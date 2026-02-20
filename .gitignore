@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+*.egg-info/
+
+# Models
+models_saved/*.pkl
+
+# Node
+node_modules/
+.next/
+src/app/.next/
+src/app/node_modules/
+
+# Postgres data
+pgdata/
+
+# Misc
+*.DS_Store
+calibration_curve.png

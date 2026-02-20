@@ -1,0 +1,40 @@
+# SwingFactr dependencies
+# Tested on Python 3.11, 3.12, and 3.13 (all stable as of Feb 2026)
+# Python 3.14 is NOT stable yet (still alpha) — do not use it
+
+# Core API
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic>=2.9.0
+
+# NBA Data (no API key needed)
+nba_api>=1.4.1
+pbpstats>=0.0.4
+
+# Data
+pandas>=2.2.0
+numpy>=1.26.4
+scipy>=1.13.0
+geopy>=2.4.1
+
+# ML — versions here support Python 3.11, 3.12, and 3.13
+scikit-learn>=1.5.0
+xgboost>=2.1.0
+statsmodels>=0.14.4
+
+# DB
+psycopg2-binary>=2.9.9
+
+# Explainability — shap 0.46+ supports 3.13, older versions do NOT
+shap>=0.46.0
+
+# Utils
+python-dotenv>=1.0.1
+
+# Dev / testing
+pytest>=8.1.1
+pytest-asyncio>=0.23.6
+httpx>=0.27.0
+
+# Optional: for calibration plots
+matplotlib>=3.8.4
