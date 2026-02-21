@@ -21,6 +21,7 @@ interface WinProbData {
   away_team: string
   home_score: number | null
   away_score: number | null
+  home_win: boolean | null
   series: WinProbPoint[]
 }
 
