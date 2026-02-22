@@ -75,20 +75,44 @@ def fetch_games_for_date(date_str: str) -> list[dict]:
 
 def fetch_games_for_daterange(start: str, end: str) -> list[dict]:
     """
-    Fetch all games in a date range.
+    Fetch all games in a date range by chunking into monthly requests.
+    ESPN caps at 1000 events per request so we split by month to get all games.
     start/end format: YYYYMMDD
-    ESPN accepts ranges like dates=20231101-20240419
     """
-    data = get(f"{BASE}/scoreboard", params={
-        "dates": f"{start}-{end}",
-        "limit": 1000
-    })
-    games = []
-    for event in data.get("events", []):
-        game = parse_game_event(event)
-        if game:
-            games.append(game)
-    return games
+    from datetime import datetime, timedelta
+
+    start_dt = datetime.strptime(start, "%Y%m%d")
+    end_dt = datetime.strptime(end, "%Y%m%d")
+
+    all_games = []
+    seen_ids = set()
+
+    # Chunk by month to stay under 1000 event limit
+    cursor = start_dt
+    while cursor <= end_dt:
+        # End of chunk = last day of current month or end_dt, whichever is earlier
+        if cursor.month == 12:
+            chunk_end = datetime(cursor.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            chunk_end = datetime(cursor.year, cursor.month + 1, 1) - timedelta(days=1)
+        chunk_end = min(chunk_end, end_dt)
+
+        chunk_start_str = cursor.strftime("%Y%m%d")
+        chunk_end_str = chunk_end.strftime("%Y%m%d")
+
+        data = get(f"{BASE}/scoreboard", params={
+            "dates": f"{chunk_start_str}-{chunk_end_str}",
+            "limit": 1000
+        })
+        for event in data.get("events", []):
+            game = parse_game_event(event)
+            if game and game["game_id"] not in seen_ids:
+                seen_ids.add(game["game_id"])
+                all_games.append(game)
+
+        cursor = chunk_end + timedelta(days=1)
+
+    return all_games
 
 
 def parse_game_event(event: dict) -> Optional[dict]:
@@ -292,8 +316,8 @@ def clock_to_seconds(clock_str: str) -> int:
 # Season date ranges for ESPN
 SEASON_DATES = {
     "2025-26": ("20251021", "20260220"),  # current season — end date = today, will fetch completed games
-    "2024-25": ("20241022", "20250413"),
-    "2023-24": ("20231024", "20240414"),
-    "2022-23": ("20221018", "20230409"),
-    "2021-22": ("20211019", "20220410"),
+    "2024-25": ("20241022", "20250622"),
+    "2023-24": ("20231024", "20240623"),
+    "2022-23": ("20221018", "20230612"),
+    "2021-22": ("20211019", "20220616"),
 }
