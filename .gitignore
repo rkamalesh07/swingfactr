@@ -7,7 +7,7 @@ venv/
 *.egg-info/
 
 # Models
-models_saved/*.pkl
+
 
 # Node
 node_modules/
