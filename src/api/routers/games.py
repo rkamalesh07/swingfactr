@@ -7,15 +7,33 @@ from src.api.schemas import GameSummary
 router = APIRouter()
 
 
+@router.get("/count")
+async def count_games(season: str = Query("2025-26"), team_id: Optional[int] = Query(None)):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            if team_id:
+                cur.execute(
+                    "SELECT COUNT(*) FROM games WHERE season_id = %s AND home_score IS NOT NULL AND (home_team_id = %s OR away_team_id = %s)",
+                    (season, team_id, team_id)
+                )
+            else:
+                cur.execute(
+                    "SELECT COUNT(*) FROM games WHERE season_id = %s AND home_score IS NOT NULL",
+                    (season,)
+                )
+            count = cur.fetchone()[0]
+    return {"count": count, "season": season}
+
+
 @router.get("/", response_model=list[GameSummary])
 async def list_games(
     season: str = Query("2025-26"),
     team_id: Optional[int] = Query(None),
     limit: int = Query(50, le=200),
+    offset: int = Query(0),
 ):
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # Use subquery to get one team row per team_id (handles duplicates)
             base_query = """
                 WITH team_abbrevs AS (
                     SELECT DISTINCT ON (team_id) team_id, abbreviation
@@ -30,10 +48,10 @@ async def list_games(
                 WHERE g.season_id = %s AND g.home_score IS NOT NULL
             """
             if team_id:
-                cur.execute(base_query + " AND (g.home_team_id = %s OR g.away_team_id = %s) ORDER BY g.game_date DESC LIMIT %s",
-                           (season, team_id, team_id, limit))
+                cur.execute(base_query + " AND (g.home_team_id = %s OR g.away_team_id = %s) ORDER BY g.game_date DESC LIMIT %s OFFSET %s",
+                           (season, team_id, team_id, limit, offset))
             else:
-                cur.execute(base_query + " ORDER BY g.game_date DESC LIMIT %s", (season, limit))
+                cur.execute(base_query + " ORDER BY g.game_date DESC LIMIT %s OFFSET %s", (season, limit, offset))
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
