@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const PAGE_SIZE = 50
 
 interface Game {
   game_id: string
@@ -18,44 +19,68 @@ interface Game {
 export default function GamesPage() {
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
-  const [season, setSeason] = useState('2024-25')
+  const [season, setSeason] = useState('2025-26')
+  const [page, setPage] = useState(0)
+  const [totalGames, setTotalGames] = useState(0)
+
+  useEffect(() => {
+    setPage(0)
+  }, [season])
 
   useEffect(() => {
     setLoading(true)
-    fetch(`${API}/games/?season=${season}&limit=50`)
-      .then((r) => r.json())
-      .then((data) => { setGames(Array.isArray(data) ? data : []); setLoading(false) })
+    fetch(`${API}/games/?season=${season}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`)
+      .then(r => r.json())
+      .then(data => {
+        const arr = Array.isArray(data) ? data : []
+        setGames(arr)
+        // Estimate total — if full page returned, assume more exist
+        if (arr.length === PAGE_SIZE) {
+          setTotalGames(Math.max(totalGames, (page + 2) * PAGE_SIZE))
+        } else {
+          setTotalGames(page * PAGE_SIZE + arr.length)
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
-  }, [season])
+  }, [season, page])
+
+  const totalPages = Math.max(1, Math.ceil(totalGames / PAGE_SIZE))
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
-        <div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
-            WIN PROBABILITY MODEL
-          </div>
-          <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Games</h1>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+          WIN PROBABILITY MODEL
         </div>
-        <select value={season} onChange={(e) => setSeason(e.target.value)} style={{
-          background: '#111', border: '1px solid #222', color: '#888',
-          padding: '6px 12px', fontSize: '12px', fontFamily: 'IBM Plex Mono, monospace',
-          outline: 'none', cursor: 'pointer',
-        }}>
-          <option value="2024-25">2024–25</option>
-          <option value="2023-24">2023–24</option>
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Games</h1>
+          <select value={season} onChange={e => setSeason(e.target.value)} style={{
+            background: '#111', border: '1px solid #222', color: '#888',
+            padding: '6px 12px', fontSize: '12px', fontFamily: 'IBM Plex Mono, monospace',
+            outline: 'none', cursor: 'pointer',
+          }}>
+            <option value="2025-26">2025–26</option>
+            <option value="2024-25">2024–25</option>
+          </select>
+        </div>
+        <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
+          Click any game to view the win probability curve →
+        </div>
       </div>
 
+      {/* Table */}
       <div style={{ border: '1px solid #1a1a1a' }}>
-        {/* Table header */}
         <div style={{
           display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
           padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
           fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
           color: '#444', letterSpacing: '0.08em',
         }}>
-          <span>DATE</span><span>MATCHUP</span><span style={{ textAlign: 'center' }}>SCORE</span><span style={{ textAlign: 'right' }}>WIN PROB</span>
+          <span>DATE</span><span>MATCHUP</span>
+          <span style={{ textAlign: 'center' }}>SCORE</span>
+          <span style={{ textAlign: 'right' }}>CURVE</span>
         </div>
 
         {loading ? (
@@ -64,20 +89,19 @@ export default function GamesPage() {
           </div>
         ) : games.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
-            No games found for this season.
+            No games found.
           </div>
         ) : games.map((g, i) => (
           <Link key={g.game_id} href={`/games/${g.game_id}`} style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
-              padding: '14px 20px',
-              borderBottom: i < games.length - 1 ? '1px solid #111' : 'none',
-              alignItems: 'center',
-              cursor: 'pointer',
-              transition: 'background 0.1s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#111')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            <div
+              style={{
+                display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
+                padding: '14px 20px',
+                borderBottom: i < games.length - 1 ? '1px solid #111' : 'none',
+                alignItems: 'center', cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#111')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
                 {g.game_date}
@@ -92,9 +116,7 @@ export default function GamesPage() {
                 </span>
               </div>
               <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#888' }}>
-                {g.away_score !== null && g.home_score !== null
-                  ? `${g.away_score} – ${g.home_score}`
-                  : '—'}
+                {g.away_score !== null && g.home_score !== null ? `${g.away_score} – ${g.home_score}` : '—'}
               </div>
               <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
                 →
@@ -104,8 +126,53 @@ export default function GamesPage() {
         ))}
       </div>
 
-      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
-        {games.length} games · click any game to view win probability curve
+      {/* Pagination */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+          {games.length > 0
+            ? `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + games.length} games`
+            : '0 games'}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{
+              background: 'none', border: '1px solid #222',
+              color: page === 0 ? '#2a2a2a' : '#888',
+              padding: '4px 12px', fontSize: '11px',
+              fontFamily: 'IBM Plex Mono, monospace',
+              cursor: page === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >← prev</button>
+
+          <select
+            value={page}
+            onChange={e => setPage(Number(e.target.value))}
+            style={{
+              background: '#111', border: '1px solid #222', color: '#888',
+              padding: '4px 8px', fontSize: '11px',
+              fontFamily: 'IBM Plex Mono, monospace', outline: 'none', cursor: 'pointer',
+            }}
+          >
+            {Array.from({ length: totalPages }, (_, i) => (
+              <option key={i} value={i}>page {i + 1}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={games.length < PAGE_SIZE}
+            style={{
+              background: 'none', border: '1px solid #222',
+              color: games.length < PAGE_SIZE ? '#2a2a2a' : '#888',
+              padding: '4px 12px', fontSize: '11px',
+              fontFamily: 'IBM Plex Mono, monospace',
+              cursor: games.length < PAGE_SIZE ? 'not-allowed' : 'pointer',
+            }}
+          >next →</button>
+        </div>
       </div>
     </div>
   )
