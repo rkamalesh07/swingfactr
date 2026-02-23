@@ -30,17 +30,8 @@ FALLBACK_COEFFICIENTS = {
     "rest_advantage": -0.131,
 }
 
-# High altitude venues (>4000 ft)
-HIGH_ALTITUDE_TEAMS = {"DEN", "UTA", "SLC", "UTAH"}
-
-# ESPN team ID -> abbreviation mapping
-ESPN_TEAM_ABBR = {
-    1: "ATL", 2: "BOS", 3: "NO", 4: "CHI", 5: "CLE", 6: "DAL",
-    7: "DEN", 8: "DET", 9: "GS", 10: "HOU", 11: "IND", 12: "LAC",
-    13: "LAL", 14: "MIA", 15: "MIL", 16: "MIN", 17: "BKN", 18: "NY",
-    19: "ORL", 20: "PHI", 21: "PHX", 22: "POR", 23: "SAC", 24: "SA",
-    25: "OKC", 26: "ORL", 27: "TOR", 28: "UTA", 29: "WAS", 30: "MEM",
-}
+# Teams whose home venue is above 4000ft
+HIGH_ALTITUDE_ABBRS = {"DEN", "UTA", "UTAH", "SLC"}
 
 
 def get_coefficients():
@@ -53,51 +44,56 @@ def get_coefficients():
     return FALLBACK_COEFFICIENTS, "fallback"
 
 
-def get_team_schedule_context(team_id: int, game_date: str) -> dict:
-    """Look up rest days and B2B status from DB for a team on a given date."""
+def get_team_rest(team_id: int, game_date_str: str) -> dict:
+    """Compute rest days and B2B status by looking up previous game in DB."""
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Find previous game for this team
                 cur.execute("""
                     SELECT game_date FROM games
-                    WHERE season_id = '2025-26'
-                    AND (home_team_id = %s OR away_team_id = %s)
+                    WHERE (home_team_id = %s OR away_team_id = %s)
                     AND game_date < %s
                     ORDER BY game_date DESC LIMIT 1
-                """, (team_id, team_id, game_date))
+                """, (team_id, team_id, game_date_str))
                 row = cur.fetchone()
                 if row:
-                    prev_date = row[0]
                     from datetime import date
-                    if isinstance(prev_date, str):
-                        prev_date = date.fromisoformat(prev_date)
-                    target = date.fromisoformat(game_date) if isinstance(game_date, str) else game_date
-                    rest_days = (target - prev_date).days
-                    return {"rest_days": rest_days, "b2b": rest_days == 1}
+                    prev = row[0] if hasattr(row[0], 'year') else date.fromisoformat(str(row[0]))
+                    today = date.fromisoformat(game_date_str)
+                    rest = (today - prev).days
+                    return {"rest_days": rest, "b2b": rest == 1}
     except Exception:
         pass
     return {"rest_days": 2, "b2b": False}
 
 
 def compute_fatigue(home_abbr: str, away_abbr: str, home_ctx: dict, away_ctx: dict, coefs: dict) -> dict:
+    """
+    Compute expected fatigue effect on home score margin.
+    Positive = home team advantaged. Negative = away team advantaged.
+    All factors stack — altitude doesn't override B2B, they sum.
+    """
     effect = 0.0
     flags = []
 
     home_b2b = home_ctx.get("b2b", False)
     away_b2b = away_ctx.get("b2b", False)
-    is_altitude = home_abbr in HIGH_ALTITUDE_TEAMS
+    home_rest = home_ctx.get("rest_days", 2) or 2
+    away_rest = away_ctx.get("rest_days", 2) or 2
+    is_altitude_venue = home_abbr in HIGH_ALTITUDE_ABBRS
 
+    # B2B effects
     if home_b2b:
         v = coefs.get("home_b2b", -0.965)
         effect += v
-        flags.append({"label": f"{home_abbr} on B2B (home)", "effect": round(v, 2), "team": "home"})
+        flags.append({"label": f"{home_abbr} on B2B", "effect": round(v, 2), "team": "home"})
 
     if away_b2b:
         v = coefs.get("away_b2b", 1.4)
         effect += v
         flags.append({"label": f"{away_abbr} on B2B (away)", "effect": round(v, 2), "team": "away"})
 
+    # Fatigue asymmetry — extra penalty when one team is on B2B and other isn't
     if away_b2b and not home_b2b:
         v = coefs.get("fatigue_asymmetry", 2.366)
         effect += v
@@ -107,18 +103,22 @@ def compute_fatigue(home_abbr: str, away_abbr: str, home_ctx: dict, away_ctx: di
         effect += v
         flags.append({"label": "Fatigue asymmetry — home disadvantaged", "effect": round(v, 2), "team": "home"})
 
-    if is_altitude:
+    # Altitude — stacks with everything else
+    if is_altitude_venue:
         v = coefs.get("high_altitude", 4.629)
         effect += v
         flags.append({"label": f"High altitude venue ({home_abbr})", "effect": round(v, 2), "team": "home"})
 
-    home_rest = home_ctx.get("rest_days", 2)
-    away_rest = away_ctx.get("rest_days", 2)
-    rest_adv = (home_rest or 2) - (away_rest or 2)
+    # Rest advantage
+    rest_adv = home_rest - away_rest
     if abs(rest_adv) >= 1:
         v = rest_adv * coefs.get("rest_advantage", -0.131)
         effect += v
-        flags.append({"label": f"Rest edge ({rest_adv:+d} days)", "effect": round(v, 2), "team": "home" if rest_adv > 0 else "away"})
+        flags.append({
+            "label": f"Rest edge ({rest_adv:+d} days for {'home' if rest_adv > 0 else 'away'})",
+            "effect": round(v, 2),
+            "team": "home" if rest_adv > 0 else "away"
+        })
 
     advantaged = None
     if effect > 1:
@@ -126,32 +126,61 @@ def compute_fatigue(home_abbr: str, away_abbr: str, home_ctx: dict, away_ctx: di
     elif effect < -1:
         advantaged = "away"
 
-    return {"expected_effect": round(float(effect), 2), "flags": flags, "advantaged_team": advantaged}
+    return {
+        "expected_effect": round(float(effect), 2),
+        "flags": flags,
+        "advantaged_team": advantaged,
+    }
 
 
 @router.get("/today")
 async def fatigue_today(date: str = Query(None)):
-    today_str = date or datetime.now().strftime("%Y%m%d")
+    """Return all games for today (and yesterday if evening) with fatigue context."""
+    now = datetime.now()
+    today_str = date or now.strftime("%Y%m%d")
+    # Also fetch yesterday since ESPN dates are UTC and evening US games may be dated prior day
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y%m%d")
+
     coefs, source = get_coefficients()
 
-    try:
-        games = fetch_games_for_date(today_str)
-    except Exception as e:
-        return JSONResponse({"games": [], "error": str(e)})
+    all_games = []
+    seen = set()
 
-    # Filter to only today's actual games (ESPN sometimes returns nearby dates)
-    date_formatted = f"{today_str[:4]}-{today_str[4:6]}-{today_str[6:]}"
-    games = [g for g in games if g.get("game_date") == date_formatted]
+    for d in [today_str, yesterday_str]:
+        try:
+            games = fetch_games_for_date(d)
+            for g in games:
+                if g["game_id"] not in seen:
+                    seen.add(g["game_id"])
+                    all_games.append(g)
+        except Exception:
+            pass
+
+    # Filter to just today's date in YYYY-MM-DD
+    today_formatted = f"{today_str[:4]}-{today_str[4:6]}-{today_str[6:]}"
+    yesterday_formatted = f"{yesterday_str[:4]}-{yesterday_str[4:6]}-{yesterday_str[6:]}"
+    all_games = [g for g in all_games if g.get("game_date") in (today_formatted, yesterday_formatted)]
+
+    # Sort: in-progress first, then not started, then completed
+    def sort_key(g):
+        s = g.get("status", "").lower()
+        if "final" in s:
+            return 2
+        if "half" in s or "qtr" in s or "end" in s:
+            return 0
+        return 1
+
+    all_games.sort(key=sort_key)
 
     results = []
-    for g in games:
+    for g in all_games:
         home_id = g.get("home_team_espn_id")
         away_id = g.get("away_team_espn_id")
-        home_abbr = g.get("home_team_abbr", ESPN_TEAM_ABBR.get(home_id, ""))
-        away_abbr = g.get("away_team_abbr", ESPN_TEAM_ABBR.get(away_id, ""))
+        home_abbr = g.get("home_team_abbr", "")
+        away_abbr = g.get("away_team_abbr", "")
 
-        home_ctx = get_team_schedule_context(home_id, date_formatted)
-        away_ctx = get_team_schedule_context(away_id, date_formatted)
+        home_ctx = get_team_rest(home_id, today_formatted)
+        away_ctx = get_team_rest(away_id, today_formatted)
 
         fatigue = compute_fatigue(home_abbr, away_abbr, home_ctx, away_ctx, coefs)
 
@@ -166,7 +195,7 @@ async def fatigue_today(date: str = Query(None)):
             "fatigue": fatigue,
         })
 
-    return JSONResponse({"games": results, "date": date_formatted, "source": source})
+    return JSONResponse({"games": results, "date": today_formatted, "source": source})
 
 
 @router.get("/")
@@ -174,7 +203,7 @@ async def fatigue_effects():
     try:
         payload = get_fatigue_effects()
         if not payload:
-            raise ValueError("empty payload")
+            raise ValueError("empty")
 
         r_squared = payload.pop("r_squared", None)
         n_games = payload.pop("n_games", None)
@@ -202,7 +231,8 @@ async def fatigue_effects():
     except Exception:
         results = [
             {"factor": k, "label": LABEL_MAP.get(k, k), "coefficient": round(v, 4),
-             "p_value": 0.05, "ci_low": 0.0, "ci_high": 0.0, "significant": k == "fatigue_asymmetry"}
+             "p_value": 0.099, "ci_low": 0.0, "ci_high": 0.0,
+             "significant": k == "fatigue_asymmetry"}
             for k, v in sorted(FALLBACK_COEFFICIENTS.items(), key=lambda x: abs(x[1]), reverse=True)
         ]
         return JSONResponse({"effects": results, "r_squared": 0.0295, "n_games": 995})
