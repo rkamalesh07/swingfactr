@@ -49,20 +49,29 @@ const LABELS: Record<string, string> = {
 
 function getAdvantageBlurb(game: GameFatigue): string {
   const { advantaged_team, flags, expected_effect } = game.fatigue
-  if (!advantaged_team || flags.length === 0) return 'No significant fatigue edge.'
+  const homeRest = (game.fatigue as any).home_rest_days
+  const awayRest = (game.fatigue as any).away_rest_days
+
+  if (!advantaged_team || Math.abs(expected_effect) < 0.3) {
+    if (homeRest !== undefined && awayRest !== undefined) {
+      return `${game.away_team}: ${awayRest}d rest · ${game.home_team}: ${homeRest}d rest — no significant edge`
+    }
+    return 'No significant fatigue edge.'
+  }
 
   const team = advantaged_team === 'home' ? game.home_team : game.away_team
   const topFlag = [...flags].sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect))[0]
 
   let reason = ''
-  if (topFlag.label.includes('B2B')) reason = 'playing on a back-to-back'
-  else if (topFlag.label.includes('altitude')) reason = 'home altitude advantage'
-  else if (topFlag.label.includes('road trip')) reason = 'long road trip for opponent'
-  else if (topFlag.label.includes('Rest')) reason = 'more rest days'
-  else if (topFlag.label.includes('asymmetry')) reason = 'opponent on a back-to-back'
+  if (topFlag.label.includes('B2B')) reason = 'on a back-to-back'
+  else if (topFlag.label.includes('altitude')) reason = 'altitude advantage'
+  else if (topFlag.label.includes('road trip')) reason = 'opponent on long road trip'
+  else if (topFlag.label.includes('Rest') || topFlag.label.includes('rest')) reason = 'more rest'
+  else if (topFlag.label.includes('asymmetry')) reason = 'opponent on B2B'
   else reason = topFlag.label.toLowerCase()
 
-  return `Fatigue edge: ${team} (${reason}, ${Math.abs(expected_effect).toFixed(1)} pts)`
+  const restNote = homeRest !== undefined ? ` · ${game.away_team}: ${awayRest}d, ${game.home_team}: ${homeRest}d` : ''
+  return `Edge: ${team} (${reason}, ${Math.abs(expected_effect).toFixed(1)} pts)${restNote}`
 }
 
 export default function FatiguePage() {

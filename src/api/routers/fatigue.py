@@ -121,15 +121,17 @@ def compute_fatigue(home_abbr: str, away_abbr: str, home_ctx: dict, away_ctx: di
         })
 
     advantaged = None
-    if effect > 1:
+    if effect > 0.3:
         advantaged = "home"
-    elif effect < -1:
+    elif effect < -0.3:
         advantaged = "away"
 
     return {
         "expected_effect": round(float(effect), 2),
         "flags": flags,
         "advantaged_team": advantaged,
+        "home_rest_days": home_rest,
+        "away_rest_days": away_rest,
     }
 
 
