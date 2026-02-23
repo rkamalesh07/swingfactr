@@ -39,9 +39,9 @@ export default function PlayersPage() {
       .catch(() => setLoading(false))
   }, [season, team, minMinutes])
 
-  const sorted = [...players].sort((a, b) =>
-    sortDir === 'desc' ? b.net_rtg - a.net_rtg : a.net_rtg - b.net_rtg
-  )
+  const sorted = [...players]
+    .sort((a, b) => sortDir === 'desc' ? b.net_rtg - a.net_rtg : a.net_rtg - b.net_rtg)
+    .map((p, i) => ({ ...p, displayRank: i + 1 }))
 
   const maxAbs = Math.max(...players.map(p => Math.abs(p.net_rtg)), 1)
 
@@ -123,7 +123,7 @@ export default function PlayersPage() {
               padding: '13px 20px', borderBottom: i < sorted.length - 1 ? '1px solid #111' : 'none',
               alignItems: 'center',
             }}>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{p.rank}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{(p as any).displayRank}</span>
               <span style={{ fontSize: '13px', color: '#e0e0e0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player}</span>
               <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.team}</span>
               <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
