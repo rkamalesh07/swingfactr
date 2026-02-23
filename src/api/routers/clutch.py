@@ -35,7 +35,7 @@ async def clutch_analysis(season: str = Query("2024-25")):
                     FROM plays p
                     JOIN games g ON g.game_id = p.game_id
                     WHERE g.season_id = %s
-                    AND p.game_seconds_elapsed >= 2580
+                    AND p.time_remaining_seconds <= 300
                     AND ABS(p.score_diff) <= 5
                     AND p.possession_team_id IS NOT NULL
                     AND p.is_fg_attempt = TRUE
