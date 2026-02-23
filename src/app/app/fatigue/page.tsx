@@ -1,9 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+interface FatigueFlag {
+  label: string
+  effect: number
+  team: 'home' | 'away'
+}
+
+interface GameFatigue {
+  game_id: string
+  home_team: string
+  away_team: string
+  home_score: number | null
+  away_score: number | null
+  status: string
+  completed: boolean
+  fatigue: {
+    expected_effect: number
+    flags: FatigueFlag[]
+    advantaged_team: 'home' | 'away' | null
+  }
+}
 
 interface Effect {
   factor: string
@@ -15,34 +36,26 @@ interface Effect {
   significant: boolean
 }
 
-const LABELS: Record<string, string> = {
-  rest_advantage: 'Rest advantage (home − away days)',
-  away_b2b: 'Away team on back-to-back',
-  home_b2b: 'Home team on back-to-back',
-  travel_miles_100: 'Travel distance (per 100 mi)',
-  tz_change: 'Timezone change (hrs)',
-  high_altitude: 'High altitude venue (DEN / UTA)',
-  long_trip: 'Long road trip (1500+ mi)',
-  fatigue_asymmetry: 'Fatigue asymmetry (away − home B2B)',
-}
-
 export default function FatiguePage() {
+  const [games, setGames] = useState<GameFatigue[]>([])
   const [effects, setEffects] = useState<Effect[]>([])
+  const [meta, setMeta] = useState<{ r_squared: number | null; n_games: number | null }>({ r_squared: null, n_games: null })
   const [loading, setLoading] = useState(true)
-  const [meta, setMeta] = useState<{ r_squared?: number; n_games?: number }>({})
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10).replace(/-/g, ''))
 
   useEffect(() => {
-    fetch(`${API}/fatigue/`)
-      .then((r) => r.json())
-      .then((d) => {
-        setEffects(d.effects || [])
-        setMeta({ r_squared: d.r_squared, n_games: d.n_games })
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+    Promise.all([
+      fetch(`${API}/fatigue/today?date=${date}`).then(r => r.json()),
+      fetch(`${API}/fatigue/`).then(r => r.json()),
+    ]).then(([todayData, effectsData]) => {
+      setGames(todayData.games || [])
+      setEffects(effectsData.effects || [])
+      setMeta({ r_squared: effectsData.r_squared, n_games: effectsData.n_games })
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [date])
 
-  const chartData = effects.map(e => ({ ...e, label: LABELS[e.factor] || e.factor }))
+  const chartData = effects.map(e => ({ name: e.label.split('(')[0].trim(), value: e.coefficient, significant: e.significant }))
 
   return (
     <div>
@@ -51,140 +64,193 @@ export default function FatiguePage() {
         <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
           OLS REGRESSION · SCORE MARGIN
         </div>
-        <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Fatigue & Travel Effects</h1>
-        <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '560px' }}>
-          Coefficient = expected points added to home team score margin per unit of each factor, 
-          holding all others constant. Green = benefits home team. Red = hurts home team.
+        <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Fatigue & Travel Effects</h1>
+        <p style={{ fontSize: '13px', color: '#555', marginTop: '8px', maxWidth: '520px', lineHeight: 1.6 }}>
+          How back-to-backs, travel, altitude, and rest affect tonight's games based on historical patterns.
         </p>
       </div>
 
-      {/* Model meta row */}
-      {!loading && meta.r_squared !== undefined && (
-        <div style={{ display: 'flex', gap: '1px', background: '#1a1a1a', marginBottom: '32px', border: '1px solid #1a1a1a' }}>
+      {/* TODAY'S GAMES SECTION */}
+      <div style={{ marginBottom: '48px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '16px' }}>
+          TODAY'S GAMES · FATIGUE CONTEXT
+        </div>
+
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>
+            Loading...
+          </div>
+        ) : games.length === 0 ? (
+          <div style={{ padding: '32px', border: '1px solid #1a1a1a', color: '#444', fontSize: '13px', textAlign: 'center' }}>
+            No games scheduled today.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {games.map(g => {
+              const effect = g.fatigue.expected_effect
+              const hasFlags = g.fatigue.flags.length > 0
+              const advantaged = g.fatigue.advantaged_team
+              const effectColor = Math.abs(effect) < 1 ? '#444' : effect > 0 ? '#4a9' : '#c55'
+
+              return (
+                <div key={g.game_id} style={{
+                  border: '1px solid #1a1a1a',
+                  padding: '20px 24px',
+                  background: hasFlags ? '#0d0d0d' : 'transparent',
+                }}>
+                  {/* Matchup row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: hasFlags ? '16px' : '0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 500, color: advantaged === 'away' ? '#e0e0e0' : '#666' }}>
+                          {g.away_team}
+                        </span>
+                        <span style={{ color: '#333', fontSize: '12px' }}>@</span>
+                        <span style={{ fontSize: '16px', fontWeight: 500, color: advantaged === 'home' ? '#e0e0e0' : '#666' }}>
+                          {g.home_team}
+                        </span>
+                      </div>
+                      {g.completed && g.home_score !== null && (
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#555' }}>
+                          {g.away_score} – {g.home_score}
+                        </span>
+                      )}
+                      {!g.completed && (
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#3a3', letterSpacing: '0.08em' }}>
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Effect badge */}
+                    <div style={{ textAlign: 'right' }}>
+                      {hasFlags ? (
+                        <div>
+                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '18px', fontWeight: 600, color: effectColor }}>
+                            {effect > 0 ? '+' : ''}{effect} pts
+                          </div>
+                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', marginTop: '2px' }}>
+                            expected home margin effect
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+                          no fatigue factors
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Flags */}
+                  {hasFlags && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {g.fatigue.flags.map((flag, i) => (
+                        <div key={i} style={{
+                          padding: '4px 10px',
+                          border: `1px solid ${flag.effect > 0 ? '#1a3a2a' : '#3a1a1a'}`,
+                          background: flag.effect > 0 ? '#0a1a12' : '#1a0a0a',
+                          fontFamily: 'IBM Plex Mono, monospace',
+                          fontSize: '10px',
+                          color: flag.effect > 0 ? '#4a9' : '#c55',
+                          display: 'flex',
+                          gap: '8px',
+                          alignItems: 'center',
+                        }}>
+                          <span>{flag.label}</span>
+                          <span style={{ opacity: 0.6 }}>{flag.effect > 0 ? '+' : ''}{flag.effect}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ADVANCED SECTION */}
+      <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '40px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', letterSpacing: '0.12em', marginBottom: '24px' }}>
+          ADVANCED · MODEL COEFFICIENTS
+        </div>
+
+        {/* Meta stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', border: '1px solid #1a1a1a', marginBottom: '32px' }}>
           {[
-            { label: 'R²', value: meta.r_squared?.toFixed(4) },
-            { label: 'Games', value: meta.n_games?.toLocaleString() },
-            { label: 'Factors', value: effects.length },
-            { label: 'Significant', value: effects.filter(e => e.significant).length },
-            { label: 'Season', value: '2024–25' },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ background: '#0a0a0a', padding: '16px 24px', flex: 1 }}>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '18px', fontWeight: 600, color: '#e8e8e8', marginBottom: '4px' }}>
-                {value}
-              </div>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em' }}>
-                {label.toUpperCase()}
-              </div>
+            { value: meta.r_squared?.toFixed(4) ?? '—', label: 'R²' },
+            { value: meta.n_games ?? '—', label: 'GAMES' },
+            { value: effects.length, label: 'FACTORS' },
+            { value: effects.filter(e => e.significant).length, label: 'SIGNIFICANT' },
+            { value: '2024–25', label: 'SEASON' },
+          ].map((s, i) => (
+            <div key={i} style={{ padding: '20px', borderRight: i < 4 ? '1px solid #1a1a1a' : 'none' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '22px', fontWeight: 300, color: '#e0e0e0' }}>{s.value}</div>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', marginTop: '4px', letterSpacing: '0.08em' }}>{s.label}</div>
             </div>
           ))}
         </div>
-      )}
 
-      {loading ? (
-        <div style={{ padding: '60px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>
-          Loading model...
-        </div>
-      ) : effects.length === 0 ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
-          No fatigue model found. Run <code style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#666' }}>python -m src.models.train_all</code> first.
-        </div>
-      ) : (
-        <>
-          {/* Chart */}
-          <div style={{ background: '#111', border: '1px solid #1a1a1a', padding: '28px', marginBottom: '24px' }}>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '20px' }}>
+        {/* Chart */}
+        {effects.length > 0 && (
+          <div style={{ border: '1px solid #1a1a1a', padding: '24px', marginBottom: '24px' }}>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', marginBottom: '20px', letterSpacing: '0.08em' }}>
               COEFFICIENT ESTIMATES (POINTS EFFECT ON HOME MARGIN)
             </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} margin={{ top: 0, right: 20, left: 20, bottom: 80 }}>
-                <XAxis
-                  dataKey="factor"
-                  angle={-35}
-                  textAnchor="end"
-                  tick={{ fill: '#555', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }}
-                  tickFormatter={(v) => (LABELS[v] || v).split('(')[0].trim().slice(0, 22)}
-                />
-                <YAxis
-                  tick={{ fill: '#555', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }}
-                  tickFormatter={(v) => v.toFixed(2)}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload?.length) {
-                      const d = payload[0].payload as Effect
-                      return (
-                        <div style={{ background: '#111', border: '1px solid #222', padding: '12px 16px', fontSize: '12px' }}>
-                          <div style={{ color: '#e0e0e0', marginBottom: '6px', fontWeight: 500 }}>{LABELS[d.factor] || d.factor}</div>
-                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: d.coefficient > 0 ? '#4ade80' : '#f87171', marginBottom: '4px' }}>
-                            {d.coefficient > 0 ? '+' : ''}{d.coefficient.toFixed(3)} pts
-                          </div>
-                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#444', fontSize: '11px' }}>p = {d.p_value.toFixed(4)}</div>
-                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#444', fontSize: '11px' }}>
-                            90% CI [{d.ci_low.toFixed(2)}, {d.ci_high.toFixed(2)}]
-                          </div>
-                          {d.significant && <div style={{ color: '#e8e8e8', fontSize: '10px', marginTop: '4px', letterSpacing: '0.08em' }}>STATISTICALLY SIGNIFICANT</div>}
-                        </div>
-                      )
-                    }
-                    return null
-                  }}
-                />
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#111" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: '#444', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }}
+                  angle={-35} textAnchor="end" interval={0} />
+                <YAxis tick={{ fill: '#444', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }} />
+                <Tooltip contentStyle={{ background: '#0a0a0a', border: '1px solid #222', fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 }}
+                  labelStyle={{ color: '#888' }} itemStyle={{ color: '#e0e0e0' }} />
                 <ReferenceLine y={0} stroke="#222" />
-                <Bar dataKey="coefficient" radius={[2, 2, 0, 0]}>
-                  {chartData.map((e, i) => (
-                    <Cell key={i} fill={e.significant ? (e.coefficient > 0 ? '#16a34a' : '#dc2626') : '#2a2a2a'} />
+                <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                  {chartData.map((entry, i) => (
+                    <Cell key={i} fill={entry.significant ? '#4a9975' : entry.value >= 0 ? '#2a2a2a' : '#2a2020'} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
+        )}
 
-          {/* Table */}
-          <div style={{ border: '1px solid #1a1a1a' }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 90px 90px 140px 80px',
-              padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
-            }}>
-              <span>FACTOR</span>
-              <span style={{ textAlign: 'right' }}>COEF</span>
-              <span style={{ textAlign: 'right' }}>P-VALUE</span>
-              <span style={{ textAlign: 'right' }}>90% CI</span>
-              <span style={{ textAlign: 'right' }}>SIG</span>
+        {/* Table */}
+        <div style={{ border: '1px solid #1a1a1a' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 140px 40px', padding: '10px 20px',
+            borderBottom: '1px solid #1a1a1a', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em' }}>
+            <span>FACTOR</span><span style={{ textAlign: 'right' }}>COEF</span>
+            <span style={{ textAlign: 'right' }}>P-VALUE</span>
+            <span style={{ textAlign: 'right' }}>90% CI</span>
+            <span style={{ textAlign: 'right' }}>SIG</span>
+          </div>
+          {effects.map((e, i) => (
+            <div key={e.factor} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 140px 40px',
+              padding: '14px 20px', borderBottom: i < effects.length - 1 ? '1px solid #111' : 'none', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', color: '#c0c0c0' }}>{e.label}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px',
+                color: e.coefficient > 0 ? '#4a9' : '#c55', fontWeight: 500 }}>
+                {e.coefficient > 0 ? '+' : ''}{e.coefficient.toFixed(3)}
+              </span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555' }}>
+                {e.p_value.toFixed(4)}
+              </span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
+                [{e.ci_low.toFixed(2)}, {e.ci_high.toFixed(2)}]
+              </span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
+                color: e.significant ? '#4a9' : '#333' }}>
+                {e.significant ? 'YES' : '—'}
+              </span>
             </div>
-            {effects.map((e, i) => (
-              <div key={e.factor} style={{
-                display: 'grid', gridTemplateColumns: '1fr 90px 90px 140px 80px',
-                padding: '14px 20px',
-                borderBottom: i < effects.length - 1 ? '1px solid #111' : 'none',
-                alignItems: 'center',
-              }}>
-                <span style={{ color: '#ccc', fontSize: '13px' }}>{LABELS[e.factor] || e.factor}</span>
-                <span style={{
-                  textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600,
-                  color: e.coefficient > 0 ? '#4ade80' : '#f87171',
-                }}>
-                  {e.coefficient > 0 ? '+' : ''}{e.coefficient.toFixed(3)}
-                </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555' }}>
-                  {e.p_value.toFixed(4)}
-                </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
-                  [{e.ci_low.toFixed(2)}, {e.ci_high.toFixed(2)}]
-                </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', letterSpacing: '0.08em' }}>
-                  {e.significant
-                    ? <span style={{ color: '#e8e8e8' }}>YES</span>
-                    : <span style={{ color: '#333' }}>—</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', lineHeight: 1.8 }}>
-            Significant = p &lt; 0.05 · Coefficient unit = points on home score margin · Gray bars = not significant
-          </div>
-        </>
-      )}
+          ))}
+        </div>
+        <div style={{ marginTop: '12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', lineHeight: 1.8 }}>
+          Coefficient = expected points added to home team score margin per unit of each factor, holding all others constant.
+          Green = benefits home team. Red = hurts home team. Trained on {meta.n_games ?? 995} games, 2024–25 season.
+        </div>
+      </div>
     </div>
   )
 }
