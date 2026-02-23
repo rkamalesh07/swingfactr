@@ -47,19 +47,21 @@ def get_coefficients():
 def get_team_rest(team_id: int, game_date_str: str) -> dict:
     """Compute rest days and B2B status by looking up previous game in DB."""
     try:
+        from datetime import date, timedelta
+        today = date.fromisoformat(game_date_str)
+        lookback = (today - timedelta(days=5)).isoformat()
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT game_date FROM games
                     WHERE (home_team_id = %s OR away_team_id = %s)
                     AND game_date < %s
+                    AND game_date >= %s
                     ORDER BY game_date DESC LIMIT 1
-                """, (team_id, team_id, game_date_str))
+                """, (team_id, team_id, game_date_str, lookback))
                 row = cur.fetchone()
                 if row:
-                    from datetime import date
                     prev = row[0] if hasattr(row[0], 'year') else date.fromisoformat(str(row[0]))
-                    today = date.fromisoformat(game_date_str)
                     rest = (today - prev).days
                     return {"rest_days": rest, "b2b": rest == 1}
     except Exception:

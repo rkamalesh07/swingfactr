@@ -52,7 +52,7 @@ function getAdvantageBlurb(game: GameFatigue): string {
   const homeRest = (game.fatigue as any).home_rest_days
   const awayRest = (game.fatigue as any).away_rest_days
 
-  if (!advantaged_team || Math.abs(expected_effect) < 0.3) {
+  if (!advantaged_team || Math.abs(expected_effect) < 0.25) {
     if (homeRest !== undefined && awayRest !== undefined) {
       return `${game.away_team}: ${awayRest}d rest · ${game.home_team}: ${homeRest}d rest — no significant edge`
     }
