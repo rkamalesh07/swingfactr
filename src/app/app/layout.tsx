@@ -44,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/lineups" className="nav-link">Lineups</Link>
           <Link href="/clutch" className="nav-link">Clutch</Link>
           <Link href="/fatigue" className="nav-link">Fatigue</Link>
+          <Link href="/players" className="nav-link">Players</Link>
           <div style={{ marginLeft: 'auto', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
             2024–25
           </div>
