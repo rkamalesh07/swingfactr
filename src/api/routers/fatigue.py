@@ -140,28 +140,31 @@ def compute_fatigue(home_abbr: str, away_abbr: str, home_ctx: dict, away_ctx: di
 @router.get("/today")
 async def fatigue_today(date: str = Query(None)):
     """Return all games for today. Fetches yesterday, today, and tomorrow in UTC to handle timezone differences."""
-    from datetime import timezone
+    # ESPN stores games in UTC — Feb 23 7pm EST = Feb 24 UTC
+    # So fetch both today and tomorrow in EST to catch all of today's games
     import zoneinfo
     est = zoneinfo.ZoneInfo("America/New_York")
     now_est = datetime.now(est)
     today_str = date or now_est.strftime("%Y%m%d")
-    today_formatted = f"{today_str[:4]}-{today_str[4:6]}-{today_str[6:]}"
+    tomorrow_str = (now_est + timedelta(days=1)).strftime("%Y%m%d")
 
     coefs, source = get_coefficients()
 
     all_games = []
     seen = set()
 
-    try:
-        games = fetch_games_for_date(today_str)
-        for g in games:
-            if g["game_id"] not in seen:
-                seen.add(g["game_id"])
-                all_games.append(g)
-    except Exception:
-        pass
+    for fetch_date in [today_str, tomorrow_str]:
+        try:
+            games = fetch_games_for_date(fetch_date)
+            for g in games:
+                if g["game_id"] not in seen:
+                    seen.add(g["game_id"])
+                    all_games.append(g)
+        except Exception:
+            pass
 
-    all_games = [g for g in all_games if g.get("game_date") == today_formatted]
+    # No date filter — ESPN already scopes to the requested date
+    today_formatted = f"{today_str[:4]}-{today_str[4:6]}-{today_str[6:]}"
 
     # Sort: in-progress first, then not started, then completed
     def sort_key(g):
