@@ -21,25 +21,33 @@ export default function GamesPage() {
   const [loading, setLoading] = useState(true)
   const [season, setSeason] = useState('2025-26')
   const [page, setPage] = useState(0)
-  const [totalGames, setTotalGames] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [knownPages, setKnownPages] = useState(1)
 
-  useEffect(() => { setPage(0) }, [season])
+  useEffect(() => {
+    setPage(0)
+    setKnownPages(1)
+    setHasMore(true)
+    setGames([])
+  }, [season])
 
   useEffect(() => {
     setLoading(true)
-    fetch(`${API}/games/?season=${season}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`)
+    setGames([])
+    const offset = page * PAGE_SIZE
+    fetch(`${API}/games/?season=${season}&limit=${PAGE_SIZE}&offset=${offset}`)
       .then(r => r.json())
       .then(data => {
         const arr = Array.isArray(data) ? data : []
         setGames(arr)
-        if (arr.length === PAGE_SIZE) setTotalGames(Math.max(totalGames, (page + 2) * PAGE_SIZE))
-        else setTotalGames(page * PAGE_SIZE + arr.length)
+        const more = arr.length === PAGE_SIZE
+        setHasMore(more)
+        if (more) setKnownPages(prev => Math.max(prev, page + 2))
+        else setKnownPages(page + 1)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [season, page])
-
-  const totalPages = Math.max(1, Math.ceil(totalGames / PAGE_SIZE))
 
   return (
     <div>
@@ -69,29 +77,42 @@ export default function GamesPage() {
           padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
           fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
         }}>
-          <span>DATE</span><span>MATCHUP</span><span style={{ textAlign: 'center' }}>SCORE</span><span style={{ textAlign: 'right' }}>CURVE</span>
+          <span>DATE</span><span>MATCHUP</span>
+          <span style={{ textAlign: 'center' }}>SCORE</span>
+          <span style={{ textAlign: 'right' }}>CURVE</span>
         </div>
 
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>
+            Loading...
+          </div>
         ) : games.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No games found.</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
+            No games found.
+          </div>
         ) : games.map((g, i) => (
           <Link key={g.game_id} href={`/games/${g.game_id}`} style={{ textDecoration: 'none' }}>
             <div
               style={{
                 display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
-                padding: '14px 20px', borderBottom: i < games.length - 1 ? '1px solid #111' : 'none',
+                padding: '14px 20px',
+                borderBottom: i < games.length - 1 ? '1px solid #111' : 'none',
                 alignItems: 'center', cursor: 'pointer',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = '#111')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{g.game_date}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+                {g.game_date}
+              </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: g.home_win === false ? 400 : 500, color: g.home_win === false ? '#555' : '#e0e0e0', fontSize: '13px' }}>{g.away_team}</span>
+                <span style={{ fontWeight: g.home_win === false ? 400 : 500, color: g.home_win === false ? '#555' : '#e0e0e0', fontSize: '13px' }}>
+                  {g.away_team}
+                </span>
                 <span style={{ color: '#333', fontSize: '11px' }}>@</span>
-                <span style={{ fontWeight: g.home_win === true ? 500 : 400, color: g.home_win === true ? '#e0e0e0' : '#555', fontSize: '13px' }}>{g.home_team}</span>
+                <span style={{ fontWeight: g.home_win === true ? 500 : 400, color: g.home_win === true ? '#e0e0e0' : '#555', fontSize: '13px' }}>
+                  {g.home_team}
+                </span>
               </div>
               <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#888' }}>
                 {g.away_score !== null && g.home_score !== null ? `${g.away_score} - ${g.home_score}` : '—'}
@@ -117,14 +138,14 @@ export default function GamesPage() {
             padding: '4px 8px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
             outline: 'none', cursor: 'pointer',
           }}>
-            {Array.from({ length: totalPages }, (_, i) => (
+            {Array.from({ length: knownPages }, (_, i) => (
               <option key={i} value={i}>page {i + 1}</option>
             ))}
           </select>
-          <button onClick={() => setPage(p => p + 1)} disabled={games.length < PAGE_SIZE} style={{
-            background: 'none', border: '1px solid #222', color: games.length < PAGE_SIZE ? '#2a2a2a' : '#888',
+          <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} style={{
+            background: 'none', border: '1px solid #222', color: !hasMore ? '#2a2a2a' : '#888',
             padding: '4px 12px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
-            cursor: games.length < PAGE_SIZE ? 'not-allowed' : 'pointer',
+            cursor: !hasMore ? 'not-allowed' : 'pointer',
           }}>next →</button>
         </div>
       </div>
