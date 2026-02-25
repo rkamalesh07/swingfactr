@@ -133,8 +133,13 @@ def parse_game_event(event: dict) -> Optional[dict]:
         if completed and home_score is not None and away_score is not None:
             home_win = home_score > away_score
 
-        # Date format from ESPN: 2023-11-01T00:00Z
-        game_date = event["date"][:10]  # just YYYY-MM-DD
+        # Date format from ESPN: 2023-11-01T00:00Z (UTC)
+        # Convert to EST (UTC-5) since NBA games are scheduled in US time
+        from datetime import datetime, timezone, timedelta
+        est = timezone(timedelta(hours=-5))
+        utc_dt = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
+        est_dt = utc_dt.astimezone(est)
+        game_date = est_dt.strftime("%Y-%m-%d")
 
         return {
             "game_id": f"espn_{event['id']}",
