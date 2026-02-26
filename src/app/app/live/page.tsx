@@ -36,22 +36,6 @@ interface LiveDetail {
   series: { game_seconds: number; home_win_prob: number; score_diff: number; quarter: number }[]
 }
 
-function ProbBar({ prob, homeTeam, awayTeam }: { prob: number; homeTeam: string; awayTeam: string }) {
-  const homePct = Math.round(prob * 100)
-  const awayPct = 100 - homePct
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', marginBottom: '4px' }}>
-        <span style={{ color: prob < 0.5 ? '#4ade80' : '#888' }}>{awayTeam} {awayPct}%</span>
-        <span style={{ color: prob > 0.5 ? '#4ade80' : '#888' }}>{homeTeam} {homePct}%</span>
-      </div>
-      <div style={{ height: '6px', background: '#111', display: 'flex', borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{ width: `${awayPct}%`, background: prob < 0.5 ? '#16a34a' : '#333', transition: 'width 1s ease' }} />
-        <div style={{ width: `${homePct}%`, background: prob > 0.5 ? '#16a34a' : '#333', transition: 'width 1s ease' }} />
-      </div>
-    </div>
-  )
-}
 
 export default function LivePage() {
   const [games, setGames] = useState<LiveGame[]>([])
