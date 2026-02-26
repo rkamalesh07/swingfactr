@@ -165,14 +165,19 @@ async def get_game_lineups(game_id: str):
 async def game_preview(game_id: str):
     """
     Pre-game win probability based on team net ratings.
-    Simulates a predicted win probability curve for future games.
+    Works for games in DB and games not yet in DB (fetches from ESPN).
     """
+    import httpx, random
+
+    eid = game_id.replace("espn_", "")
+
+    # Try DB first
+    game = None
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT g.home_team_id, g.away_team_id,
                        g.home_score, g.away_score, g.home_win,
-                       g.game_date,
                        ht.abbreviation as home_team,
                        at.abbreviation as away_team
                 FROM games g
@@ -180,51 +185,67 @@ async def game_preview(game_id: str):
                 JOIN teams at ON at.team_id = g.away_team_id
                 WHERE g.game_id = %s
             """, (game_id,))
-            game = cur.fetchone()
-            if not game:
-                raise HTTPException(status_code=404, detail="Game not found")
-            cols = [d[0] for d in cur.description]
-            game = dict(zip(cols, game))
+            row = cur.fetchone()
+            if row:
+                cols = [d[0] for d in cur.description]
+                game = dict(zip(cols, row))
 
-            # Get team net ratings from stints this season
+            # Get team ratings by abbreviation (works whether game is in DB or not)
             cur.execute("""
-                SELECT s.team_id,
-                    ROUND(SUM(s.net_points)::numeric / NULLIF(SUM(s.possessions), 0) * 100, 2) as net_rtg
-                FROM stints s
-                JOIN games g ON g.game_id = s.game_id
-                WHERE g.season_id = '2025-26'
-                AND s.possessions > 0
-                AND s.team_id IN (%s, %s)
-                GROUP BY s.team_id
-            """, (game["home_team_id"], game["away_team_id"]))
-            ratings = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+                SELECT t.abbreviation,
+                    ROUND(AVG(g2.home_score - g2.away_score) FILTER (WHERE g2.home_team_id = t.team_id)::numeric
+                        + AVG(g2.away_score - g2.home_score) FILTER (WHERE g2.away_team_id = t.team_id)::numeric, 1) as net_rtg
+                FROM teams t
+                JOIN games g2 ON (g2.home_team_id = t.team_id OR g2.away_team_id = t.team_id)
+                WHERE g2.season_id = '2025-26' AND g2.home_score IS NOT NULL
+                GROUP BY t.team_id, t.abbreviation
+            """)
+            team_ratings = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
 
-    home_rtg = ratings.get(game["home_team_id"], 0)
-    away_rtg = ratings.get(game["away_team_id"], 0)
+    # If not in DB, fetch from ESPN
+    if not game:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
+                    params={"event": eid},
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+                data = r.json()
+            comp = data.get("header", {}).get("competitions", [{}])[0]
+            teams = {t["homeAway"]: t for t in comp.get("competitors", [])}
+            home_abbr = teams.get("home", {}).get("team", {}).get("abbreviation", "?")
+            away_abbr = teams.get("away", {}).get("team", {}).get("abbreviation", "?")
+            home_score = teams.get("home", {}).get("score")
+            away_score = teams.get("away", {}).get("score")
+            game = {
+                "home_team": home_abbr,
+                "away_team": away_abbr,
+                "home_team_id": None,
+                "away_team_id": None,
+                "home_score": int(home_score) if home_score else None,
+                "away_score": int(away_score) if away_score else None,
+                "home_win": None,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Game not found: {e}")
 
-    # Expected point differential per 100 poss, convert to per game (~100 poss/game)
-    # home court = +2.5 pts
-    expected_diff = (home_rtg - away_rtg) / 100 * 100 + 2.5
+    home_rtg = team_ratings.get(game["home_team"], 0)
+    away_rtg = team_ratings.get(game["away_team"], 0)
+    expected_diff = (home_rtg - away_rtg) + 2.5
 
-    # Generate simulated win prob curve
-    # Start at pre-game probability, add noise that settles toward outcome
-    import random
     random.seed(hash(game_id))
-
-    series = []
-    # pre-game prob based on team strength
     pregame_prob = win_prob_from_state(int(expected_diff), 2880, home_court=0)
 
-    score_diff = 0
+    series = []
+    score_diff = 0.0
     for sec in range(0, 2881, 30):
         time_rem = 2880 - sec
-        # Simulate score drift toward expected outcome
         if sec > 0:
-            drift = expected_diff / 2880 * 30  # expected pts per 30s
+            drift = expected_diff / 2880 * 30
             noise = random.gauss(0, 1.2)
             score_diff += drift + noise
             score_diff = max(-35, min(35, score_diff))
-
         prob = win_prob_from_state(int(score_diff), time_rem, home_court=2.5)
         series.append({
             "game_seconds": sec,
@@ -237,8 +258,6 @@ async def game_preview(game_id: str):
 
     return JSONResponse({
         "game_id": game_id,
-        "home_team_id": game["home_team_id"],
-        "away_team_id": game["away_team_id"],
         "home_team": game["home_team"],
         "away_team": game["away_team"],
         "home_score": game["home_score"],
