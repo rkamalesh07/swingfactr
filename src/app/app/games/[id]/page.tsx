@@ -107,13 +107,24 @@ export default function GamePage() {
 
     const tryDB = fetch(`${API}/game/${id}/winprob`)
       .then(r => r.json())
-      .then(wp => (wp.series && wp.series.length > 0 && wp.home_team) ? wp : null)
+      .then(wp => (wp.series && wp.series.length > 10 && wp.home_team) ? wp : null)
       .catch(() => null)
 
-    Promise.all([tryLive, tryDB]).then(([live, db]) => {
-      // Prefer DB data for completed games (more accurate), live for in-progress/upcoming
-      if (db && db.series.length > 0) {
+    const tryPreview = fetch(`${API}/game/${id}/preview`)
+      .then(r => r.json())
+      .then(p => (p.series && p.series.length > 10 && p.home_team) ? p : null)
+      .catch(() => null)
+
+    Promise.all([tryLive, tryDB, tryPreview]).then(([live, db, preview]) => {
+      if (db && db.series.length > 10) {
+        // Completed game with real plays — most accurate
         setData(db)
+      } else if (live && live.series && live.series.length > 10) {
+        // Live game with real plays from ESPN
+        setData(live)
+      } else if (preview) {
+        // Pre-game or no plays yet — use simulated preview curve
+        setData(preview)
       } else if (live) {
         setData(live)
       } else {
