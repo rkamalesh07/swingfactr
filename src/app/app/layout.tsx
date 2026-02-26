@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}>
             SWINGFACTR
           </Link>
+          <Link href="/live" className="nav-link">Live</Link>
           <Link href="/games" className="nav-link">Games</Link>
           <Link href="/lineups" className="nav-link">Lineups</Link>
           <Link href="/clutch" className="nav-link">Clutch</Link>
