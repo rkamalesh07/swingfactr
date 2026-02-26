@@ -190,17 +190,34 @@ async def game_preview(game_id: str):
                 cols = [d[0] for d in cur.description]
                 game = dict(zip(cols, row))
 
-            # Get team ratings by abbreviation (works whether game is in DB or not)
+            # Get per-game margins by team for exponential weighting
             cur.execute("""
                 SELECT t.abbreviation,
-                    ROUND(AVG(g2.home_score - g2.away_score) FILTER (WHERE g2.home_team_id = t.team_id)::numeric
-                        + AVG(g2.away_score - g2.home_score) FILTER (WHERE g2.away_team_id = t.team_id)::numeric, 1) as net_rtg
+                    CASE WHEN g2.home_team_id = t.team_id THEN g2.home_score - g2.away_score
+                         ELSE g2.away_score - g2.home_score END as margin,
+                    g2.game_date
                 FROM teams t
                 JOIN games g2 ON (g2.home_team_id = t.team_id OR g2.away_team_id = t.team_id)
                 WHERE g2.season_id = '2025-26' AND g2.home_score IS NOT NULL
-                GROUP BY t.team_id, t.abbreviation
             """)
-            team_ratings = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+            import math
+            from datetime import date as date_cls
+            today = date_cls.today()
+            team_game_data = {}
+            for abbr, margin, gdate in cur.fetchall():
+                if abbr not in team_game_data:
+                    team_game_data[abbr] = []
+                team_game_data[abbr].append((margin, gdate))
+
+            team_ratings = {}
+            for abbr, games in team_game_data.items():
+                total_w = total_wm = 0
+                for margin, gdate in games:
+                    days_ago = (today - gdate).days
+                    w = math.exp(-0.015 * days_ago)
+                    total_w += w
+                    total_wm += w * margin
+                team_ratings[abbr] = total_wm / total_w if total_w > 0 else 0
 
     # If not in DB, fetch from ESPN
     if not game:
