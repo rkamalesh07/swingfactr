@@ -189,7 +189,13 @@ export default function LivePage() {
                     </div>
                   )}
 
-                  {detail.series.length > 1 && (
+                  {detail.state === 'pre' && (
+                    <div style={{ padding: '12px 0', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+                      Game hasn't started — click below for projected win probability based on team ratings.
+                    </div>
+                  )}
+
+                  {detail.series.length > 1 && detail.state !== 'pre' && (
                     <>
                       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '12px' }}>
                         WIN PROBABILITY CURVE
