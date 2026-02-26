@@ -1,4 +1,4 @@
-"""Team rankings router — net rating, off/def rating, record."""
+"""Team rankings and lineup router."""
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from src.etl.db import get_conn
@@ -11,46 +11,32 @@ async def team_rankings(season: str = Query("2025-26")):
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                WITH team_games AS (
-                    SELECT
-                        t.team_id, t.abbreviation,
-                        COUNT(*) as games,
-                        SUM(CASE WHEN g.home_win = TRUE AND g.home_team_id = t.team_id THEN 1
-                                 WHEN g.home_win = FALSE AND g.away_team_id = t.team_id THEN 1
-                                 ELSE 0 END) as wins,
-                        SUM(CASE WHEN g.home_win = FALSE AND g.home_team_id = t.team_id THEN 1
-                                 WHEN g.home_win = TRUE AND g.away_team_id = t.team_id THEN 1
-                                 ELSE 0 END) as losses,
-                        AVG(CASE WHEN g.home_team_id = t.team_id THEN g.home_score - g.away_score
-                                 ELSE g.away_score - g.home_score END) as avg_margin
-                    FROM teams t
-                    JOIN games g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                    WHERE g.season_id = %s AND g.home_score IS NOT NULL
-                    GROUP BY t.team_id, t.abbreviation
-                ),
-                team_stints AS (
-                    SELECT
-                        s.team_id,
-                        SUM(s.net_points) as total_net,
-                        SUM(s.possessions) as total_poss,
-                        SUM(s.duration_seconds) as total_seconds
-                    FROM stints s
-                    JOIN games g ON g.game_id = s.game_id
-                    WHERE g.season_id = %s
-                    AND s.possessions > 0
-                    GROUP BY s.team_id
-                )
                 SELECT
-                    tg.team_id, tg.abbreviation,
-                    tg.games, tg.wins, tg.losses,
-                    ROUND(tg.avg_margin::numeric, 1) as avg_margin,
-                    ROUND(ts.total_net::numeric / NULLIF(ts.total_poss, 0) * 100, 1) as net_rtg,
-                    ROUND(ts.total_seconds::numeric / 60, 0) as minutes
-                FROM team_games tg
-                LEFT JOIN team_stints ts ON ts.team_id = tg.team_id
-                WHERE tg.games >= 10
-                ORDER BY net_rtg DESC NULLS LAST
-            """, (season, season))
+                    t.team_id, t.abbreviation,
+                    COUNT(*) as games,
+                    SUM(CASE WHEN (g.home_win = TRUE AND g.home_team_id = t.team_id)
+                                  OR (g.home_win = FALSE AND g.away_team_id = t.team_id)
+                             THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN (g.home_win = FALSE AND g.home_team_id = t.team_id)
+                                  OR (g.home_win = TRUE AND g.away_team_id = t.team_id)
+                             THEN 1 ELSE 0 END) as losses,
+                    ROUND(AVG(
+                        CASE WHEN g.home_team_id = t.team_id
+                             THEN g.home_score - g.away_score
+                             ELSE g.away_score - g.home_score END
+                    )::numeric, 1) as avg_margin,
+                    ROUND(AVG(
+                        CASE WHEN g.home_team_id = t.team_id
+                             THEN g.home_score - g.away_score
+                             ELSE g.away_score - g.home_score END
+                    )::numeric, 1) as net_rtg
+                FROM teams t
+                JOIN games g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                WHERE g.season_id = %s AND g.home_score IS NOT NULL
+                GROUP BY t.team_id, t.abbreviation
+                HAVING COUNT(*) >= 10
+                ORDER BY net_rtg DESC
+            """, (season,))
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -91,8 +77,7 @@ async def lineup_rankings(
                     COUNT(DISTINCT s.game_id) as games,
                     SUM(s.possessions) as possessions,
                     ROUND(SUM(s.duration_seconds)::numeric / 60, 1) as minutes,
-                    ROUND(SUM(s.net_points)::numeric / NULLIF(SUM(s.possessions), 0) * 100, 1) as net_rtg,
-                    SUM(s.net_points) as total_net
+                    ROUND(SUM(s.net_points)::numeric / NULLIF(SUM(s.possessions), 0) * 100, 1) as net_rtg
                 FROM stints s
                 JOIN teams t ON t.team_id = s.team_id
                 JOIN games g ON g.game_id = s.game_id
@@ -106,8 +91,7 @@ async def lineup_rankings(
             cols = [d[0] for d in cur.description]
             stints_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-            # Get player names for each lineup
-            all_lineup_ids = [r["lineup_id"] for r in stints_rows[:100]]  # top 100
+            all_lineup_ids = [r["lineup_id"] for r in stints_rows[:200]]
             if all_lineup_ids:
                 cur.execute("""
                     SELECT lp.lineup_id,
@@ -121,7 +105,7 @@ async def lineup_rankings(
                 for lid, name in cur.fetchall():
                     if lid not in lineup_player_names:
                         lineup_player_names[lid] = []
-                    lineup_player_names[lid].append(name.strip())
+                    lineup_player_names[lid].append((name or '').strip())
             else:
                 lineup_player_names = {}
 
