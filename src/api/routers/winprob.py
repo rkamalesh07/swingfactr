@@ -6,15 +6,14 @@ import math
 
 router = APIRouter()
 
-def win_prob_from_state(score_diff: int, time_remaining: int, home_court: float = 0.0) -> float:
+def win_prob_from_state(score_diff: int, time_remaining: int, home_court: float = 0.0, expected_diff: float = 0.0) -> float:
     """
     Compute home team win probability from score diff and time remaining.
-    Based on NBA historical calibration:
-    - score_diff: home_score - away_score (positive = home leading)
-    - time_remaining: seconds left in regulation (0-2880)
-    - home_court: home court advantage in points (~2.5 pts)
-    
-    Uses logistic model calibrated to NBA: k=0.1697 from Stern 1994 / updated
+    - score_diff: current home_score - away_score
+    - time_remaining: seconds left (0-2880)
+    - home_court: static home court advantage (~2.5 pts)
+    - expected_diff: pre-game expected final margin for home team
+      (scaled by time_remaining/2880 so it fades as the actual score develops)
     """
     if time_remaining <= 0:
         if score_diff > 0:
@@ -24,19 +23,14 @@ def win_prob_from_state(score_diff: int, time_remaining: int, home_court: float 
         else:
             return 0.5
 
-    # Adjusted score diff includes home court advantage
-    adj_diff = score_diff + home_court
+    # Scale expected_diff by fraction of game remaining
+    # At tipoff this equals full expected_diff; at game end it equals 0 (score is truth)
+    remaining_fraction = time_remaining / 2880
+    adj_diff = score_diff + home_court + expected_diff * remaining_fraction
     
-    # Variance of score grows with time (random walk model)
-    # NBA pace ~100 possessions/48min, ~1 pt per possession
-    # std_dev of final margin ≈ sqrt(time_remaining / 2880) * 11.5
     std_dev = 11.5 * math.sqrt(time_remaining / 2880)
-    
-    # P(home wins) = P(Z > -adj_diff / std_dev) where Z~N(0,1)
     z = adj_diff / std_dev
     prob = 0.5 * (1 + math.erf(z / math.sqrt(2)))
-    
-    # Clamp to reasonable range
     return max(0.02, min(0.98, prob))
 
 
@@ -263,19 +257,18 @@ async def game_preview(game_id: str):
     # Start score diff at 0 — team quality shows through win_prob via expected_diff offset
     # We pass expected_diff as a separate home_court-like offset so it affects prob from tip
     score_diff = 0.0
-    quality_offset = expected_diff - 2.5  # strip out home court, keep team quality diff
+    team_quality_diff = expected_diff - 2.5  # strip home court to get pure team quality
 
     for sec in range(0, 2881, 30):
         time_rem = 2880 - sec
         if sec > 0:
-            drift = expected_diff / 2880 * 30
+            drift = expected_diff / 2880 * 30  # expected pts per 30s interval
             noise = random.gauss(0, 1.2)
             score_diff += drift + noise
             score_diff = max(-40, min(40, score_diff))
-        # Use score_diff as integer (NBA scores are whole numbers)
         int_diff = round(score_diff)
-        # home_court bakes in both home advantage AND team quality from tipoff
-        prob = win_prob_from_state(int_diff, time_rem, home_court=expected_diff)
+        # Pass expected_diff separately so it scales down as game progresses
+        prob = win_prob_from_state(int_diff, time_rem, home_court=2.5, expected_diff=team_quality_diff)
         series.append({
             "game_seconds": sec,
             "time_remaining": time_rem,

@@ -36,7 +36,8 @@ interface GameData {
 }
 
 function formatTime(seconds: number): string {
-  const q = Math.min(Math.floor(seconds / 720) + 1, 4)
+  if (seconds >= 2880) return 'Q4 0:00'
+  const q = Math.floor(seconds / 720) + 1
   const secInQ = seconds % 720
   const remaining = 720 - secInQ
   const m = Math.floor(remaining / 60)

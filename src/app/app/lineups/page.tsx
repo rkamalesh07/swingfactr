@@ -55,7 +55,7 @@ const fmtAbs = (v: number | null, d = 1) => v == null ? '—' : v.toFixed(d)
 
 export default function LineupsPage() {
   const [teamId, setTeamId] = useState(2)
-  const [season] = useState('2024-25')
+  const [season] = useState('2025-26')
   const [lineups, setLineups] = useState<Lineup[]>([])
   const [loading, setLoading] = useState(false)
 

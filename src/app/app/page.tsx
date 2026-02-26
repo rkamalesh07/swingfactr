@@ -59,6 +59,14 @@ const MODULES = [
     stat: '23K',
     statLabel: 'stints tracked',
   },
+  {
+    href: '/teams',
+    label: 'Team Form & Trends',
+    tag: 'Exponential Decay · λ=0.015',
+    desc: 'Which teams are trending up or down right now. Weighted recent performance vs full season average.',
+    stat: '🔥',
+    statLabel: 'hot/cold streaks',
+  },
 ]
 
 export default function Home() {
