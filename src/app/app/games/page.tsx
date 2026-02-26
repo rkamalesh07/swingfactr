@@ -22,8 +22,8 @@ export default function GamesPage() {
   const [season, setSeason] = useState('2025-26')
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [search, setSearch] = useState('')
 
-  // Fetch total count when season changes
   useEffect(() => {
     setPage(0)
     fetch(`${API}/games/count?season=${season}`)
@@ -32,7 +32,6 @@ export default function GamesPage() {
       .catch(() => setTotalPages(1))
   }, [season])
 
-  // Fetch games when page or season changes
   useEffect(() => {
     setLoading(true)
     fetch(`${API}/games/?season=${season}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`)
@@ -41,22 +40,42 @@ export default function GamesPage() {
       .catch(() => setLoading(false))
   }, [season, page])
 
+  const filtered = search.trim()
+    ? games.filter(g =>
+        g.home_team.toLowerCase().includes(search.toLowerCase()) ||
+        g.away_team.toLowerCase().includes(search.toLowerCase())
+      )
+    : games
+
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
         <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
           WIN PROBABILITY MODEL
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Games</h1>
-          <select value={season} onChange={e => setSeason(e.target.value)} style={{
-            background: '#111', border: '1px solid #222', color: '#888',
-            padding: '6px 12px', fontSize: '12px', fontFamily: 'IBM Plex Mono, monospace',
-            outline: 'none', cursor: 'pointer',
-          }}>
-            <option value="2025-26">2025-26</option>
-            <option value="2024-25">2024-25</option>
-          </select>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="Search team (e.g. OKC)"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                background: '#111', border: '1px solid #222', color: '#888',
+                padding: '6px 12px', fontSize: '12px', fontFamily: 'IBM Plex Mono, monospace',
+                outline: 'none', width: '180px',
+              }}
+            />
+            <select value={season} onChange={e => { setSeason(e.target.value); setSearch('') }} style={{
+              background: '#111', border: '1px solid #222', color: '#888',
+              padding: '6px 12px', fontSize: '12px', fontFamily: 'IBM Plex Mono, monospace',
+              outline: 'none', cursor: 'pointer',
+            }}>
+              <option value="2025-26">2025-26</option>
+              <option value="2024-25">2024-25</option>
+            </select>
+          </div>
         </div>
         <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
           Click any game to view the win probability curve →
@@ -76,14 +95,16 @@ export default function GamesPage() {
 
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
-        ) : games.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No games found.</div>
-        ) : games.map((g, i) => (
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
+            {search ? `No games found for "${search}"` : 'No games found.'}
+          </div>
+        ) : filtered.map((g, i) => (
           <Link key={g.game_id} href={`/games/${g.game_id}`} style={{ textDecoration: 'none' }}>
             <div
               style={{
                 display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
-                padding: '14px 20px', borderBottom: i < games.length - 1 ? '1px solid #111' : 'none',
+                padding: '14px 20px', borderBottom: i < filtered.length - 1 ? '1px solid #111' : 'none',
                 alignItems: 'center', cursor: 'pointer',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = '#111')}
@@ -104,33 +125,35 @@ export default function GamesPage() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
-          {games.length > 0 ? `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + games.length}` : '0 games'}
-          {' '}&middot; page {page + 1} of {totalPages}
+      {!search && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+            {games.length > 0 ? `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + games.length}` : '0 games'}
+            {' '}&middot; page {page + 1} of {totalPages}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{
+              background: 'none', border: '1px solid #222', color: page === 0 ? '#2a2a2a' : '#888',
+              padding: '4px 12px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
+              cursor: page === 0 ? 'not-allowed' : 'pointer',
+            }}>← prev</button>
+            <select value={page} onChange={e => setPage(Number(e.target.value))} style={{
+              background: '#111', border: '1px solid #222', color: '#888',
+              padding: '4px 8px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
+              outline: 'none', cursor: 'pointer',
+            }}>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <option key={i} value={i}>page {i + 1}</option>
+              ))}
+            </select>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{
+              background: 'none', border: '1px solid #222', color: page >= totalPages - 1 ? '#2a2a2a' : '#888',
+              padding: '4px 12px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
+              cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+            }}>next →</button>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{
-            background: 'none', border: '1px solid #222', color: page === 0 ? '#2a2a2a' : '#888',
-            padding: '4px 12px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
-            cursor: page === 0 ? 'not-allowed' : 'pointer',
-          }}>← prev</button>
-          <select value={page} onChange={e => setPage(Number(e.target.value))} style={{
-            background: '#111', border: '1px solid #222', color: '#888',
-            padding: '4px 8px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
-            outline: 'none', cursor: 'pointer',
-          }}>
-            {Array.from({ length: totalPages }, (_, i) => (
-              <option key={i} value={i}>page {i + 1}</option>
-            ))}
-          </select>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{
-            background: 'none', border: '1px solid #222', color: page >= totalPages - 1 ? '#2a2a2a' : '#888',
-            padding: '4px 12px', fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace',
-            cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
-          }}>next →</button>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

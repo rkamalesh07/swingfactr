@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS teams (
 
 CREATE TABLE IF NOT EXISTS players (
     player_id   INTEGER PRIMARY KEY,
-    full_name   VARCHAR(100) NOT NULL,
+    first_name  VARCHAR(50),
+    last_name   VARCHAR(50),
+    full_name   VARCHAR(100),
     position    VARCHAR(5)
 );
 
@@ -50,35 +52,31 @@ CREATE INDEX IF NOT EXISTS idx_games_date ON games(game_date);
 CREATE INDEX IF NOT EXISTS idx_games_season ON games(season_id);
 
 CREATE TABLE IF NOT EXISTS plays (
-    play_id             BIGSERIAL PRIMARY KEY,
-    game_id             VARCHAR(20) REFERENCES games(game_id),
-    period              INTEGER NOT NULL,
-    clock_seconds       INTEGER NOT NULL,
-    game_seconds_elapsed INTEGER NOT NULL,
-    event_type          INTEGER,
-    event_msg_type      INTEGER,
-    description         TEXT,
-    home_score          INTEGER DEFAULT 0,
-    away_score          INTEGER DEFAULT 0,
-    score_diff          INTEGER,
-    possession_team_id  INTEGER,
-    player1_id          INTEGER,
-    player2_id          INTEGER,
-    player3_id          INTEGER,
-    is_fg_attempt       BOOLEAN DEFAULT FALSE,
-    is_fg_made          BOOLEAN DEFAULT FALSE,
-    is_3pt              BOOLEAN DEFAULT FALSE,
-    shot_distance       FLOAT,
-    is_rim_attempt      BOOLEAN DEFAULT FALSE,
-    is_turnover         BOOLEAN DEFAULT FALSE,
-    is_foul             BOOLEAN DEFAULT FALSE,
-    is_timeout          BOOLEAN DEFAULT FALSE,
-    home_timeouts_left  INTEGER,
-    away_timeouts_left  INTEGER,
-    home_fouls          INTEGER DEFAULT 0,
-    away_fouls          INTEGER DEFAULT 0
+    play_id                 BIGSERIAL PRIMARY KEY,
+    game_id                 VARCHAR(20) REFERENCES games(game_id),
+    play_num                INTEGER,
+    period                  INTEGER,
+    clock_seconds           INTEGER,
+    game_seconds_elapsed    INTEGER,
+    time_remaining_seconds  INTEGER,
+    description             TEXT,
+    home_score              INTEGER DEFAULT 0,
+    away_score              INTEGER DEFAULT 0,
+    score_diff              INTEGER,
+    possession_team_id      INTEGER,
+    is_home_possession      BOOLEAN,
+    is_fg_attempt           BOOLEAN DEFAULT FALSE,
+    is_fg_made              BOOLEAN DEFAULT FALSE,
+    is_3pt                  BOOLEAN DEFAULT FALSE,
+    shot_distance           FLOAT,
+    is_rim_attempt          BOOLEAN DEFAULT FALSE,
+    is_turnover             BOOLEAN DEFAULT FALSE,
+    is_foul                 BOOLEAN DEFAULT FALSE,
+    is_timeout              BOOLEAN DEFAULT FALSE,
+    play_type               VARCHAR(100)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plays_game_num ON plays(game_id, play_num);
 CREATE INDEX IF NOT EXISTS idx_plays_game ON plays(game_id);
 
 CREATE TABLE IF NOT EXISTS stints (
@@ -94,14 +92,19 @@ CREATE TABLE IF NOT EXISTS stints (
     duration_seconds    INTEGER,
     start_score_diff    INTEGER,
     end_score_diff      INTEGER,
+    net_points          INTEGER,
+    possessions         INTEGER DEFAULT 0,
+    is_clutch           BOOLEAN DEFAULT FALSE,
     points_for          INTEGER DEFAULT 0,
     points_against      INTEGER DEFAULT 0,
     possessions_for     INTEGER DEFAULT 0,
     possessions_against INTEGER DEFAULT 0,
-    net_points          INTEGER,
-    is_clutch           BOOLEAN DEFAULT FALSE
+    off_rating          FLOAT,
+    def_rating          FLOAT,
+    net_rating          FLOAT
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS stints_unique_idx ON stints(game_id, team_id, lineup_id, period, start_game_seconds);
 CREATE INDEX IF NOT EXISTS idx_stints_game ON stints(game_id);
 CREATE INDEX IF NOT EXISTS idx_stints_lineup ON stints(lineup_id);
 CREATE INDEX IF NOT EXISTS idx_stints_team ON stints(team_id);
@@ -109,6 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_stints_team ON stints(team_id);
 CREATE TABLE IF NOT EXISTS lineup_players (
     lineup_id   VARCHAR(100) NOT NULL,
     player_id   INTEGER,
+    team_id     INTEGER REFERENCES teams(team_id),
     PRIMARY KEY (lineup_id, player_id)
 );
 
@@ -146,24 +150,7 @@ CREATE TABLE IF NOT EXISTS schedule (
     altitude_ft     INTEGER DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS clutch_segments (
-    segment_id      BIGSERIAL PRIMARY KEY,
-    game_id         VARCHAR(20) REFERENCES games(game_id),
-    team_id         INTEGER REFERENCES teams(team_id),
-    lineup_id       VARCHAR(100),
-    start_seconds   INTEGER,
-    end_seconds     INTEGER,
-    score_diff_at_start INTEGER,
-    points_scored   INTEGER DEFAULT 0,
-    points_allowed  INTEGER DEFAULT 0,
-    possessions     INTEGER DEFAULT 0,
-    won_segment     BOOLEAN,
-    game_won        BOOLEAN,
-    home_team_id    INTEGER,
-    opp_def_cluster INTEGER,
-    rest_days       INTEGER,
-    b2b             BOOLEAN DEFAULT FALSE
-);
+CREATE UNIQUE INDEX IF NOT EXISTS schedule_team_game_idx ON schedule(team_id, game_id);
 
 CREATE TABLE IF NOT EXISTS win_prob_predictions (
     pred_id         BIGSERIAL PRIMARY KEY,
@@ -188,6 +175,25 @@ CREATE TABLE IF NOT EXISTS defensive_profiles (
     def_cluster     INTEGER,
     cluster_label   VARCHAR(30),
     PRIMARY KEY (team_id, season_id)
+);
+
+CREATE TABLE IF NOT EXISTS clutch_segments (
+    segment_id      BIGSERIAL PRIMARY KEY,
+    game_id         VARCHAR(20) REFERENCES games(game_id),
+    team_id         INTEGER REFERENCES teams(team_id),
+    lineup_id       VARCHAR(100),
+    start_seconds   INTEGER,
+    end_seconds     INTEGER,
+    score_diff_at_start INTEGER,
+    points_scored   INTEGER DEFAULT 0,
+    points_allowed  INTEGER DEFAULT 0,
+    possessions     INTEGER DEFAULT 0,
+    won_segment     BOOLEAN,
+    game_won        BOOLEAN,
+    home_team_id    INTEGER,
+    opp_def_cluster INTEGER,
+    rest_days       INTEGER,
+    b2b             BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS model_runs (
