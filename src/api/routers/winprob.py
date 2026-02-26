@@ -237,21 +237,33 @@ async def game_preview(game_id: str):
     random.seed(hash(game_id))
     pregame_prob = win_prob_from_state(int(expected_diff), 2880, home_court=0)
 
+    # Simulation: start score at 0 but immediately reflect team strength via home_court+expected_diff.
+    # The win_prob_from_state uses home_court=2.5 PLUS the score diff, so at tipoff (score=0)
+    # the probability already bakes in home court. But we also want team quality baked in from
+    # the start — so we initialize score_diff to a small fraction of expected_diff.
+    # This way SA (better team) starts already favored even when score is 0-0.
     series = []
+    # Start score diff at 0 — team quality shows through win_prob via expected_diff offset
+    # We pass expected_diff as a separate home_court-like offset so it affects prob from tip
     score_diff = 0.0
+    quality_offset = expected_diff - 2.5  # strip out home court, keep team quality diff
+
     for sec in range(0, 2881, 30):
         time_rem = 2880 - sec
         if sec > 0:
             drift = expected_diff / 2880 * 30
             noise = random.gauss(0, 1.2)
             score_diff += drift + noise
-            score_diff = max(-35, min(35, score_diff))
-        prob = win_prob_from_state(int(score_diff), time_rem, home_court=2.5)
+            score_diff = max(-40, min(40, score_diff))
+        # Use score_diff as integer (NBA scores are whole numbers)
+        int_diff = round(score_diff)
+        # home_court bakes in both home advantage AND team quality from tipoff
+        prob = win_prob_from_state(int_diff, time_rem, home_court=expected_diff)
         series.append({
             "game_seconds": sec,
             "time_remaining": time_rem,
             "home_win_prob": round(prob, 3),
-            "score_diff": round(score_diff, 1),
+            "score_diff": int_diff,
             "quarter": min(sec // 720 + 1, 4),
             "is_simulated": True,
         })
