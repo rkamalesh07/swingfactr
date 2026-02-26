@@ -2,36 +2,76 @@ import Link from 'next/link'
 
 const MODULES = [
   {
-    href: '/games',
-    label: 'Win Probability',
-    tag: 'XGBoost · Calibrated',
-    desc: 'Per-play win probability curves for every completed game. Trained on 469K plays from the 2024–25 season.',
-    stat: '995',
-    statLabel: 'games modeled',
+    href: '/live',
+    label: 'Live Win Probability',
+    tag: 'Random Walk · Real-time ESPN',
+    desc: "Today's games with live win probability bars updating every 30 seconds. Click any game for the full curve.",
+    stat: '🔴',
+    statLabel: 'live today',
+    accent: '#ef4444',
   },
   {
-    href: '/lineups',
-    label: 'Lineup Impact',
-    tag: 'RAPM · Ridge Regression',
-    desc: 'Regularized Adjusted Plus-Minus for every 5-man unit. Controls for opponent quality. 90% CI from bootstrap.',
-    stat: '572',
-    statLabel: 'players tracked',
+    href: '/games',
+    label: 'Game Win Curves',
+    tag: 'Random Walk · Per-play',
+    desc: 'Per-play win probability curves for every completed game. Pre-game projections for upcoming matchups based on team ratings.',
+    stat: '870',
+    statLabel: 'games this season',
+    accent: '#e8e8e8',
+  },
+  {
+    href: '/teams',
+    label: 'Team Rankings',
+    tag: 'Net Rating · 5-man Stints',
+    desc: 'All 30 teams ranked by net rating. Best and worst 5-man lineups by net points per 100 possessions.',
+    stat: '30',
+    statLabel: 'teams ranked',
+    accent: '#e8e8e8',
+  },
+  {
+    href: '/rapm',
+    label: 'RAPM',
+    tag: 'Ridge Regression · α=2000',
+    desc: 'Regularized Adjusted Plus-Minus — points added per 100 possessions controlling for teammates and opponents.',
+    stat: '534',
+    statLabel: 'players rated',
+    accent: '#e8e8e8',
+  },
+  {
+    href: '/players',
+    label: 'Player Ratings',
+    tag: 'Net Rating · On/Off',
+    desc: 'On-court net rating for every player with 50+ minutes. Sortable by offense, defense, and net impact.',
+    stat: '410K',
+    statLabel: 'plays analyzed',
+    accent: '#e8e8e8',
   },
   {
     href: '/clutch',
     label: 'Clutch Performance',
     tag: 'Last 5 min · ±5 pts',
-    desc: 'Team and lineup net ratings in clutch situations only. Separates clutch performers from aggregate noise.',
+    desc: 'Net ratings in clutch situations only — Q4 within 5 points. Separates closers from aggregate noise.',
     stat: 'Q4',
-    statLabel: 'crunch time only',
+    statLabel: 'crunch time',
+    accent: '#e8e8e8',
   },
   {
     href: '/fatigue',
     label: 'Fatigue & Travel',
     tag: 'OLS Regression · R²=0.029',
-    desc: 'Quantified effect of back-to-backs, travel distance, altitude, and timezone changes on score margin.',
+    desc: 'Quantified effect of back-to-backs, travel distance, altitude, and timezone changes on scoring margin.',
     stat: '8',
     statLabel: 'fatigue factors',
+    accent: '#e8e8e8',
+  },
+  {
+    href: '/lineups',
+    label: 'Lineup Explorer',
+    tag: 'Play-by-play · 5-man units',
+    desc: 'Browse every 5-man lineup with net rating, possessions, and minutes. Filter by team.',
+    stat: '23K',
+    statLabel: 'stints tracked',
+    accent: '#e8e8e8',
   },
 ]
 
@@ -41,23 +81,48 @@ export default function Home() {
       <style>{`
         .module-card { background: #0a0a0a; padding: 28px 32px; transition: background 0.15s; display: block; text-decoration: none; }
         .module-card:hover { background: #131313; }
+        .module-card:hover .card-arrow { color: #555; }
+        .card-arrow { transition: color 0.15s; }
       `}</style>
 
       <div style={{ marginBottom: '48px' }}>
         <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333', letterSpacing: '0.12em', marginBottom: '12px' }}>
-          NBA ANALYTICS · 2024–25 SEASON
+          NBA ANALYTICS · 2025–26 SEASON · LIVE
         </div>
         <h1 style={{ fontSize: '32px', fontWeight: 300, color: '#f0f0f0', letterSpacing: '-0.02em', marginBottom: '12px', lineHeight: 1.1 }}>
           Game intelligence.<br />Not player props.
         </h1>
         <p style={{ color: '#555', fontSize: '14px', maxWidth: '520px', lineHeight: 1.6 }}>
-          SwingFactr models lineup chemistry, in-game win probability, and schedule fatigue
-          using play-by-play data from every 2024–25 NBA game.
+          SwingFactr models lineup chemistry, live win probability, and schedule fatigue
+          using play-by-play data from every 2025–26 NBA game — updated daily.
         </p>
       </div>
 
+      {/* Live banner */}
+      <Link href="/live" style={{ textDecoration: 'none', display: 'block', marginBottom: '1px' }}>
+        <div style={{
+          background: '#0a0a0a', border: '1px solid #1a1a1a', borderBottom: 'none',
+          padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          transition: 'background 0.15s',
+        }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#131313')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#0a0a0a')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ color: '#ef4444', fontSize: '10px' }}>●</span>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#ef4444', letterSpacing: '0.1em' }}>
+              LIVE WIN PROBABILITY
+            </span>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+              Today's games · auto-refresh 30s
+            </span>
+          </div>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>View →</span>
+        </div>
+      </Link>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#1a1a1a', border: '1px solid #1a1a1a' }}>
-        {MODULES.map((m) => (
+        {MODULES.filter(m => m.href !== '/live').map((m) => (
           <Link key={m.href} href={m.href} className="module-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
@@ -70,16 +135,17 @@ export default function Home() {
               </div>
             </div>
             <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, marginBottom: '20px' }}>{m.desc}</p>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>View data →</div>
+            <div className="card-arrow" style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>View data →</div>
           </Link>
         ))}
       </div>
 
-      <div style={{ marginTop: '48px', paddingTop: '24px', borderTop: '1px solid #1a1a1a', display: 'flex', gap: '40px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
-        <span>ESPN API · No auth required</span>
-        <span>XGBoost · AUC 0.79</span>
+      <div style={{ marginTop: '48px', paddingTop: '24px', borderTop: '1px solid #1a1a1a', display: 'flex', flexWrap: 'wrap', gap: '32px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
+        <span>870 games · 2025-26</span>
+        <span>Random Walk Win Prob</span>
         <span>Ridge RAPM · α=2000</span>
-        <span>OLS Fatigue · n=995 games</span>
+        <span>23K stints · 534 players</span>
+        <span>ESPN API · daily ETL</span>
       </div>
     </div>
   )
