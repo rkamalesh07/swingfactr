@@ -152,3 +152,40 @@ if __name__ == "__main__":
     init_pool()
     seed_teams()
     run_incremental(season=args.season, dry_run=args.dry_run)
+
+
+def log_etl_run(payload: dict):
+    """Write ETL run metadata to etl_runs table."""
+    try:
+        from src.etl.db import get_conn
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS etl_runs (
+                        run_id SERIAL PRIMARY KEY,
+                        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        finished_at TIMESTAMPTZ,
+                        season_id VARCHAR(10) NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'running',
+                        games_processed INTEGER DEFAULT 0,
+                        plays_processed INTEGER DEFAULT 0,
+                        stints_processed INTEGER DEFAULT 0,
+                        errors INTEGER DEFAULT 0,
+                        error_details TEXT,
+                        duration_seconds FLOAT,
+                        latest_game_date DATE
+                    )
+                """)
+                cur.execute("""
+                    INSERT INTO etl_runs (
+                        started_at, finished_at, season_id, status,
+                        games_processed, plays_processed, stints_processed,
+                        errors, error_details, duration_seconds, latest_game_date
+                    ) VALUES (
+                        %(started_at)s, %(finished_at)s, %(season_id)s, %(status)s,
+                        %(games_processed)s, %(plays_processed)s, %(stints_processed)s,
+                        %(errors)s, %(error_details)s, %(duration_seconds)s, %(latest_game_date)s
+                    )
+                """, payload)
+    except Exception as e:
+        logger.warning(f"Could not log ETL run: {e}")
