@@ -12,7 +12,7 @@ except ImportError:
     pass
 
 from src.etl.db import init_pool
-from src.api.routers import games, winprob, lineups, clutch, fatigue, players, rapm, teams_router, live, playoff_simulator, health
+from src.api.routers import games, winprob, lineups, clutch, fatigue, players, rapm, teams_router, live, playoff_simulator, health, props
 
 
 @asynccontextmanager
@@ -51,6 +51,7 @@ app.include_router(teams_router.router, prefix="/teams", tags=["teams"])
 app.include_router(live.router, prefix="/live", tags=["live"])
 app.include_router(playoff_simulator.router, prefix="/playoffs", tags=["playoffs"])
 app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(props.router, prefix="/props", tags=["props"])
 
 
 @app.get("/")
