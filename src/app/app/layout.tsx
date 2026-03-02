@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/teams" className="nav-link">Teams</Link>
           <Link href="/rapm" className="nav-link">RAPM</Link>
           <div style={{ marginLeft: 'auto', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
-            2024–25
+            2025–26
           </div>
         </nav>
         <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px' }}>
