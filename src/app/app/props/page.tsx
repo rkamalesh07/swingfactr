@@ -44,6 +44,8 @@ interface PropRow {
   rest_days: number
   opp_def_label: string
   computed_at: string
+  edge: number
+  edge_label: string
 }
 
 interface BoardStats {
@@ -152,6 +154,7 @@ export default function PropsPage() {
   const [search, setSearch] = useState('')
   const [minScore, setMinScore] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'composite_score' | 'edge'>('composite_score')
 
   useEffect(() => {
     Promise.all([
@@ -170,8 +173,11 @@ export default function PropsPage() {
       if (search && !p.player_name.toLowerCase().includes(search.toLowerCase())) return false
       if (p.composite_score < minScore) return false
       return true
+    }).sort((a, b) => {
+      if (sortBy === 'edge') return Math.abs(b.edge) - Math.abs(a.edge)
+      return b.composite_score - a.composite_score
     })
-  }, [props, statFilter, search, minScore])
+  }, [props, statFilter, search, minScore, sortBy])
 
   const lastUpdated = boardStats?.last_computed
     ? new Date(boardStats.last_computed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
@@ -227,6 +233,16 @@ export default function PropsPage() {
           placeholder="Search player..."
           style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', color: '#e0e0e0', padding: '6px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', outline: 'none', width: '160px' }}
         />
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {[['composite_score', 'Score'], ['edge', 'Edge']].map(([key, label]) => (
+            <button key={key} onClick={() => setSortBy(key as any)} style={{
+              background: sortBy === key ? '#0f1f0f' : '#0a0a0a',
+              border: `1px solid ${sortBy === key ? '#4ade80' : '#1a1a1a'}`,
+              color: sortBy === key ? '#4ade80' : '#444',
+              padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', cursor: 'pointer',
+            }}>SORT: {label}</button>
+          ))}
+        </div>
         <select value={minScore} onChange={e => setMinScore(Number(e.target.value))} style={{
           background: '#0a0a0a', border: '1px solid #1a1a1a', color: '#666',
           padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', outline: 'none',
@@ -260,7 +276,7 @@ export default function PropsPage() {
           {/* Header row */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '24px 160px 60px 70px 60px 70px 70px 80px 80px 80px 120px',
+            gridTemplateColumns: '24px 160px 60px 70px 60px 70px 70px 80px 80px 80px 120px 70px',
             padding: '8px 16px', borderBottom: '1px solid #1a1a1a',
             fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em',
           }}>
@@ -275,6 +291,7 @@ export default function PropsPage() {
             <span>L10 AVG</span>
             <span>OPP DEF</span>
             <span>SCORE</span>
+            <span>EDGE</span>
           </div>
 
           {filtered.map((row, i) => {
@@ -286,7 +303,7 @@ export default function PropsPage() {
                   onClick={() => setExpanded(isExpanded ? null : key)}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '24px 160px 60px 70px 60px 70px 70px 80px 80px 80px 120px',
+                    gridTemplateColumns: '24px 160px 60px 70px 60px 70px 70px 80px 80px 80px 120px 70px',
                     padding: '11px 16px', cursor: 'pointer', alignItems: 'center',
                     background: isExpanded ? '#0d0d0d' : row.composite_score >= 65 ? 'rgba(74,222,128,0.02)' : 'transparent',
                     transition: 'background 0.1s',
@@ -337,6 +354,16 @@ export default function PropsPage() {
                   </span>
 
                   <ScoreBadge score={row.composite_score} label={row.score_label} color={row.score_color} />
+
+                  <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 700,
+                    color: row.edge > 3 ? '#4ade80' : row.edge < -3 ? '#f87171' : '#555' }}>
+                    {row.edge > 0 ? '+' : ''}{row.edge != null ? row.edge.toFixed(1) : '—'}
+                    {row.edge != null && Math.abs(row.edge) > 3 && (
+                      <div style={{ fontSize: '8px', fontWeight: 400, color: 'inherit', marginTop: '1px' }}>
+                        {row.edge > 0 ? 'OVER value' : 'UNDER value'}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {isExpanded && <ExpandedRow row={row} />}

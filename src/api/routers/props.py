@@ -68,6 +68,11 @@ async def get_board(
             r["game_log"] = json.loads(r["game_log"])
         if r["computed_at"]:
             r["computed_at"] = r["computed_at"].isoformat()
+        # Compute edge: our model probability vs book implied probability
+        comp = r.get("composite_score") or 0
+        impl = r.get("implied_prob_over") or 50
+        r["edge"] = round(comp - impl, 1)
+        r["edge_label"] = "over" if r["edge"] > 0 else "under"
         results.append(r)
 
     # Get last computed time
