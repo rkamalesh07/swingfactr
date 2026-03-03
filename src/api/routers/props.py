@@ -9,8 +9,13 @@ This router just reads from the prop_board table — instant page loads.
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from src.etl.db import get_conn
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 import json
+
+def get_today():
+    # Use PST date to match when ETL runs
+    pst = timezone(timedelta(hours=-8))
+    return datetime.now(pst).date()
 
 router = APIRouter()
 
@@ -24,7 +29,7 @@ async def get_board(
     Full prop board for today sorted by composite score descending.
     Optionally filter by stat, min score, or player name search.
     """
-    today = date.today()
+    today = get_today()
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -78,7 +83,7 @@ async def get_board(
 @router.get("/board/stats")
 async def board_stats():
     """Summary stats for today's board — used for the header."""
-    today = date.today()
+    today = get_today()
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -111,7 +116,7 @@ async def player_detail(
     stat: str = Query("pts"),
 ):
     """Detailed view for a single player prop — for expanded row view."""
-    today = date.today()
+    today = get_today()
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""

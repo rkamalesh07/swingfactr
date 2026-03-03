@@ -4,11 +4,13 @@ on:
   schedule:
     # Game data ETL — 9am EST (14:00 UTC) daily
     - cron: '0 14 * * *'
-    # Props board — 2x daily on game days only (script skips if no games)
-    # 11am PST = 19:00 UTC  (lines usually posted by now)
-    # 4pm PST  = 00:00 UTC  (final lines before tip-off)
-    - cron: '0 19 * * *'
-    - cron: '0 0 * * *'
+    # Props board — 3x daily on game days only (script skips if no games)
+    # 6:30am PST = 14:30 UTC
+    # 12pm PST   = 20:00 UTC
+    # 3:30pm PST = 23:30 UTC
+    - cron: '30 14 * * *'
+    - cron: '0 20 * * *'
+    - cron: '30 23 * * *'
   workflow_dispatch:
     inputs:
       job:
@@ -45,8 +47,9 @@ jobs:
     timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
-      github.event.schedule == '0 19 * * *' ||
-      github.event.schedule == '0 0 * * *'
+      github.event.schedule == '30 14 * * *' ||
+      github.event.schedule == '0 20 * * *' ||
+      github.event.schedule == '30 23 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

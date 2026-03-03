@@ -368,7 +368,9 @@ def get_rest_info(team_abbr):
 async def run():
     init_pool()
     ensure_table()
-    today = date.today()
+    # Use PST date so it matches what the API router reads
+    pst = timezone(timedelta(hours=-8))
+    today = datetime.now(pst).date()
 
     async with httpx.AsyncClient(headers=HEADERS) as client:
         logger.info("Fetching all NBA props from Odds API...")
