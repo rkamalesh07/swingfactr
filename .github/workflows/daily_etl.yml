@@ -1,29 +1,61 @@
-name: Daily Incremental ETL
+name: Daily ETL + Props Board
 
 on:
   schedule:
+    # Game data ETL — 9am EST (14:00 UTC) daily
     - cron: '0 14 * * *'
+    # Props board — 2x daily on game days only (script skips if no games)
+    # 11am PST = 19:00 UTC  (lines usually posted by now)
+    # 4pm PST  = 00:00 UTC  (final lines before tip-off)
+    - cron: '0 19 * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which job to run'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - etl
+          - props
 
 jobs:
   incremental-etl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '0 14 * * *'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
+      - run: pip install -r requirements.txt
       - name: Run incremental ETL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m src.etl.incremental --season 2025-26
+
+  props-board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '0 19 * * *' ||
+      github.event.schedule == '0 0 * * *'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Run props board ETL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python -m src.etl.props_board

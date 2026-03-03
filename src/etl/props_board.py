@@ -119,26 +119,86 @@ def ensure_table():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
 
 async def fetch_all_props(client):
-    """Fetch all NBA player props in one request using sport-level endpoint."""
+    """
+    Fetch all NBA player props by:
+    1. Getting today's event IDs (1 request)
+    2. Fetching props per event (1 request per game)
+    Player props only available on per-event endpoint, not sport-level.
+    """
     markets = "player_points,player_rebounds,player_assists,player_threes,player_steals,player_blocks"
+
+    # Step 1: get event IDs
     try:
         r = await client.get(
-            f"{ODDS_BASE}/sports/basketball_nba/odds",
-            params={
-                "apiKey": ODDS_API_KEY,
-                "regions": "us",
-                "markets": markets,
-                "oddsFormat": "american",
-                "bookmakers": "draftkings,fanduel,betmgm",
-            },
-            timeout=30,
+            f"{ODDS_BASE}/sports/basketball_nba/events",
+            params={"apiKey": ODDS_API_KEY},
+            timeout=15,
         )
         remaining = r.headers.get("x-requests-remaining", "?")
-        logger.info(f"Odds API requests remaining: {remaining}")
-        return r.json()
+        logger.info(f"Odds API requests remaining after events fetch: {remaining}")
+        events = r.json()
+        if not isinstance(events, list):
+            logger.error(f"Bad events response: {events}")
+            return []
     except Exception as e:
-        logger.error(f"Failed to fetch props: {e}")
+        logger.error(f"Failed to fetch events: {e}")
         return []
+
+    # Filter to only today's games (within next 24 hours) to avoid wasting requests
+    from datetime import timezone as tz
+    now = datetime.now(tz.utc)
+    cutoff = now + timedelta(hours=24)
+    todays_events = []
+    for event in events:
+        commence = event.get("commence_time", "")
+        try:
+            commence_dt = datetime.fromisoformat(commence.replace("Z", "+00:00"))
+            if now <= commence_dt <= cutoff:
+                todays_events.append(event)
+        except Exception:
+            continue
+
+    logger.info(f"Found {len(todays_events)} NBA events today (filtered from {len(events)} total)")
+
+    # Skip entirely if no games today — preserves monthly request quota
+    if not todays_events:
+        logger.info("No NBA games today — skipping props fetch to preserve API quota")
+        return []
+
+    # Step 2: fetch props per event
+    all_events = []
+    for event in todays_events:
+        event_id = event.get("id")
+        home = ODDS_TEAM_MAP.get(event.get("home_team", ""), "")
+        away = ODDS_TEAM_MAP.get(event.get("away_team", ""), "")
+        if not event_id or not home or not away:
+            continue
+        try:
+            r2 = await client.get(
+                f"{ODDS_BASE}/sports/basketball_nba/events/{event_id}/odds",
+                params={
+                    "apiKey": ODDS_API_KEY,
+                    "regions": "us",
+                    "markets": markets,
+                    "oddsFormat": "american",
+                    "bookmakers": "draftkings,fanduel,betmgm",
+                },
+                timeout=15,
+            )
+            remaining = r2.headers.get("x-requests-remaining", "?")
+            data = r2.json()
+            if isinstance(data, dict) and data.get("bookmakers") is not None:
+                data["home_team"] = event.get("home_team")
+                data["away_team"] = event.get("away_team")
+                all_events.append(data)
+                logger.info(f"Fetched props for {away} @ {home} · {remaining} requests remaining")
+            else:
+                logger.warning(f"No bookmaker data for {away} @ {home}: {str(data)[:100]}")
+        except Exception as e:
+            logger.warning(f"Failed props for event {event_id}: {e}")
+            continue
+
+    return all_events
 
 async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
     """Fetch last N box scores for a player from ESPN."""
@@ -335,11 +395,15 @@ async def run():
                     stat = MARKET_TO_STAT.get(market.get("key", ""))
                     if not stat:
                         continue
+                    # Group by player name (in "description" field) and Over/Under (in "name" field)
+                    # ESPN format: {"name": "Over", "description": "Anthony Davis", "price": -105, "point": 23.5}
                     player_outcomes = defaultdict(dict)
                     for outcome in market.get("outcomes", []):
-                        pname = outcome.get("name", "")
-                        desc = outcome.get("description", "Over")
-                        player_outcomes[pname][desc] = {
+                        side = outcome.get("name", "")        # "Over" or "Under"
+                        pname = outcome.get("description", "") # player name
+                        if not pname or side not in ("Over", "Under"):
+                            continue
+                        player_outcomes[pname][side] = {
                             "odds": outcome.get("price", 0),
                             "line": outcome.get("point", 0),
                         }
@@ -347,7 +411,7 @@ async def run():
                         over = sides.get("Over", {})
                         under = sides.get("Under", {})
                         line = over.get("line") or under.get("line")
-                        if line is None:
+                        if not line:
                             continue
                         pkey = pname.lower()
                         existing = all_props[pkey].get(stat)
