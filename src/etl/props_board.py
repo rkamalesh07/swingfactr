@@ -236,7 +236,11 @@ async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
                 for athlete in stat_group.get("athletes", []):
                     info = athlete.get("athlete", {})
                     name = info.get("displayName", "")
-                    if player_name.lower() not in name.lower() and name.lower() not in player_name.lower():
+                    # Require all tokens from player_name to appear in ESPN name
+                    # e.g. "Tyrese Maxey" -> both "tyrese" and "maxey" must be in name
+                    pname_tokens = player_name.lower().split()
+                    ename_lower = name.lower()
+                    if not all(tok in ename_lower for tok in pname_tokens):
                         continue
                     stats = athlete.get("stats", [])
                     if not stats or stats[0] == "DNP":
@@ -464,26 +468,27 @@ async def run():
             # We'll try both home and away
             player_name = list(stat_props.values())[0]["player_name"]
 
-            # Get rest info for both teams and pick the one that finds game logs
+            # Resolve player's team ONCE before processing all stats
+            # Fetch logs for both teams and pick whichever returns >= 3 games
+            team_found = ""
+            is_home_player = False
+            player_logs_cache = []
+            for try_team, try_is_home in [(home_team, True), (away_team, False)]:
+                if not try_team:
+                    continue
+                candidate = await fetch_player_logs(client, player_name, try_team)
+                if len(candidate) >= 3:
+                    team_found = try_team
+                    is_home_player = try_is_home
+                    player_logs_cache = candidate
+                    break
+
             rest_home = get_rest_info(home_team) if home_team else {}
             rest_away = get_rest_info(away_team) if away_team else {}
 
             for stat, prop_info in stat_props.items():
                 line = prop_info["line"]
-
-                # Try home team first, then away
-                logs = []
-                team_found = ""
-                is_home_player = False
-
-                for try_team, try_is_home in [(home_team, True), (away_team, False)]:
-                    if not try_team:
-                        continue
-                    logs = await fetch_player_logs(client, player_name, try_team)
-                    if logs:
-                        team_found = try_team
-                        is_home_player = try_is_home
-                        break
+                logs = player_logs_cache
 
                 opp = away_team if is_home_player else home_team
                 opp_def = get_opp_defense(opp) if opp else 0.0
