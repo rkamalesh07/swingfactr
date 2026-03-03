@@ -242,18 +242,39 @@ async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
                     if not stats or stats[0] == "DNP":
                         continue
                     try:
-                        fg3 = stats[2].split("-") if len(stats) > 2 else ["0", "0"]
+                        # Use label-based lookup — never hardcode indices
+                        # ESPN labels: MIN PTS FG 3PT FT REB AST TO STL BLK OREB DREB PF +/-
+                        labels = stat_group.get("labels", [])
+                        def get_stat(label, default=0):
+                            if label in labels:
+                                idx = labels.index(label)
+                                val = stats[idx] if idx < len(stats) else None
+                                if val is None or val == "" or val == "DNP":
+                                    return default
+                                # Handle "made-attempted" format like "3-5"
+                                if "-" in str(val) and label in ("FG", "3PT", "FT"):
+                                    return int(str(val).split("-")[0])
+                                try:
+                                    return float(val)
+                                except (ValueError, TypeError):
+                                    return default
+                            return default
+
+                        minutes = get_stat("MIN")
+                        if minutes < 1:
+                            continue
+
                         results.append({
                             "date": str(game_date),
                             "opp": opp,
                             "is_home": is_home,
-                            "min": float(stats[0]) if stats[0] else 0,
-                            "pts": int(stats[13]) if len(stats) > 13 else 0,
-                            "reb": int(stats[6]) if len(stats) > 6 else 0,
-                            "ast": int(stats[7]) if len(stats) > 7 else 0,
-                            "stl": int(stats[8]) if len(stats) > 8 else 0,
-                            "blk": int(stats[9]) if len(stats) > 9 else 0,
-                            "fg3m": int(fg3[0]) if fg3[0].isdigit() else 0,
+                            "min": minutes,
+                            "pts": int(get_stat("PTS")),
+                            "reb": int(get_stat("REB")),
+                            "ast": int(get_stat("AST")),
+                            "stl": int(get_stat("STL")),
+                            "blk": int(get_stat("BLK")),
+                            "fg3m": int(get_stat("3PT")),
                         })
                     except Exception:
                         continue
