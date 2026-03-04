@@ -3,70 +3,85 @@
 import { useState, useEffect, useMemo } from 'react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const PP_IMPLIED = 57.7
 
 const STATS = [
-  { key: 'all', label: 'All' },
-  { key: 'pts', label: 'Points' },
-  { key: 'reb', label: 'Rebounds' },
-  { key: 'ast', label: 'Assists' },
+  { key: 'all',  label: 'All' },
+  { key: 'pts',  label: 'Points' },
+  { key: 'reb',  label: 'Rebounds' },
+  { key: 'ast',  label: 'Assists' },
   { key: 'fg3m', label: '3-Pointers' },
-  { key: 'stl', label: 'Steals' },
-  { key: 'blk', label: 'Blocks' },
+  { key: 'stl',  label: 'Steals' },
+  { key: 'blk',  label: 'Blocks' },
+]
+
+const TIERS = [
+  { key: 'all',      label: 'All Tiers' },
+  { key: 'standard', label: 'Standard' },
+  { key: 'goblin',   label: '🟢 Goblin' },
+  { key: 'demon',    label: '🔴 Demon' },
 ]
 
 const STAT_LABEL: Record<string, string> = {
   pts: 'PTS', reb: 'REB', ast: 'AST', fg3m: '3PM', stl: 'STL', blk: 'BLK'
 }
 
+const TIER_BADGE: Record<string, { icon: string; color: string; bg: string }> = {
+  demon:    { icon: '🔴', color: '#f87171', bg: 'rgba(248,113,113,0.1)' },
+  goblin:   { icon: '🟢', color: '#4ade80', bg: 'rgba(74,222,128,0.1)'  },
+  standard: { icon: '',   color: '#555',    bg: 'transparent'            },
+}
+
 interface PropRow {
-  player_name: string
-  team: string
-  opponent: string
-  is_home: boolean
-  stat: string
-  line: number
-  over_odds: number
-  under_odds: number
-  implied_prob_over: number
-  bookmaker: string
-  avg_season: number
-  avg_last5: number
-  avg_last10: number
-  hit_rate_season: number
-  hit_rate_last5: number
-  hit_rate_last10: number
-  composite_score: number
-  score_label: string
-  score_color: string
-  factors: { label: string; value: string; impact: string }[]
-  game_log: { date: string; opp: string; home: boolean; val: number; min: number }[]
-  is_b2b: boolean
-  rest_days: number
-  opp_def_label: string
-  computed_at: string
-  edge: number
-  edge_label: string
+  player_name:      string
+  team:             string
+  opponent:         string
+  is_home:          boolean
+  stat:             string
+  odds_type:        string
+  line:             number
+  pp_implied_prob:  number
+  pp_american_odds: number
+  avg_season:       number
+  avg_last5:        number
+  avg_last10:       number
+  hit_rate_season:  number
+  hit_rate_last5:   number
+  hit_rate_last10:  number
+  composite_score:  number
+  score_label:      string
+  score_color:      string
+  factors:          { label: string; value: string; impact: string }[]
+  game_log:         { date: string; opp: string; home: boolean; val: number; min: number }[]
+  is_b2b:           boolean
+  rest_days:        number
+  opp_def_label:    string
+  computed_at:      string
+  edge:             number
+  pick_side:        string
+  is_tossup:        boolean
 }
 
 interface BoardStats {
-  total: number
-  strong_overs: number
-  lean_overs: number
-  strong_unders: number
-  last_computed: string
-  players: number
-  message?: string
+  total:          number
+  strong_overs:   number
+  lean_overs:     number
+  strong_unders:  number
+  last_computed:  string
+  players:        number
+  message?:       string
 }
 
 function ScoreBadge({ score, label, color }: { score: number; label: string; color: string }) {
+  const pct = ((score - 5) / 90) * 88
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
       <div style={{ position: 'relative', width: '36px', height: '36px', flexShrink: 0 }}>
         <svg width="36" height="36" viewBox="0 0 36 36">
           <circle cx="18" cy="18" r="14" fill="none" stroke="#111" strokeWidth="4" />
           <circle cx="18" cy="18" r="14" fill="none" stroke={color} strokeWidth="4"
-            strokeDasharray={`${score / 100 * 88} 88`}
-            strokeLinecap="round" transform="rotate(-90 18 18)" />
+            strokeDasharray={`${pct} 88`} strokeLinecap="round"
+            transform="rotate(-90 18 18)" />
         </svg>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', fontWeight: 700, color }}>{Math.round(score)}</span>
@@ -78,14 +93,29 @@ function ScoreBadge({ score, label, color }: { score: number; label: string; col
 }
 
 function HitBar({ pct }: { pct: number }) {
-  const color = pct >= 65 ? '#4ade80' : pct >= 50 ? '#86efac' : pct >= 40 ? '#fbbf24' : '#f87171'
+  const color = pct >= 65 ? '#4ade80' : pct >= 55 ? '#86efac' : pct >= 40 ? '#fbbf24' : '#f87171'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <div style={{ width: '50px', height: '4px', background: '#111', overflow: 'hidden' }}>
+      <div style={{ width: '40px', height: '4px', background: '#111', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color }} />
       </div>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color, width: '34px' }}>{pct.toFixed(0)}%</span>
     </div>
+  )
+}
+
+function TierBadge({ tier }: { tier: string }) {
+  const b = TIER_BADGE[tier] || TIER_BADGE.standard
+  if (!b.icon) return null
+  return (
+    <span style={{
+      fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
+      color: b.color, background: b.bg,
+      border: `1px solid ${b.color}40`,
+      padding: '1px 4px', marginLeft: '4px',
+    }}>
+      {tier.toUpperCase()}
+    </span>
   )
 }
 
@@ -96,21 +126,24 @@ function ExpandedRow({ row }: { row: PropRow }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
         <div>
           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>AVERAGES</div>
-          {[['Season', row.avg_season], ['Last 10', row.avg_last10], ['Last 5', row.avg_last5]].map(([l, v]) => (
-            <div key={String(l)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+          {([['Season', row.avg_season], ['Last 10', row.avg_last10], ['Last 5', row.avg_last5]] as [string, number][]).map(([l, v]) => (
+            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{l}</span>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: v != null && Number(v) > line ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-                {v ?? '—'}
-              </span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600,
+                color: v != null && Number(v) > line ? '#4ade80' : '#f87171' }}>{v ?? '—'}</span>
             </div>
           ))}
+          <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>
+            PrizePicks line · {row.odds_type} · implied {PP_IMPLIED}%
+          </div>
         </div>
         <div>
           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>SCORE FACTORS</div>
           {row.factors?.map((f, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{f.label}</span>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: f.impact === 'positive' ? '#4ade80' : f.impact === 'negative' ? '#f87171' : '#888' }}>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
+                color: f.impact === 'positive' ? '#4ade80' : f.impact === 'negative' ? '#f87171' : '#888' }}>
                 {f.impact === 'positive' ? '↑' : f.impact === 'negative' ? '↓' : '—'} {f.value}
               </span>
             </div>
@@ -128,9 +161,7 @@ function ExpandedRow({ row }: { row: PropRow }) {
                   border: `1px solid ${over ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}`,
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
                   color: over ? '#4ade80' : '#f87171',
-                }}>
-                  {g.val}
-                </div>
+                }}>{g.val}</div>
               )
             })}
           </div>
@@ -144,14 +175,16 @@ function ExpandedRow({ row }: { row: PropRow }) {
 }
 
 export default function PropsPage() {
-  const [props, setProps] = useState<PropRow[]>([])
+  const [props, setProps]           = useState<PropRow[]>([])
   const [boardStats, setBoardStats] = useState<BoardStats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]       = useState(true)
   const [statFilter, setStatFilter] = useState('all')
-  const [search, setSearch] = useState('')
-  const [minScore, setMinScore] = useState(0)
-  const [sortBy, setSortBy] = useState<'composite_score' | 'edge'>('composite_score')
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [tierFilter, setTierFilter] = useState('all')
+  const [search, setSearch]         = useState('')
+  const [minScore, setMinScore]     = useState(0)
+  const [sortBy, setSortBy]         = useState<'composite_score' | 'edge'>('composite_score')
+  const [hideTossups, setHideTossups] = useState(false)
+  const [expanded, setExpanded]     = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -168,56 +201,61 @@ export default function PropsPage() {
     return props
       .filter(p => {
         if (statFilter !== 'all' && p.stat !== statFilter) return false
+        if (tierFilter !== 'all' && p.odds_type !== tierFilter) return false
         if (search && !p.player_name.toLowerCase().includes(search.toLowerCase())) return false
         if (p.composite_score < minScore) return false
+        if (hideTossups && p.is_tossup) return false
         return true
       })
-      .sort((a, b) => {
-        if (sortBy === 'edge') return Math.abs(b.edge) - Math.abs(a.edge)
-        return b.composite_score - a.composite_score
-      })
-  }, [props, statFilter, search, minScore, sortBy])
+      .sort((a, b) =>
+        sortBy === 'edge'
+          ? Math.abs(b.edge) - Math.abs(a.edge)
+          : b.composite_score - a.composite_score
+      )
+  }, [props, statFilter, tierFilter, search, minScore, sortBy, hideTossups])
 
   const lastUpdated = boardStats?.last_computed
     ? new Date(boardStats.last_computed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
     : null
 
-  const COLS = '24px 160px 60px 60px 56px 72px 72px 78px 78px 80px 110px 60px 36px'
+  const COLS = '24px 170px 60px 56px 80px 72px 72px 80px 80px 110px 64px 36px'
 
   return (
     <div>
+      {/* Header */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
-          PROP BOARD · UPDATES 3× DAILY · NOT BETTING ADVICE
+          PROP BOARD · PRIZEPICKS · UPDATES 3× DAILY · NOT BETTING ADVICE
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Tonight's Props</h1>
           {lastUpdated && (
             <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
-              Last updated {lastUpdated}
+              Updated {lastUpdated}
             </span>
           )}
         </div>
       </div>
 
+      {/* Summary stats */}
       {boardStats && boardStats.total > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', marginBottom: '16px' }}>
-          {[
+          {([
             ['TOTAL PROPS', boardStats.total, '#888'],
-            ['STRONG OVER (65+)', boardStats.strong_overs, '#4ade80'],
-            ['LEAN OVER (55+)', boardStats.lean_overs, '#86efac'],
-            ['PLAYERS', boardStats.players, '#888'],
-          ].map(([label, val, color]) => (
-            <div key={String(label)} style={{ border: '1px solid #1a1a1a', padding: '12px 16px' }}>
+            ['STRONG OVER', boardStats.strong_overs, '#4ade80'],
+            ['LEAN OVER',   boardStats.lean_overs,   '#86efac'],
+            ['PLAYERS',     boardStats.players,       '#888'],
+          ] as [string, number, string][]).map(([label, val, color]) => (
+            <div key={label} style={{ border: '1px solid #1a1a1a', padding: '12px 16px' }}>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 700, color: color as string }}>{val}</div>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 700, color }}>{val}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '1px', alignItems: 'center' }}>
+      {/* Filters row 1 — stat + tier */}
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '4px', alignItems: 'center' }}>
         {STATS.map(s => (
           <button key={s.key} onClick={() => setStatFilter(s.key)} style={{
             background: statFilter === s.key ? '#0f1f0f' : 'transparent',
@@ -226,7 +264,19 @@ export default function PropsPage() {
             padding: '6px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', cursor: 'pointer',
           }}>{s.label}</button>
         ))}
-        <div style={{ flex: 1 }} />
+        <div style={{ width: '1px', height: '24px', background: '#1a1a1a', margin: '0 4px' }} />
+        {TIERS.map(t => (
+          <button key={t.key} onClick={() => setTierFilter(t.key)} style={{
+            background: tierFilter === t.key ? '#0f1f0f' : 'transparent',
+            border: `1px solid ${tierFilter === t.key ? '#4ade80' : '#1a1a1a'}`,
+            color: tierFilter === t.key ? '#4ade80' : '#444',
+            padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', cursor: 'pointer',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Filters row 2 — sort + search + score + tossup */}
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '1px', alignItems: 'center' }}>
         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>SORT</span>
         {(['composite_score', 'edge'] as const).map(key => (
           <button key={key} onClick={() => setSortBy(key)} style={{
@@ -236,18 +286,23 @@ export default function PropsPage() {
             padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', cursor: 'pointer',
           }}>{key === 'composite_score' ? 'Score' : 'Edge'}</button>
         ))}
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search player..."
-          style={{ background: 'transparent', border: '1px solid #1a1a1a', color: '#e0e0e0', padding: '6px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', outline: 'none', width: '150px' }}
-        />
+        <button onClick={() => setHideTossups(h => !h)} style={{
+          background: hideTossups ? '#1a0f00' : 'transparent',
+          border: `1px solid ${hideTossups ? '#fbbf24' : '#1a1a1a'}`,
+          color: hideTossups ? '#fbbf24' : '#444',
+          padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', cursor: 'pointer',
+        }}>Hide Toss-ups</button>
+        <div style={{ flex: 1 }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player..."
+          style={{ background: 'transparent', border: '1px solid #1a1a1a', color: '#e0e0e0',
+            padding: '6px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', outline: 'none', width: '150px' }} />
         <select value={minScore} onChange={e => setMinScore(Number(e.target.value))} style={{
           background: '#0a0a0a', border: '1px solid #1a1a1a', color: '#555',
           padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', outline: 'none',
         }}>
           <option value={0}>All scores</option>
-          <option value={55}>55+ Lean Over</option>
-          <option value={65}>65+ Strong Over</option>
+          <option value={61.7}>Lean Over (61.7+)</option>
+          <option value={67.7}>Strong Over (67.7+)</option>
         </select>
       </div>
 
@@ -266,97 +321,126 @@ export default function PropsPage() {
         </div>
       ) : (
         <div style={{ border: '1px solid #1a1a1a' }}>
-          {/* Header */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: COLS,
-            padding: '8px 16px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em',
-          }}>
+          {/* Table header */}
+          <div style={{ display: 'grid', gridTemplateColumns: COLS, padding: '8px 16px',
+            borderBottom: '1px solid #1a1a1a',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em' }}>
             <span>#</span>
             <span>PLAYER</span>
             <span>MATCHUP</span>
             <span>STAT</span>
-            <span>LINE</span>
-            <span>ODDS O/U</span>
+            <span>LINE / TIER</span>
             <span>L5 HIT%</span>
             <span>L10 HIT%</span>
             <span>L10 AVG</span>
             <span>OPP DEF</span>
             <span>SCORE</span>
             <span>EDGE</span>
-            <span>O/U</span>
+            <span>PICK</span>
           </div>
 
           {filtered.map((row, i) => {
-            const key = `${row.player_name}|${row.stat}`
+            const key       = `${row.player_name}|${row.stat}|${row.odds_type}`
             const isExpanded = expanded === key
-            const isOver = row.edge > 0
+            const tier       = TIER_BADGE[row.odds_type] || TIER_BADGE.standard
+            const isOver     = row.pick_side === 'over'
+
             return (
               <div key={key} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #0d0d0d' : 'none' }}>
-                <div
-                  onClick={() => setExpanded(isExpanded ? null : key)}
+                <div onClick={() => setExpanded(isExpanded ? null : key)}
                   className="row-link"
                   style={{
                     display: 'grid', gridTemplateColumns: COLS,
                     padding: '11px 16px', cursor: 'pointer', alignItems: 'center',
-                    background: isExpanded ? '#0d0d0d' : row.composite_score >= 65 ? 'rgba(74,222,128,0.02)' : 'transparent',
+                    background: isExpanded ? '#0d0d0d'
+                      : row.composite_score >= 67.7 ? 'rgba(74,222,128,0.02)'
+                      : row.is_tossup ? 'rgba(255,255,255,0.01)' : 'transparent',
+                    opacity: row.is_tossup ? 0.6 : 1,
                   }}>
+
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>{i + 1}</span>
 
+                  {/* Player */}
                   <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>{row.player_name}</div>
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                      {row.is_b2b && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)', padding: '0 3px' }}>B2B</span>}
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>
+                      {row.player_name}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
                       {row.team && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#555' }}>{row.team}</span>}
+                      {row.is_b2b && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)', padding: '0 3px' }}>B2B</span>}
                     </div>
                   </div>
 
+                  {/* Matchup */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>
                     {row.is_home ? 'vs' : '@'} {row.opponent}
                   </span>
 
+                  {/* Stat */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600, color: '#666' }}>
                     {STAT_LABEL[row.stat] || row.stat}
                   </span>
 
-                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 700, color: '#e0e0e0' }}>
-                    {row.line}
-                  </span>
-
-                  <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>
-                    <span style={{ color: row.over_odds < 0 ? '#4ade80' : '#888' }}>{row.over_odds > 0 ? '+' : ''}{row.over_odds}</span>
-                    <span style={{ color: '#222', margin: '0 2px' }}>/</span>
-                    <span style={{ color: row.under_odds < 0 ? '#4ade80' : '#888' }}>{row.under_odds > 0 ? '+' : ''}{row.under_odds}</span>
+                  {/* Line + tier badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 700, color: '#e0e0e0' }}>
+                      {row.line}
+                    </span>
+                    {row.odds_type !== 'standard' && (
+                      <span style={{
+                        fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
+                        color: tier.color, background: tier.bg,
+                        border: `1px solid ${tier.color}40`,
+                        padding: '1px 4px',
+                      }}>{row.odds_type.toUpperCase()}</span>
+                    )}
                   </div>
 
-                  <div>{row.hit_rate_last5 != null ? <HitBar pct={row.hit_rate_last5} /> : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}</div>
-                  <div>{row.hit_rate_last10 != null ? <HitBar pct={row.hit_rate_last10} /> : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}</div>
+                  {/* L5 hit% */}
+                  <div>{row.hit_rate_last5 != null
+                    ? <HitBar pct={row.hit_rate_last5} />
+                    : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
+                  </div>
 
-                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: row.avg_last10 != null && row.avg_last10 > row.line ? '#4ade80' : '#f87171' }}>
+                  {/* L10 hit% */}
+                  <div>{row.hit_rate_last10 != null
+                    ? <HitBar pct={row.hit_rate_last10} />
+                    : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
+                  </div>
+
+                  {/* L10 avg */}
+                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
+                    color: row.avg_last10 != null && row.avg_last10 > row.line ? '#4ade80' : '#f87171' }}>
                     {row.avg_last10 ?? '—'}
                   </span>
 
+                  {/* Opp def */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
                     color: row.opp_def_label === 'good' ? '#f87171' : row.opp_def_label === 'poor' ? '#4ade80' : '#555' }}>
                     {row.opp_def_label ?? '—'}
                   </span>
 
+                  {/* Score */}
                   <ScoreBadge score={row.composite_score} label={row.score_label} color={row.score_color} />
 
+                  {/* Edge */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600,
-                    color: row.edge > 3 ? '#4ade80' : row.edge < -3 ? '#f87171' : '#555' }}>
-                    {row.edge != null ? `${row.edge > 0 ? '+' : ''}${row.edge.toFixed(1)}` : '—'}
+                    color: row.edge > 4 ? '#4ade80' : row.edge < -4 ? '#f87171' : '#555' }}>
+                    {row.edge > 0 ? '+' : ''}{row.edge.toFixed(1)}
                   </span>
 
-                  {/* O/U signal */}
-                  <span style={{
-                    fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 700,
-                    color: isOver ? '#4ade80' : '#f87171',
-                  }}>
-                    {isOver ? 'O' : 'U'}
-                  </span>
+                  {/* Pick side — O always for demon/goblin, O or U for standard */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', fontWeight: 800,
+                      color: isOver ? '#4ade80' : '#f87171' }}>
+                      {isOver ? 'O' : 'U'}
+                    </span>
+                    {row.odds_type !== 'standard' && (
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#333', marginTop: '-2px' }}>only</span>
+                    )}
+                  </div>
+
                 </div>
-
                 {isExpanded && <ExpandedRow row={row} />}
               </div>
             )
@@ -365,8 +449,9 @@ export default function PropsPage() {
       )}
 
       <div style={{ marginTop: '14px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#222', lineHeight: 1.8 }}>
-        <div>Score = composite of recent form, season hit rate, avg vs line, opp defense, rest · Edge = model prob minus book implied prob</div>
-        <div>Lines from DraftKings via The Odds API · ⚠ For informational purposes only. Not betting advice.</div>
+        <div>🟢 Goblin = discounted line (over only) · 🔴 Demon = boosted line (over only) · Standard = over or under available</div>
+        <div>Score anchored at 57.7% (PrizePicks 6-pick flex break-even) · Edge = model prob minus 57.7%</div>
+        <div>Lines from PrizePicks · ⚠ For informational purposes only. Not betting advice.</div>
       </div>
     </div>
   )

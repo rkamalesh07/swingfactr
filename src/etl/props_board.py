@@ -1,212 +1,185 @@
 """
-Props Board ETL — runs at scheduled times to pre-compute tonight's prop scores.
+Props Board ETL — fetches PrizePicks lines (standard/demon/goblin) and computes scores.
 
-Cron schedule (PST = UTC-8):
-  5am PST  = 13:00 UTC
-  8am PST  = 16:00 UTC
-  12pm PST = 20:00 UTC
-  3pm PST  = 23:00 UTC
-  7pm PST  = 03:00 UTC next day
+PrizePicks tiers:
+  goblin   🟢 — discounted line, over only, lower multiplier
+  standard    — fair line, over OR under available
+  demon    🔴 — boosted line, over only, higher multiplier
 
-Usage:
-  python -m src.etl.props_board
+Implied probability per leg: 57.7% (6-pick Flex break-even)
+American odds equivalent: -136
 
-This script:
-  1. Fetches all NBA player props from Odds API (1 request)
-  2. For each player with a prop, fetches last 20 ESPN box scores
-  3. Computes composite score
-  4. Writes to prop_board table (upsert)
+Cron: 6:30am / 12pm / 3:30pm PST
 """
 
-import asyncio
-import httpx
-import logging
-import math
-import os
-import sys
+import asyncio, httpx, json, logging, sys
 from collections import defaultdict
-from datetime import date, datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from src.etl.db import get_conn, init_pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
 logger = logging.getLogger("props_board")
 
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "9ef42e6c03d4f69902fb02f8318e028a")
-ODDS_BASE = "https://api.the-odds-api.com/v4"
 ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+PP_URL       = "https://api.prizepicks.com/projections"
+HEADERS      = {"User-Agent": "Mozilla/5.0"}
+PP_HEADERS   = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "Accept": "application/json",
+    "Referer": "https://app.prizepicks.com/",
+    "Origin": "https://app.prizepicks.com",
+}
+
+PP_IMPLIED_PROB  = 57.7   # 6-pick flex break-even per leg
+PP_AMERICAN_ODDS = -136
+
+PP_STAT_MAP = {
+    "Points":        "pts",
+    "Rebounds":      "reb",
+    "Assists":       "ast",
+    "3-PT Made":     "fg3m",
+    "Steals":        "stl",
+    "Blocked Shots": "blk",
+}
+
+PP_TEAM_MAP = {
+    "ATL":"ATL","BOS":"BOS","BKN":"BKN","CHA":"CHA","CHI":"CHI",
+    "CLE":"CLE","DAL":"DAL","DEN":"DEN","DET":"DET","GSW":"GSW",
+    "HOU":"HOU","IND":"IND","LAC":"LAC","LAL":"LAL","MEM":"MEM",
+    "MIA":"MIA","MIL":"MIL","MIN":"MIN","NOP":"NOP","NYK":"NYK",
+    "OKC":"OKC","ORL":"ORL","PHI":"PHI","PHX":"PHX","POR":"POR",
+    "SAC":"SAC","SAS":"SAS","TOR":"TOR","UTA":"UTA","WAS":"WAS",
+}
 
 ABBR_NORMALIZE = {
-    "SA": "SAS", "NO": "NOP", "GS": "GSW", "NY": "NYK", "WSH": "WAS",
+    "SA":"SAS","NO":"NOP","GS":"GSW","NY":"NYK","WSH":"WAS","UTAH":"UTA","PHO":"PHX",
 }
 
-ODDS_TEAM_MAP = {
-    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
-    "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE",
-    "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
-    "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-    "Los Angeles Clippers": "LAC", "Los Angeles Lakers": "LAL", "Memphis Grizzlies": "MEM",
-    "Miami Heat": "MIA", "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN",
-    "New Orleans Pelicans": "NOP", "New York Knicks": "NYK", "Oklahoma City Thunder": "OKC",
-    "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
-    "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS",
-    "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS",
-}
-
-MARKET_TO_STAT = {
-    "player_points": "pts",
-    "player_rebounds": "reb",
-    "player_assists": "ast",
-    "player_threes": "fg3m",
-    "player_steals": "stl",
-    "player_blocks": "blk",
-}
-
-def normalize(abbr):
-    return ABBR_NORMALIZE.get(abbr, abbr)
-
-def implied_prob(american_odds):
-    if not american_odds:
-        return 50.0
-    if american_odds > 0:
-        return round(100 / (american_odds + 100) * 100, 1)
-    return round(abs(american_odds) / (abs(american_odds) + 100) * 100, 1)
+# ---------------------------------------------------------------------------
+# DB
+# ---------------------------------------------------------------------------
 
 def ensure_table():
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS prop_board (
-                    prop_id         SERIAL PRIMARY KEY,
-                    player_name     VARCHAR(100) NOT NULL,
-                    team            VARCHAR(5),
-                    opponent        VARCHAR(5),
-                    is_home         BOOLEAN,
-                    stat            VARCHAR(20) NOT NULL,
-                    line            FLOAT NOT NULL,
-                    over_odds       INTEGER,
-                    under_odds      INTEGER,
-                    implied_prob_over FLOAT,
-                    bookmaker       VARCHAR(30),
-                    avg_season      FLOAT,
-                    avg_last5       FLOAT,
-                    avg_last10      FLOAT,
-                    avg_last20      FLOAT,
-                    home_avg        FLOAT,
-                    away_avg        FLOAT,
-                    hit_rate_season FLOAT,
-                    hit_rate_last5  FLOAT,
-                    hit_rate_last10 FLOAT,
-                    composite_score FLOAT,
-                    score_label     VARCHAR(30),
-                    score_color     VARCHAR(10),
-                    factors         JSONB,
-                    game_log        JSONB,
-                    is_b2b          BOOLEAN DEFAULT FALSE,
-                    rest_days       INTEGER,
-                    opp_def_label   VARCHAR(20),
-                    opp_def_margin  FLOAT,
-                    computed_at     TIMESTAMPTZ DEFAULT NOW(),
-                    game_date       DATE NOT NULL,
-                    UNIQUE (player_name, stat, game_date)
+                    prop_id          SERIAL PRIMARY KEY,
+                    player_name      VARCHAR(100) NOT NULL,
+                    team             VARCHAR(5),
+                    opponent         VARCHAR(5),
+                    is_home          BOOLEAN,
+                    stat             VARCHAR(20) NOT NULL,
+                    odds_type        VARCHAR(10) NOT NULL DEFAULT 'standard',
+                    line             FLOAT NOT NULL,
+                    pp_implied_prob  FLOAT DEFAULT 57.7,
+                    pp_american_odds INTEGER DEFAULT -136,
+                    avg_season       FLOAT,
+                    avg_last5        FLOAT,
+                    avg_last10       FLOAT,
+                    avg_last20       FLOAT,
+                    home_avg         FLOAT,
+                    away_avg         FLOAT,
+                    hit_rate_season  FLOAT,
+                    hit_rate_last5   FLOAT,
+                    hit_rate_last10  FLOAT,
+                    composite_score  FLOAT,
+                    score_label      VARCHAR(30),
+                    score_color      VARCHAR(10),
+                    factors          JSONB,
+                    game_log         JSONB,
+                    is_b2b           BOOLEAN DEFAULT FALSE,
+                    rest_days        INTEGER,
+                    opp_def_label    VARCHAR(20),
+                    opp_def_margin   FLOAT,
+                    computed_at      TIMESTAMPTZ DEFAULT NOW(),
+                    game_date        DATE NOT NULL,
+                    UNIQUE (player_name, stat, odds_type, game_date)
                 )
             """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date ON prop_board(game_date)")
+            # Add missing columns for existing tables
+            for col, defn in [
+                ("odds_type",        "VARCHAR(10) NOT NULL DEFAULT 'standard'"),
+                ("pp_implied_prob",  "FLOAT DEFAULT 57.7"),
+                ("pp_american_odds", "INTEGER DEFAULT -136"),
+            ]:
+                cur.execute(f"ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS {col} {defn}")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date  ON prop_board(game_date)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
 
-async def fetch_all_props(client):
-    """
-    Fetch all NBA player props by:
-    1. Getting today's event IDs (1 request)
-    2. Fetching props per event (1 request per game)
-    Player props only available on per-event endpoint, not sport-level.
-    """
-    markets = "player_points,player_rebounds,player_assists,player_threes,player_steals,player_blocks"
+# ---------------------------------------------------------------------------
+# PrizePicks fetch
+# ---------------------------------------------------------------------------
 
-    # Step 1: get event IDs
+async def fetch_prizepicks_props(client):
+    """Returns: all_props[player_lower][stat][odds_type] = {player_name, line, team, odds_type}"""
     try:
-        r = await client.get(
-            f"{ODDS_BASE}/sports/basketball_nba/events",
-            params={"apiKey": ODDS_API_KEY},
-            timeout=15,
-        )
-        remaining = r.headers.get("x-requests-remaining", "?")
-        logger.info(f"Odds API requests remaining after events fetch: {remaining}")
-        events = r.json()
-        if not isinstance(events, list):
-            logger.error(f"Bad events response: {events}")
-            return []
+        r = await client.get(PP_URL,
+            params={"league_id": 7, "per_page": 500, "single_stat": "true"},
+            headers=PP_HEADERS, timeout=15)
+        if r.status_code != 200:
+            logger.error(f"PrizePicks {r.status_code}: {r.text[:200]}")
+            return {}
+        data = r.json()
     except Exception as e:
-        logger.error(f"Failed to fetch events: {e}")
-        return []
+        logger.error(f"PrizePicks fetch failed: {e}")
+        return {}
 
-    # Filter to only today's games (within next 24 hours) to avoid wasting requests
-    from datetime import timezone as tz
-    now = datetime.now(tz.utc)
-    cutoff = now + timedelta(hours=24)
-    todays_events = []
-    for event in events:
-        commence = event.get("commence_time", "")
-        try:
-            commence_dt = datetime.fromisoformat(commence.replace("Z", "+00:00"))
-            if now <= commence_dt <= cutoff:
-                todays_events.append(event)
-        except Exception:
+    projections = data.get("data", [])
+    included    = {i["id"]: i for i in data.get("included", [])}
+    all_props   = defaultdict(lambda: defaultdict(dict))
+
+    for proj in projections:
+        attrs     = proj.get("attributes", {})
+        pp_stat   = attrs.get("stat_type", "")
+        stat      = PP_STAT_MAP.get(pp_stat)
+        odds_type = attrs.get("odds_type", "standard")  # standard | demon | goblin
+        if not stat:
+            continue
+        line = attrs.get("line_score")
+        if line is None:
+            continue
+        line = float(line)
+
+        player_id   = proj.get("relationships", {}).get("new_player", {}).get("data", {}).get("id")
+        player_obj  = included.get(player_id, {})
+        p_attrs     = player_obj.get("attributes", {})
+        player_name = p_attrs.get("display_name", "")
+        pp_team     = p_attrs.get("team_abbreviation") or p_attrs.get("team", "")
+        team_abbr   = PP_TEAM_MAP.get(pp_team, pp_team)
+
+        if not player_name:
             continue
 
-    logger.info(f"Found {len(todays_events)} NBA events today (filtered from {len(events)} total)")
+        pkey = player_name.lower()
+        # Keep only one line per player/stat/odds_type (take first seen = lowest rank)
+        if odds_type not in all_props[pkey][stat]:
+            all_props[pkey][stat][odds_type] = {
+                "player_name": player_name,
+                "line":        line,
+                "team":        team_abbr,
+                "odds_type":   odds_type,
+            }
 
-    # Skip entirely if no games today — preserves monthly request quota
-    if not todays_events:
-        logger.info("No NBA games today — skipping props fetch to preserve API quota")
-        return []
+    total = sum(len(ot) for sv in all_props.values() for ot in sv.values())
+    logger.info(f"PrizePicks: {len(all_props)} players, {total} props across all tiers")
+    return all_props
 
-    # Step 2: fetch props per event
-    all_events = []
-    for event in todays_events:
-        event_id = event.get("id")
-        home = ODDS_TEAM_MAP.get(event.get("home_team", ""), "")
-        away = ODDS_TEAM_MAP.get(event.get("away_team", ""), "")
-        if not event_id or not home or not away:
-            continue
-        try:
-            r2 = await client.get(
-                f"{ODDS_BASE}/sports/basketball_nba/events/{event_id}/odds",
-                params={
-                    "apiKey": ODDS_API_KEY,
-                    "regions": "us",
-                    "markets": markets,
-                    "oddsFormat": "american",
-                    "bookmakers": "draftkings,fanduel,betmgm",
-                },
-                timeout=15,
-            )
-            remaining = r2.headers.get("x-requests-remaining", "?")
-            data = r2.json()
-            if isinstance(data, dict) and data.get("bookmakers") is not None:
-                data["home_team"] = event.get("home_team")
-                data["away_team"] = event.get("away_team")
-                all_events.append(data)
-                logger.info(f"Fetched props for {away} @ {home} · {remaining} requests remaining")
-            else:
-                logger.warning(f"No bookmaker data for {away} @ {home}: {str(data)[:100]}")
-        except Exception as e:
-            logger.warning(f"Failed props for event {event_id}: {e}")
-            continue
+# ---------------------------------------------------------------------------
+# ESPN
+# ---------------------------------------------------------------------------
 
-    return all_events
+def normalize(abbr):
+    return ABBR_NORMALIZE.get(abbr, abbr)
 
 async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
-    """Fetch last N box scores for a player from ESPN."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT g.game_id, g.game_date,
-                    th.abbreviation, ta.abbreviation
+                SELECT g.game_id, g.game_date, th.abbreviation, ta.abbreviation
                 FROM games g
                 JOIN teams th ON th.team_id = g.home_team_id
                 JOIN teams ta ON ta.team_id = g.away_team_id
@@ -220,117 +193,117 @@ async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
     for game_id, game_date, home_abbr, away_abbr in games:
         espn_id = game_id.replace("espn_", "")
         try:
-            r = await client.get(ESPN_SUMMARY, params={"event": espn_id}, timeout=8)
+            r    = await client.get(ESPN_SUMMARY, params={"event": espn_id}, timeout=8)
             data = r.json()
         except Exception:
             continue
 
         is_home = (home_abbr == team_abbr)
-        opp = away_abbr if is_home else home_abbr
+        opp     = away_abbr if is_home else home_abbr
 
         for boxscore in data.get("boxscore", {}).get("players", []):
             t_abbr = normalize(boxscore.get("team", {}).get("abbreviation", ""))
             if t_abbr != team_abbr:
                 continue
             for stat_group in boxscore.get("statistics", []):
+                labels = stat_group.get("labels", [])
                 for athlete in stat_group.get("athletes", []):
-                    info = athlete.get("athlete", {})
-                    name = info.get("displayName", "")
-                    # Require all tokens from player_name to appear in ESPN name
-                    # e.g. "Tyrese Maxey" -> both "tyrese" and "maxey" must be in name
-                    pname_tokens = player_name.lower().split()
-                    ename_lower = name.lower()
-                    if not all(tok in ename_lower for tok in pname_tokens):
+                    name = athlete.get("athlete", {}).get("displayName", "")
+                    if not all(tok in name.lower() for tok in player_name.lower().split()):
                         continue
                     stats = athlete.get("stats", [])
                     if not stats or stats[0] == "DNP":
                         continue
                     try:
-                        # Use label-based lookup — never hardcode indices
-                        # ESPN labels: MIN PTS FG 3PT FT REB AST TO STL BLK OREB DREB PF +/-
-                        labels = stat_group.get("labels", [])
-                        def get_stat(label, default=0):
-                            if label in labels:
-                                idx = labels.index(label)
-                                val = stats[idx] if idx < len(stats) else None
-                                if val is None or val == "" or val == "DNP":
-                                    return default
-                                # Handle "made-attempted" format like "3-5"
-                                if "-" in str(val) and label in ("FG", "3PT", "FT"):
-                                    return int(str(val).split("-")[0])
-                                try:
-                                    return float(val)
-                                except (ValueError, TypeError):
-                                    return default
-                            return default
+                        def get_stat(label, default=0, _l=labels, _s=stats):
+                            if label not in _l: return default
+                            idx = _l.index(label)
+                            val = _s[idx] if idx < len(_s) else None
+                            if val is None or val in ("", "DNP"): return default
+                            if "-" in str(val) and label in ("FG","3PT","FT"):
+                                return int(str(val).split("-")[0])
+                            try: return float(val)
+                            except: return default
 
                         minutes = get_stat("MIN")
-                        if minutes < 1:
-                            continue
-
+                        if minutes < 1: continue
                         results.append({
-                            "date": str(game_date),
-                            "opp": opp,
-                            "is_home": is_home,
-                            "min": minutes,
-                            "pts": int(get_stat("PTS")),
-                            "reb": int(get_stat("REB")),
-                            "ast": int(get_stat("AST")),
-                            "stl": int(get_stat("STL")),
-                            "blk": int(get_stat("BLK")),
+                            "date": str(game_date), "opp": opp, "is_home": is_home,
+                            "min":  minutes,
+                            "pts":  int(get_stat("PTS")),
+                            "reb":  int(get_stat("REB")),
+                            "ast":  int(get_stat("AST")),
+                            "stl":  int(get_stat("STL")),
+                            "blk":  int(get_stat("BLK")),
                             "fg3m": int(get_stat("3PT")),
                         })
                     except Exception:
                         continue
     return results
 
+# ---------------------------------------------------------------------------
+# Stats + scoring
+# ---------------------------------------------------------------------------
+
 def compute_stats(logs, stat, line):
     vals = [g[stat] for g in logs if g.get("min", 0) >= 10]
-    if not vals:
-        return None
-
-    def avg(arr): return round(sum(arr) / len(arr), 1) if arr else None
-    def hr(arr): return round(sum(1 for v in arr if v > line) / len(arr) * 100, 1) if arr else None
-
-    home = [g[stat] for g in logs if g.get("is_home") and g.get("min", 0) >= 10]
-    away = [g[stat] for g in logs if not g.get("is_home") and g.get("min", 0) >= 10]
-
+    if not vals: return None
+    def avg(arr): return round(sum(arr)/len(arr), 1) if arr else None
+    def hr(arr):  return round(sum(1 for v in arr if v > line)/len(arr)*100, 1) if arr else None
+    home = [g[stat] for g in logs if     g.get("is_home") and g.get("min",0) >= 10]
+    away = [g[stat] for g in logs if not g.get("is_home") and g.get("min",0) >= 10]
     return {
-        "avg_season": avg(vals),
-        "avg_last5": avg(vals[:5]),
-        "avg_last10": avg(vals[:10]),
-        "avg_last20": avg(vals[:20]),
-        "home_avg": avg(home),
-        "away_avg": avg(away),
+        "avg_season":      avg(vals),
+        "avg_last5":       avg(vals[:5]),
+        "avg_last10":      avg(vals[:10]),
+        "avg_last20":      avg(vals[:20]),
+        "home_avg":        avg(home),
+        "away_avg":        avg(away),
         "hit_rate_season": hr(vals),
-        "hit_rate_last5": hr(vals[:5]),
+        "hit_rate_last5":  hr(vals[:5]),
         "hit_rate_last10": hr(vals[:10]),
-        "game_log": [{"date": g["date"], "opp": g["opp"], "home": g["is_home"], "val": g[stat], "min": g["min"]} for g in logs[:20]],
+        "game_log": [
+            {"date": g["date"], "opp": g["opp"], "home": g["is_home"],
+             "val": g[stat], "min": g["min"]} for g in logs[:20]
+        ],
     }
 
-def compute_score(stats, opp_def_margin, is_b2b, is_home, line):
-    score = 50.0
-    factors = []
+def compute_score(stats, opp_def_margin, is_b2b, is_home, line, odds_type):
+    """
+    Score anchored at PP_IMPLIED_PROB (57.7).
+    Edge = score - 57.7 → meaningful vs PrizePicks line.
+    Demon lines are harder to hit over → penalize score slightly.
+    Goblin lines are easier to hit over → boost score slightly.
+    """
+    # Tier adjustment: demon = harder over, goblin = easier over
+    tier_adj = {"demon": -3.0, "goblin": +3.0, "standard": 0.0}
+    score    = PP_IMPLIED_PROB + tier_adj.get(odds_type, 0)
+    factors  = []
 
     if stats.get("hit_rate_last5") is not None:
-        delta = stats["hit_rate_last5"] - 50
+        delta = stats["hit_rate_last5"] - PP_IMPLIED_PROB
         score += delta * 0.35
-        factors.append({"label": "Last 5 hit rate", "value": f"{stats['hit_rate_last5']}%", "impact": "positive" if delta > 0 else "negative"})
+        factors.append({"label": "Last 5 hit rate", "value": f"{stats['hit_rate_last5']}%",
+                         "impact": "positive" if delta > 0 else "negative"})
 
     if stats.get("hit_rate_season") is not None:
-        delta = stats["hit_rate_season"] - 50
+        delta = stats["hit_rate_season"] - PP_IMPLIED_PROB
         score += delta * 0.20
-        factors.append({"label": "Season hit rate", "value": f"{stats['hit_rate_season']}%", "impact": "positive" if delta > 0 else "negative"})
+        factors.append({"label": "Season hit rate", "value": f"{stats['hit_rate_season']}%",
+                         "impact": "positive" if delta > 0 else "negative"})
 
     if stats.get("avg_last10") is not None:
-        margin = stats["avg_last10"] - line
-        score += margin * 2.5
-        factors.append({"label": "L10 avg vs line", "value": f"{'+' if margin >= 0 else ''}{margin:.1f}", "impact": "positive" if margin > 0 else "negative"})
+        margin       = stats["avg_last10"] - line
+        contribution = max(-10, min(10, margin * 2.5))
+        score       += contribution
+        factors.append({"label": "L10 avg vs line", "value": f"{'+' if margin>=0 else ''}{margin:.1f}",
+                         "impact": "positive" if margin > 0 else "negative"})
 
     if opp_def_margin is not None:
         score -= opp_def_margin * 1.5
-        label = "good" if opp_def_margin < -2 else "poor" if opp_def_margin > 2 else "average"
-        factors.append({"label": "Opp defense", "value": label, "impact": "negative" if opp_def_margin < -1 else "positive" if opp_def_margin > 1 else "neutral"})
+        lbl = "good" if opp_def_margin < -2 else "poor" if opp_def_margin > 2 else "average"
+        factors.append({"label": "Opp defense", "value": lbl,
+                         "impact": "negative" if opp_def_margin < -1 else "positive" if opp_def_margin > 1 else "neutral"})
 
     if is_b2b:
         score -= 5
@@ -341,8 +314,21 @@ def compute_score(stats, opp_def_margin, is_b2b, is_home, line):
         factors.append({"label": "Home game", "value": "yes", "impact": "positive"})
 
     score = max(5, min(95, score))
-    label = "Strong Over" if score >= 65 else "Lean Over" if score >= 55 else "Strong Under" if score <= 35 else "Lean Under" if score <= 45 else "Toss-up"
-    color = "#4ade80" if score >= 65 else "#86efac" if score >= 55 else "#fbbf24" if score > 45 else "#f87171"
+    edge  = score - PP_IMPLIED_PROB
+
+    # Labels: for demon/goblin always over, standard uses model direction
+    if odds_type in ("demon", "goblin"):
+        if edge >= 10:   label, color = "Strong Over",  "#4ade80"
+        elif edge >= 4:  label, color = "Lean Over",    "#86efac"
+        elif edge <= -4: label, color = "Risky Over",   "#f87171"
+        else:            label, color = "Marginal",     "#fbbf24"
+    else:  # standard
+        if edge >= 10:   label, color = "Strong Over",  "#4ade80"
+        elif edge >= 4:  label, color = "Lean Over",    "#86efac"
+        elif edge <= -10:label, color = "Strong Under", "#f87171"
+        elif edge <= -4: label, color = "Lean Under",   "#fb923c"
+        else:            label, color = "Toss-up",      "#fbbf24"
+
     return round(score, 1), label, color, factors
 
 def get_opp_defense(opp_abbr):
@@ -360,8 +346,7 @@ def get_opp_defense(opp_abbr):
                 """, (opp_abbr,))
                 row = cur.fetchone()
                 return float(row[0]) if row and row[0] else 0.0
-    except Exception:
-        return 0.0
+    except Exception: return 0.0
 
 def get_rest_info(team_abbr):
     try:
@@ -380,197 +365,152 @@ def get_rest_info(team_abbr):
                 row = cur.fetchone()
                 if row:
                     is_home = row[4] == team_abbr
-                    return {
-                        "is_home": is_home,
-                        "is_b2b": bool(row[0] if is_home else row[1]),
-                        "rest_days": row[2] if is_home else row[3],
-                        "opponent": row[5] if is_home else row[4],
-                    }
-    except Exception:
-        pass
+                    return {"is_b2b": bool(row[0] if is_home else row[1]),
+                            "rest_days": row[2] if is_home else row[3]}
+    except Exception: pass
     return {}
+
+def get_team_game_info(team_abbr):
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT th.abbreviation, ta.abbreviation
+                    FROM games g
+                    JOIN teams th ON th.team_id = g.home_team_id
+                    JOIN teams ta ON ta.team_id = g.away_team_id
+                    WHERE g.season_id = '2025-26' AND g.home_score IS NULL
+                    AND (th.abbreviation = %s OR ta.abbreviation = %s)
+                    ORDER BY g.game_date ASC LIMIT 1
+                """, (team_abbr, team_abbr))
+                row = cur.fetchone()
+                if row:
+                    home_abbr, away_abbr = row
+                    is_home = home_abbr == team_abbr
+                    return {"home": home_abbr, "away": away_abbr,
+                            "is_home": is_home,
+                            "opponent": away_abbr if is_home else home_abbr}
+    except Exception: pass
+    return {}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 async def run():
     init_pool()
     ensure_table()
-    # Use PST date so it matches what the API router reads
-    pst = timezone(timedelta(hours=-8))
+
+    pst   = timezone(timedelta(hours=-8))
     today = datetime.now(pst).date()
 
-    async with httpx.AsyncClient(headers=HEADERS) as client:
-        logger.info("Fetching all NBA props from Odds API...")
-        events_data = await fetch_all_props(client)
+    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True) as client:
+        logger.info("Fetching NBA props from PrizePicks...")
+        all_props = await fetch_prizepicks_props(client)
 
-        if not events_data or isinstance(events_data, dict):
-            logger.error(f"Bad response from Odds API: {events_data}")
+        if not all_props:
+            logger.info("No props from PrizePicks — exiting")
             return
 
-        # Parse all props from response
-        # Structure: [{id, home_team, away_team, bookmakers: [{markets: [{key, outcomes}]}]}]
-        all_props = defaultdict(dict)  # player_lower -> {stat -> prop_info}
-        game_lookup = {}  # player_lower -> {home, away}
+        rows_written = 0
 
-        for event in events_data:
-            home = ODDS_TEAM_MAP.get(event.get("home_team", ""), "")
-            away = ODDS_TEAM_MAP.get(event.get("away_team", ""), "")
-            if not home or not away:
+        for pkey, stat_map in all_props.items():
+            # Get player info from first available prop
+            first_prop = next(
+                prop for sv in stat_map.values() for prop in sv.values()
+            )
+            player_name = first_prop["player_name"]
+            team_abbr   = first_prop.get("team", "")
+
+            if not team_abbr:
                 continue
 
-            for bookmaker in event.get("bookmakers", []):
-                bk_key = bookmaker.get("key", "")
-                for market in bookmaker.get("markets", []):
-                    stat = MARKET_TO_STAT.get(market.get("key", ""))
-                    if not stat:
-                        continue
-                    # Group by player name (in "description" field) and Over/Under (in "name" field)
-                    # ESPN format: {"name": "Over", "description": "Anthony Davis", "price": -105, "point": 23.5}
-                    player_outcomes = defaultdict(dict)
-                    for outcome in market.get("outcomes", []):
-                        side = outcome.get("name", "")        # "Over" or "Under"
-                        pname = outcome.get("description", "") # player name
-                        if not pname or side not in ("Over", "Under"):
-                            continue
-                        player_outcomes[pname][side] = {
-                            "odds": outcome.get("price", 0),
-                            "line": outcome.get("point", 0),
-                        }
-                    for pname, sides in player_outcomes.items():
-                        over = sides.get("Over", {})
-                        under = sides.get("Under", {})
-                        line = over.get("line") or under.get("line")
-                        if not line:
-                            continue
-                        pkey = pname.lower()
-                        existing = all_props[pkey].get(stat)
-                        if not existing or bk_key == "draftkings":
-                            all_props[pkey][stat] = {
-                                "player_name": pname,
-                                "line": line,
-                                "over_odds": over.get("odds"),
-                                "under_odds": under.get("odds"),
-                                "implied_prob_over": implied_prob(over.get("odds", 0)),
-                                "bookmaker": bk_key,
-                                "home": home,
-                                "away": away,
-                            }
-                            game_lookup[pkey] = {"home": home, "away": away}
+            game_info = get_team_game_info(team_abbr)
+            is_home   = game_info.get("is_home", False)
+            opponent  = game_info.get("opponent", "")
 
-        logger.info(f"Found {len(all_props)} players with props across {len(events_data)} games")
+            # Fetch ESPN logs ONCE per player (shared across all stats + tiers)
+            player_logs = await fetch_player_logs(client, player_name, team_abbr)
 
-        # For each player, determine team and fetch box scores
-        rows_written = 0
-        for pkey, stat_props in all_props.items():
-            game_info = game_lookup.get(pkey, {})
-            home_team = game_info.get("home", "")
-            away_team = game_info.get("away", "")
+            rest      = get_rest_info(team_abbr)
+            is_b2b    = rest.get("is_b2b", False)
+            rest_days = rest.get("rest_days", 1)
+            opp_def   = get_opp_defense(opponent) if opponent else 0.0
+            opp_def_label = "good" if opp_def < -2 else "poor" if opp_def > 2 else "average"
 
-            # Try to determine player's team by checking which team has their game logs
-            # We'll try both home and away
-            player_name = list(stat_props.values())[0]["player_name"]
+            for stat, tiers in stat_map.items():
+                for odds_type, prop_info in tiers.items():
+                    line  = prop_info["line"]
+                    stats = compute_stats(player_logs, stat, line) if player_logs else None
 
-            # Resolve player's team ONCE before processing all stats
-            # Fetch logs for both teams and pick whichever returns >= 3 games
-            team_found = ""
-            is_home_player = False
-            player_logs_cache = []
-            for try_team, try_is_home in [(home_team, True), (away_team, False)]:
-                if not try_team:
-                    continue
-                candidate = await fetch_player_logs(client, player_name, try_team)
-                if len(candidate) >= 3:
-                    team_found = try_team
-                    is_home_player = try_is_home
-                    player_logs_cache = candidate
-                    break
+                    if stats:
+                        comp_score, score_label, score_color, factors = compute_score(
+                            stats, opp_def, is_b2b, is_home, line, odds_type
+                        )
+                    else:
+                        comp_score  = PP_IMPLIED_PROB
+                        score_label = "Insufficient data"
+                        score_color = "#555"
+                        factors     = [{"label": "No history", "value": "—", "impact": "neutral"}]
 
-            rest_home = get_rest_info(home_team) if home_team else {}
-            rest_away = get_rest_info(away_team) if away_team else {}
-
-            for stat, prop_info in stat_props.items():
-                line = prop_info["line"]
-                logs = player_logs_cache
-
-                opp = away_team if is_home_player else home_team
-                opp_def = get_opp_defense(opp) if opp else 0.0
-                opp_def_label = "good" if opp_def < -2 else "poor" if opp_def > 2 else "average"
-
-                rest = rest_home if is_home_player else rest_away
-                is_b2b = rest.get("is_b2b", False)
-                rest_days = rest.get("rest_days", 1)
-
-                if logs:
-                    stats = compute_stats(logs, stat, line)
-                else:
-                    stats = None
-
-                if stats:
-                    comp_score, score_label, score_color, factors = compute_score(
-                        stats, opp_def, is_b2b, is_home_player, line
-                    )
-                else:
-                    # Fall back to implied probability only
-                    imp = prop_info.get("implied_prob_over", 50)
-                    comp_score = imp
-                    score_label = "Implied only"
-                    score_color = "#888"
-                    factors = [{"label": "Implied prob", "value": f"{imp}%", "impact": "neutral"}]
-
-                import json
-                with get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO prop_board (
-                                player_name, team, opponent, is_home, stat, line,
-                                over_odds, under_odds, implied_prob_over, bookmaker,
-                                avg_season, avg_last5, avg_last10, avg_last20,
-                                home_avg, away_avg, hit_rate_season, hit_rate_last5, hit_rate_last10,
-                                composite_score, score_label, score_color, factors, game_log,
-                                is_b2b, rest_days, opp_def_label, opp_def_margin, game_date
-                            ) VALUES (
-                                %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s,
-                                %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s
-                            )
-                            ON CONFLICT (player_name, stat, game_date)
-                            DO UPDATE SET
-                                composite_score = EXCLUDED.composite_score,
-                                score_label = EXCLUDED.score_label,
-                                score_color = EXCLUDED.score_color,
-                                line = EXCLUDED.line,
-                                over_odds = EXCLUDED.over_odds,
-                                under_odds = EXCLUDED.under_odds,
-                                implied_prob_over = EXCLUDED.implied_prob_over,
-                                avg_last5 = EXCLUDED.avg_last5,
-                                avg_last10 = EXCLUDED.avg_last10,
-                                hit_rate_last5 = EXCLUDED.hit_rate_last5,
-                                hit_rate_last10 = EXCLUDED.hit_rate_last10,
-                                factors = EXCLUDED.factors,
-                                game_log = EXCLUDED.game_log,
-                                computed_at = NOW()
-                        """, (
-                            player_name, team_found or None, opp or None, is_home_player, stat, line,
-                            prop_info.get("over_odds"), prop_info.get("under_odds"),
-                            prop_info.get("implied_prob_over"), prop_info.get("bookmaker"),
-                            stats.get("avg_season") if stats else None,
-                            stats.get("avg_last5") if stats else None,
-                            stats.get("avg_last10") if stats else None,
-                            stats.get("avg_last20") if stats else None,
-                            stats.get("home_avg") if stats else None,
-                            stats.get("away_avg") if stats else None,
-                            stats.get("hit_rate_season") if stats else None,
-                            stats.get("hit_rate_last5") if stats else None,
-                            stats.get("hit_rate_last10") if stats else None,
-                            comp_score, score_label, score_color,
-                            json.dumps(factors),
-                            json.dumps(stats.get("game_log", []) if stats else []),
-                            is_b2b, rest_days,
-                            opp_def_label, opp_def,
-                            today,
-                        ))
-                rows_written += 1
+                    with get_conn() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO prop_board (
+                                    player_name, team, opponent, is_home,
+                                    stat, odds_type, line,
+                                    pp_implied_prob, pp_american_odds,
+                                    avg_season, avg_last5, avg_last10, avg_last20,
+                                    home_avg, away_avg,
+                                    hit_rate_season, hit_rate_last5, hit_rate_last10,
+                                    composite_score, score_label, score_color,
+                                    factors, game_log,
+                                    is_b2b, rest_days, opp_def_label, opp_def_margin,
+                                    game_date
+                                ) VALUES (
+                                    %s,%s,%s,%s,
+                                    %s,%s,%s,
+                                    %s,%s,
+                                    %s,%s,%s,%s,
+                                    %s,%s,
+                                    %s,%s,%s,
+                                    %s,%s,%s,
+                                    %s,%s,
+                                    %s,%s,%s,%s,
+                                    %s
+                                )
+                                ON CONFLICT (player_name, stat, odds_type, game_date) DO UPDATE SET
+                                    line            = EXCLUDED.line,
+                                    composite_score = EXCLUDED.composite_score,
+                                    score_label     = EXCLUDED.score_label,
+                                    score_color     = EXCLUDED.score_color,
+                                    avg_last5       = EXCLUDED.avg_last5,
+                                    avg_last10      = EXCLUDED.avg_last10,
+                                    hit_rate_last5  = EXCLUDED.hit_rate_last5,
+                                    hit_rate_last10 = EXCLUDED.hit_rate_last10,
+                                    factors         = EXCLUDED.factors,
+                                    game_log        = EXCLUDED.game_log,
+                                    computed_at     = NOW()
+                            """, (
+                                player_name, team_abbr, opponent, is_home,
+                                stat, odds_type, line,
+                                PP_IMPLIED_PROB, PP_AMERICAN_ODDS,
+                                stats.get("avg_season")      if stats else None,
+                                stats.get("avg_last5")       if stats else None,
+                                stats.get("avg_last10")      if stats else None,
+                                stats.get("avg_last20")      if stats else None,
+                                stats.get("home_avg")        if stats else None,
+                                stats.get("away_avg")        if stats else None,
+                                stats.get("hit_rate_season") if stats else None,
+                                stats.get("hit_rate_last5")  if stats else None,
+                                stats.get("hit_rate_last10") if stats else None,
+                                comp_score, score_label, score_color,
+                                json.dumps(factors),
+                                json.dumps(stats.get("game_log",[]) if stats else []),
+                                is_b2b, rest_days, opp_def_label, opp_def,
+                                today,
+                            ))
+                    rows_written += 1
 
         logger.info(f"Written {rows_written} props to prop_board for {today}")
 
