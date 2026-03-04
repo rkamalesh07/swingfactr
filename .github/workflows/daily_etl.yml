@@ -1,35 +1,38 @@
-name: Daily ETL + Props Board
+name: Daily ETL + Props Board + Outcome Checker
 
 on:
   schedule:
-    # Game data ETL — 9am EST (14:00 UTC) daily
-    - cron: '0 14 * * *'
-    # Props board — 3x daily on game days only (script skips if no games)
+    # Game data ETL — 9am PST (17:00 UTC)
+    - cron: '0 17 * * *'
+    # Props board — 3x daily (PrizePicks, no API key needed)
     # 6:30am PST = 14:30 UTC
     # 12pm PST   = 20:00 UTC
     # 3:30pm PST = 23:30 UTC
     - cron: '30 14 * * *'
     - cron: '0 20 * * *'
     - cron: '30 23 * * *'
+    # Outcome checker — 10pm PST = 06:00 UTC next day
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       job:
         description: 'Which job to run'
         required: false
-        default: 'both'
+        default: 'all'
         type: choice
         options:
-          - both
+          - all
           - etl
           - props
+          - outcomes
 
 jobs:
   incremental-etl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.schedule == '0 14 * * *'
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'etl') ||
+      github.event.schedule == '0 17 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: |
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'props') ||
       github.event.schedule == '30 14 * * *' ||
       github.event.schedule == '0 20 * * *' ||
       github.event.schedule == '30 23 * * *'
@@ -57,8 +60,25 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - run: pip install -r requirements.txt
-      - name: Run props board ETL
+      - name: Run props board ETL (PrizePicks)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: python -m src.etl.props_board
+
+  outcome-checker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'outcomes') ||
+      github.event.schedule == '0 6 * * *'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Run outcome checker
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.etl.outcome_checker

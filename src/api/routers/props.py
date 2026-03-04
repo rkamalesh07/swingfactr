@@ -134,3 +134,32 @@ async def player_detail(name: str = Query(...), stat: str = Query("pts")):
         if r.get("game_date"):    r["game_date"]     = str(r["game_date"])
         results.append(r)
     return JSONResponse(results)
+
+@router.get("/results")
+async def get_results(days: int = Query(30)):
+    """Outcome tracker results for admin dashboard."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    game_date, player_name, team, opponent,
+                    stat, odds_type, line, actual_value,
+                    hit, composite_score, score_label, edge,
+                    pick_side, correct
+                FROM prop_results
+                WHERE game_date >= CURRENT_DATE - INTERVAL '%s days'
+                ORDER BY game_date DESC, composite_score DESC
+            """, (days,))
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
+
+    results = []
+    for row in rows:
+        r = dict(zip(cols, row))
+        if r.get("game_date"): r["game_date"] = str(r["game_date"])
+        results.append(r)
+
+    return JSONResponse({
+        "total":   len(results),
+        "results": results,
+    })
