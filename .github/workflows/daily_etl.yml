@@ -1,10 +1,10 @@
-name: Daily ETL + Props Board + Outcome Checker
+name: Daily ETL + Props Board + Outcome Checker + Calibration
 
 on:
   schedule:
     # Game data ETL — 9am PST (17:00 UTC)
     - cron: '0 17 * * *'
-    # Props board — 3x daily (PrizePicks, no API key needed)
+    # Props board — 3x daily
     # 6:30am PST = 14:30 UTC
     # 12pm PST   = 20:00 UTC
     # 3:30pm PST = 23:30 UTC
@@ -13,6 +13,8 @@ on:
     - cron: '30 23 * * *'
     # Outcome checker — 10pm PST = 06:00 UTC next day
     - cron: '0 6 * * *'
+    # Calibration — every Sunday 8am PST = 16:00 UTC Sunday
+    - cron: '0 16 * * 0'
   workflow_dispatch:
     inputs:
       job:
@@ -25,20 +27,20 @@ on:
           - etl
           - props
           - outcomes
+          - calibrate
+          - backtest
 
 jobs:
   incremental-etl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: |
-      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'etl') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'etl')) ||
       github.event.schedule == '0 17 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+        with: { python-version: '3.11', cache: 'pip' }
       - run: pip install -r requirements.txt
       - name: Run incremental ETL
         env:
@@ -49,18 +51,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: |
-      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'props') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'props')) ||
       github.event.schedule == '30 14 * * *' ||
       github.event.schedule == '0 20 * * *' ||
       github.event.schedule == '30 23 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+        with: { python-version: '3.11', cache: 'pip' }
       - run: pip install -r requirements.txt
-      - name: Run props board ETL (PrizePicks)
+      - name: Run props board ETL (PrizePicks — v11 calibrated)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m src.etl.props_board
@@ -69,16 +69,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: |
-      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'outcomes') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'outcomes')) ||
       github.event.schedule == '0 6 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+        with: { python-version: '3.11', cache: 'pip' }
       - run: pip install -r requirements.txt
-      - name: Run outcome checker
+      - name: Run outcome checker (10pm PST)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m src.etl.outcome_checker
+
+  calibrate-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'calibrate')) ||
+      github.event.schedule == '0 16 * * 0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install -r requirements.txt numpy
+      - name: Fit Platt scaling calibration (weekly)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.etl.calibrate_model
+
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'backtest'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install -r requirements.txt numpy
+      - name: Run walk-forward backtest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.etl.backtest
