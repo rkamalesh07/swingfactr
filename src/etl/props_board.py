@@ -1,20 +1,25 @@
 """
-Props Board ETL v11 — calibrated probabilities + pace/total + usage rate.
+Props Board ETL v12 — Distribution-based stat model.
 
-New in v11:
-  1. Loads Platt-scaling coefficients from model_calibration table
-  2. composite_score is now a CALIBRATED probability (0-100) not a raw heuristic
-  3. Fetches game pace + implied total from ESPN scoreboard
-  4. Fetches player usage rate from box scores
-  5. Power-play break-even thresholds correct per n (not fixed 57.7)
-  6. Toss-up filter uses calibrated probability, not raw score
+Architecture (per PDF recommendation):
+  1. Pull player's full season game logs from player_game_logs table
+  2. Compute per-minute stat rates with Bayesian shrinkage
+     shrunk_rate = season_rate * 0.65 + recent_rate(L10) * 0.35
+  3. Project minutes using weighted recent average + fatigue adjustments
+  4. Compute predicted stat mean = shrunk_rate * projected_minutes * pace_factor
+  5. Compute predicted stat std from historical game-to-game variance
+  6. P(Y > line) = 1 - normal_CDF(line + 0.5, mean, std)  [continuity correction]
+  7. Calibrate with Platt scaling
+  8. Cap edge at ±15 standard / ±10 goblin
 
-Break-even thresholds per PDF:
-  2-pick Power: 57.7%
-  3-pick Power: 58.5%
-  4-pick Power: 56.2%
-  5-pick Power: 54.9%
-  6-pick Power: 58.5% (approx)
+Key improvements over v11:
+  - Uses DISTRIBUTION not hit rates (immune to line movement)
+  - Bayesian shrinkage prevents recency overfitting (doc section 2)
+  - Per-minute rates account for role/minutes changes (doc section 3)
+  - Pace factor from team possessions (doc section 6)
+  - Opponent positional defense from opp_def_margin per team (best available)
+  - Minutes trend feature (is player's role growing or shrinking?)
+  - Variable B2B penalty based on player's own history (doc section 7)
 """
 
 import asyncio, httpx, json, logging, sys, math
@@ -26,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.etl.db import get_conn, init_pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
-logger = logging.getLogger("props_board")
+logger = logging.getLogger("props_board_v12")
 
 ESPN_SUMMARY    = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
@@ -39,22 +44,16 @@ PP_HEADERS      = {
     "Origin": "https://app.prizepicks.com",
 }
 
+PP_IMPLIED_PROB  = 57.7
 PP_AMERICAN_ODDS = -136
-
-# Power-play break-even per leg (from PDF section 2.1)
-POWER_BREAKEVEN = {2: 57.7, 3: 58.5, 4: 56.2, 5: 54.9, 6: 58.5}
-# Default for edge calculation (2-pick most common)
-PP_IMPLIED_PROB = POWER_BREAKEVEN[2]
+MAX_EDGE_STANDARD = 15.0
+MAX_EDGE_GOBLIN   = 10.0
+LEAGUE_AVG_PACE   = 98.5   # NBA avg possessions per team per game 2025-26
 
 PP_STAT_MAP = {
-    "Points":        "pts",
-    "Rebounds":      "reb",
-    "Assists":       "ast",
-    "3-PT Made":     "fg3m",
-    "Steals":        "stl",
-    "Blocked Shots": "blk",
+    "Points": "pts", "Rebounds": "reb", "Assists": "ast",
+    "3-PT Made": "fg3m", "Steals": "stl", "Blocked Shots": "blk",
 }
-
 PP_TEAM_MAP = {
     "ATL":"ATL","BOS":"BOS","BKN":"BKN","CHA":"CHA","CHI":"CHI",
     "CLE":"CLE","DAL":"DAL","DEN":"DEN","DET":"DET","GSW":"GSW",
@@ -63,128 +62,353 @@ PP_TEAM_MAP = {
     "OKC":"OKC","ORL":"ORL","PHI":"PHI","PHX":"PHX","POR":"POR",
     "SAC":"SAC","SAS":"SAS","TOR":"TOR","UTA":"UTA","WAS":"WAS",
 }
-
 ABBR_NORMALIZE = {
     "SA":"SAS","NO":"NOP","GS":"GSW","NY":"NYK","WSH":"WAS","UTAH":"UTA","PHO":"PHX",
 }
 
-STAT_AVG_WEIGHT = {
-    "pts": 2.0, "reb": 1.5, "ast": 3.0,
-    "fg3m": 2.5, "stl": 3.5, "blk": 3.5,
-}
+def normalize(abbr): return ABBR_NORMALIZE.get(abbr, abbr)
 
 # ---------------------------------------------------------------------------
-# Calibration — load Platt coefficients from DB
+# Math helpers
 # ---------------------------------------------------------------------------
 
-_CAL_CACHE: dict = {}
+def normal_cdf(x, mu, sigma):
+    """P(X <= x) for normal distribution."""
+    if sigma <= 0: return 0.5
+    z = (x - mu) / (sigma * math.sqrt(2))
+    return 0.5 * (1 + math.erf(z))
 
-def sigmoid(x: float) -> float:
+def p_over_line(line, mu, sigma):
+    """P(Y > line) with continuity correction (+0.5 for discrete stats)."""
+    return 1 - normal_cdf(line + 0.5, mu, sigma)
+
+def sigmoid(x):
     return 1.0 / (1.0 + math.exp(-max(-500, min(500, x))))
 
+def mean(vals): return sum(vals) / len(vals) if vals else None
+def std(vals):
+    if len(vals) < 2: return None
+    m = mean(vals)
+    return math.sqrt(sum((v - m) ** 2 for v in vals) / (len(vals) - 1))
+
+# ---------------------------------------------------------------------------
+# Calibration
+# ---------------------------------------------------------------------------
+_CAL_CACHE = {}
+
 def load_calibration():
-    """Load per-stat and global calibration coefficients. Cached per run."""
     global _CAL_CACHE
-    if _CAL_CACHE:
-        return _CAL_CACHE
+    if _CAL_CACHE: return _CAL_CACHE
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT stat, a, b FROM model_calibration
-                    ORDER BY fitted_at DESC
-                """)
-                rows = cur.fetchall()
-        seen = set()
-        for stat, a, b in rows:
-            if stat not in seen:
-                _CAL_CACHE[stat] = (a, b)
-                seen.add(stat)
-        logger.info(f"Loaded calibration for: {list(_CAL_CACHE.keys())}")
+                cur.execute("SELECT stat, a, b FROM model_calibration ORDER BY fitted_at DESC")
+                seen = set()
+                for stat, a, b in cur.fetchall():
+                    if stat not in seen:
+                        _CAL_CACHE[stat] = (float(a), float(b))
+                        seen.add(stat)
+        logger.info(f"Loaded calibration: {list(_CAL_CACHE.keys())}")
     except Exception as e:
-        logger.warning(f"No calibration data found ({e}) — using uncalibrated scores")
+        logger.warning(f"No calibration ({e}) — using uncalibrated probabilities")
     return _CAL_CACHE
 
-# Maximum credible edge vs PrizePicks implied prob (57.7%).
-# Best prop models sustain ~5-10% edge. Cap at 15% for standard, 10% for goblins.
-# Goblins have lower multipliers — a 3.5 PTS goblin cannot be 37% edge.
-MAX_EDGE_STANDARD = 15.0   # cal_score range: 42.7 – 72.7
-MAX_EDGE_GOBLIN   = 10.0   # cal_score range: 47.7 – 67.7
-
-def calibrate_prob(raw_score: float, stat: str, odds_type: str = 'standard') -> float:
+def calibrate_and_cap(raw_prob_0_1, stat, odds_type):
     """
-    Convert raw heuristic score to calibrated probability (0-100).
-    Caps edge at MAX_EDGE so output is always plausible.
+    Apply Platt scaling then cap edge.
+    raw_prob_0_1: P(Y > line) from normal distribution (0-1 float)
+    Returns calibrated probability as 0-100.
     """
-    cal   = load_calibration()
+    # Convert to score space for Platt (model was trained on 0-100 scores)
+    raw_score = raw_prob_0_1 * 100
+    cal = load_calibration()
     coefs = cal.get(stat) or cal.get('all')
     if coefs:
         a, b = coefs
         prob = sigmoid(a * raw_score + b) * 100
     else:
-        prob = raw_score  # already anchored at PP_IMPLIED_PROB
+        prob = raw_score
 
     max_edge = MAX_EDGE_GOBLIN if odds_type == 'goblin' else MAX_EDGE_STANDARD
     prob = max(PP_IMPLIED_PROB - max_edge, min(PP_IMPLIED_PROB + max_edge, prob))
     return round(prob, 1)
 
 # ---------------------------------------------------------------------------
-# DB
+# Player game logs — query cached data
 # ---------------------------------------------------------------------------
 
-def ensure_table():
+def get_player_logs(player_name, team_abbr, n=40):
+    """
+    Pull up to n most recent game logs from cache.
+    Falls back to name fuzzy match if exact match fails.
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
+            # Exact match first
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS prop_board (
-                    prop_id          SERIAL PRIMARY KEY,
-                    player_name      VARCHAR(100) NOT NULL,
-                    team             VARCHAR(5),
-                    opponent         VARCHAR(5),
-                    is_home          BOOLEAN,
-                    stat             VARCHAR(20) NOT NULL,
-                    odds_type        VARCHAR(10) NOT NULL DEFAULT 'standard',
-                    line             FLOAT NOT NULL,
-                    pp_implied_prob  FLOAT DEFAULT 57.7,
-                    pp_american_odds INTEGER DEFAULT -136,
-                    avg_season       FLOAT,
-                    avg_last5        FLOAT,
-                    avg_last10       FLOAT,
-                    avg_last20       FLOAT,
-                    home_avg         FLOAT,
-                    away_avg         FLOAT,
-                    hit_rate_season  FLOAT,
-                    hit_rate_last5   FLOAT,
-                    hit_rate_last10  FLOAT,
-                    composite_score  FLOAT,
-                    score_label      VARCHAR(30),
-                    score_color      VARCHAR(10),
-                    factors          JSONB,
-                    game_log         JSONB,
-                    is_b2b           BOOLEAN DEFAULT FALSE,
-                    rest_days        INTEGER,
-                    opp_def_label    VARCHAR(20),
-                    opp_def_margin   FLOAT,
-                    usage_rate       FLOAT,
-                    game_pace        FLOAT,
-                    computed_at      TIMESTAMPTZ DEFAULT NOW(),
-                    game_date        DATE NOT NULL,
-                    UNIQUE (player_name, stat, odds_type, game_date)
-                )
-            """)
-            for col, defn in [
-                ("odds_type",        "VARCHAR(10) NOT NULL DEFAULT 'standard'"),
-                ("pp_implied_prob",  "FLOAT DEFAULT 57.7"),
-                ("pp_american_odds", "INTEGER DEFAULT -136"),
-                ("usage_rate",       "FLOAT"),
-                ("game_pace",        "FLOAT"),
-            ]:
-                cur.execute(f"ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS {col} {defn}")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date  ON prop_board(game_date)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
+                SELECT game_date, minutes, pts, reb, ast, stl, blk, fg3m,
+                       fga, fta, tov, is_home, opponent_abbr,
+                       is_b2b, rest_days, opp_def_margin
+                FROM player_game_logs
+                WHERE player_name = %s AND season_id = '2025-26'
+                ORDER BY game_date DESC
+                LIMIT %s
+            """, (player_name, n))
+            rows = cur.fetchall()
+
+            # Fuzzy fallback: last name match
+            if not rows:
+                last = player_name.split()[-1]
+                cur.execute("""
+                    SELECT game_date, minutes, pts, reb, ast, stl, blk, fg3m,
+                           fga, fta, tov, is_home, opponent_abbr,
+                           is_b2b, rest_days, opp_def_margin
+                    FROM player_game_logs
+                    WHERE LOWER(player_name) LIKE %s AND team_abbr = %s
+                      AND season_id = '2025-26'
+                    ORDER BY game_date DESC
+                    LIMIT %s
+                """, (f"%{last.lower()}%", team_abbr, n))
+                rows = cur.fetchall()
+
+    if not rows: return []
+
+    cols = ["game_date","minutes","pts","reb","ast","stl","blk","fg3m",
+            "fga","fta","tov","is_home","opponent_abbr",
+            "is_b2b","rest_days","opp_def_margin"]
+    return [dict(zip(cols, r)) for r in rows]
 
 # ---------------------------------------------------------------------------
-# PrizePicks fetch — skip demons
+# Team pace — average possessions per game
+# ---------------------------------------------------------------------------
+_PACE_CACHE = {}
+
+def get_team_pace(team_abbr):
+    """Estimate team pace from average possessions in recent stints."""
+    global _PACE_CACHE
+    if team_abbr in _PACE_CACHE: return _PACE_CACHE[team_abbr]
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                # Sum possessions per game for this team, average across games
+                cur.execute("""
+                    SELECT AVG(game_poss) FROM (
+                        SELECT game_id, SUM(possessions) as game_poss
+                        FROM stints
+                        WHERE team_id = (SELECT team_id FROM teams WHERE abbreviation = %s)
+                        GROUP BY game_id
+                    ) sub
+                """, (team_abbr,))
+                row = cur.fetchone()
+                pace = float(row[0]) if row and row[0] else LEAGUE_AVG_PACE
+    except Exception:
+        pace = LEAGUE_AVG_PACE
+    _PACE_CACHE[team_abbr] = pace
+    return pace
+
+# ---------------------------------------------------------------------------
+# Core distribution model
+# ---------------------------------------------------------------------------
+
+def compute_distribution_score(logs, line, stat, odds_type,
+                                 is_b2b, opp_def_margin, implied_total,
+                                 team_abbr, opp_abbr):
+    """
+    Returns (cal_prob_0_100, factors, model_details) using distribution model.
+
+    Steps:
+    1. Filter qualified games (>= 10 min)
+    2. Compute per-minute rate with Bayesian shrinkage
+    3. Project minutes
+    4. predicted_mean = shrunk_rate * projected_minutes * pace_factor
+    5. predicted_std  = historical std of game outcomes
+    6. P(Y > line) = 1 - normal_CDF(line + 0.5, mean, std)
+    7. Calibrate + cap
+    """
+    qualified = [g for g in logs if g["minutes"] and g["minutes"] >= 10]
+    if len(qualified) < 3:
+        return None, [], {}
+
+    factors = []
+
+    # ── 1. Per-minute rate with Bayesian shrinkage ──────────────────────────
+    # Season rate (all games)
+    season_vals    = [g[stat] for g in qualified if g[stat] is not None]
+    season_minutes = [g["minutes"] for g in qualified if g[stat] is not None]
+    if not season_vals: return None, [], {}
+
+    total_stat    = sum(season_vals)
+    total_minutes = sum(season_minutes)
+    season_rate   = total_stat / total_minutes if total_minutes > 0 else 0
+
+    # Recent rate (last 10 qualified games)
+    recent10      = qualified[:10]
+    recent_stat   = sum(g[stat] for g in recent10 if g[stat] is not None)
+    recent_mins   = sum(g["minutes"] for g in recent10 if g[stat] is not None)
+    recent_rate   = recent_stat / recent_mins if recent_mins > 0 else season_rate
+
+    # Bayesian shrinkage: season 65%, recent 35% (doc section 2)
+    shrunk_rate = season_rate * 0.65 + recent_rate * 0.35
+
+    factors.append({
+        "label":  "Stat rate/min",
+        "value":  f"{shrunk_rate:.3f} (s:{season_rate:.3f} r:{recent_rate:.3f})",
+        "impact": "neutral"
+    })
+
+    # ── 2. Minutes projection ───────────────────────────────────────────────
+    recent_mins_list = [g["minutes"] for g in qualified[:10]]
+    older_mins_list  = [g["minutes"] for g in qualified[10:20]] if len(qualified) > 10 else recent_mins_list
+
+    avg_min_recent   = mean(recent_mins_list) or 25.0
+    avg_min_season   = mean([g["minutes"] for g in qualified]) or 25.0
+
+    # Minutes projection: weighted recent 60%, season 40%
+    projected_min = avg_min_recent * 0.60 + avg_min_season * 0.40
+
+    # Minutes trend: is role growing or shrinking?
+    if len(qualified) >= 15:
+        avg_older = mean([g["minutes"] for g in qualified[10:20]])
+        if avg_older:
+            min_trend = avg_min_recent - avg_older
+            if min_trend > 3:
+                projected_min = min(projected_min + 1.5, projected_min * 1.08)
+                factors.append({"label": "Min trend", "value": f"+{min_trend:.1f} vs earlier", "impact": "positive"})
+            elif min_trend < -3:
+                projected_min = max(projected_min - 1.5, projected_min * 0.92)
+                factors.append({"label": "Min trend", "value": f"{min_trend:.1f} vs earlier", "impact": "negative"})
+
+    # B2B penalty — calibrated to this player's own B2B history
+    b2b_games  = [g for g in qualified if g.get("is_b2b")]
+    norm_games = [g for g in qualified if not g.get("is_b2b")]
+    if is_b2b:
+        if b2b_games and norm_games:
+            b2b_avg_min  = mean([g["minutes"] for g in b2b_games])
+            norm_avg_min = mean([g["minutes"] for g in norm_games])
+            b2b_factor   = b2b_avg_min / norm_avg_min if norm_avg_min > 0 else 0.93
+        else:
+            b2b_factor = 0.93  # default 7% minutes reduction on B2B
+        projected_min *= b2b_factor
+        factors.append({
+            "label": "B2B fatigue",
+            "value": f"{b2b_factor:.0%} min factor",
+            "impact": "negative"
+        })
+
+    factors.append({
+        "label":  "Projected min",
+        "value":  f"{projected_min:.1f}",
+        "impact": "neutral"
+    })
+
+    # ── 3. Pace adjustment ──────────────────────────────────────────────────
+    team_pace = get_team_pace(team_abbr)
+    opp_pace  = get_team_pace(opp_abbr)
+    game_pace = (team_pace + opp_pace) / 2
+    pace_factor = game_pace / LEAGUE_AVG_PACE
+
+    # Only apply pace to counting stats that scale with possessions
+    if stat in ("pts", "reb", "ast", "fg3m"):
+        if abs(pace_factor - 1.0) > 0.03:
+            impact = "positive" if pace_factor > 1 else "negative"
+            factors.append({
+                "label": "Pace factor",
+                "value": f"{game_pace:.0f} poss ({pace_factor:+.1%})",
+                "impact": impact
+            })
+    else:
+        pace_factor = 1.0  # STL/BLK don't scale strongly with pace
+
+    # Implied total override: if we have betting market total, use it
+    if implied_total:
+        implied_pace_factor = implied_total / (LEAGUE_AVG_PACE * 2)
+        pace_factor = (pace_factor + implied_pace_factor) / 2
+
+    # ── 4. Predicted mean ───────────────────────────────────────────────────
+    predicted_mean = shrunk_rate * projected_min * pace_factor
+
+    # ── 5. Opponent defense adjustment ─────────────────────────────────────
+    if opp_def_margin is not None:
+        # opp_def_margin > 0 = bad defense (opponent gives up points)
+        # Scale: 1 point of margin ≈ 2% impact on stat
+        def_factor = 1.0 + (opp_def_margin * 0.015)
+        def_factor = max(0.85, min(1.15, def_factor))  # cap at ±15%
+        if stat in ("pts", "ast", "fg3m"):  # offense-dependent stats
+            predicted_mean *= def_factor
+        if abs(opp_def_margin) > 2:
+            lbl = "poor" if opp_def_margin > 2 else "good"
+            factors.append({
+                "label": "Opp defense",
+                "value": f"{lbl} ({opp_def_margin:+.1f})",
+                "impact": "positive" if opp_def_margin > 2 else "negative"
+            })
+
+    # ── 6. Predicted std ────────────────────────────────────────────────────
+    game_vals = [g[stat] for g in qualified[:20] if g[stat] is not None]
+    hist_std  = std(game_vals) if len(game_vals) >= 3 else None
+
+    # Fallback std by stat if insufficient history
+    fallback_std = {
+        "pts": max(4.0, predicted_mean * 0.28),
+        "reb": max(2.0, predicted_mean * 0.40),
+        "ast": max(1.5, predicted_mean * 0.45),
+        "fg3m": max(1.0, predicted_mean * 0.60),
+        "stl": max(0.5, predicted_mean * 0.70),
+        "blk": max(0.5, predicted_mean * 0.70),
+    }
+    predicted_std = hist_std if hist_std else fallback_std.get(stat, predicted_mean * 0.35)
+
+    # ── 7. P(Y > line) ──────────────────────────────────────────────────────
+    prob_over = p_over_line(line, predicted_mean, predicted_std)
+
+    factors.insert(0, {
+        "label":  "Predicted",
+        "value":  f"{predicted_mean:.1f} ± {predicted_std:.1f}",
+        "impact": "positive" if predicted_mean > line else "negative"
+    })
+    factors.insert(1, {
+        "label":  "P(over line)",
+        "value":  f"{prob_over*100:.1f}%",
+        "impact": "positive" if prob_over > 0.577 else "negative"
+    })
+
+    # ── 8. Calibrate and cap ────────────────────────────────────────────────
+    cal_prob = calibrate_and_cap(prob_over, stat, odds_type)
+
+    model_details = {
+        "predicted_mean": round(predicted_mean, 2),
+        "predicted_std":  round(predicted_std, 2),
+        "prob_over_raw":  round(prob_over * 100, 1),
+        "projected_min":  round(projected_min, 1),
+        "shrunk_rate":    round(shrunk_rate, 4),
+        "pace_factor":    round(pace_factor, 3),
+        "season_rate":    round(season_rate, 4),
+        "recent_rate":    round(recent_rate, 4),
+        "n_games":        len(qualified),
+    }
+
+    return cal_prob, factors, model_details
+
+# ---------------------------------------------------------------------------
+# Score label
+# ---------------------------------------------------------------------------
+
+def score_to_label(cal_prob, odds_type):
+    edge = cal_prob - PP_IMPLIED_PROB
+    if odds_type == "goblin":
+        if edge >= 8:    return "Strong Over",  "#4ade80"
+        elif edge >= 4:  return "Lean Over",    "#86efac"
+        elif edge <= -4: return "Risky Pick",   "#f87171"
+        else:            return "Marginal",     "#fbbf24"
+    else:
+        if edge >= 10:   return "Strong Over",  "#4ade80"
+        elif edge >= 5:  return "Lean Over",    "#86efac"
+        elif edge <= -10:return "Strong Under", "#f87171"
+        elif edge <= -5: return "Lean Under",   "#fb923c"
+        else:            return "Toss-up",      "#fbbf24"
+
+# ---------------------------------------------------------------------------
+# PrizePicks fetch
 # ---------------------------------------------------------------------------
 
 async def fetch_prizepicks_props(client):
@@ -193,17 +417,17 @@ async def fetch_prizepicks_props(client):
             params={"league_id": 7, "per_page": 500, "single_stat": "true"},
             headers=PP_HEADERS, timeout=15)
         if r.status_code != 200:
-            logger.error(f"PrizePicks {r.status_code}: {r.text[:200]}")
+            logger.error(f"PrizePicks {r.status_code}")
             return {}
         data = r.json()
     except Exception as e:
         logger.error(f"PrizePicks fetch failed: {e}")
         return {}
 
-    projections    = data.get("data", [])
-    included       = {i["id"]: i for i in data.get("included", [])}
-    all_props      = defaultdict(lambda: defaultdict(dict))
-    skipped_demons = 0
+    projections = data.get("data", [])
+    included    = {i["id"]: i for i in data.get("included", [])}
+    all_props   = defaultdict(lambda: defaultdict(dict))
+    skipped     = 0
 
     for proj in projections:
         attrs     = proj.get("attributes", {})
@@ -211,12 +435,9 @@ async def fetch_prizepicks_props(client):
         stat      = PP_STAT_MAP.get(pp_stat)
         odds_type = attrs.get("odds_type", "standard")
         if not stat: continue
-        if odds_type == "demon":
-            skipped_demons += 1
-            continue
+        if odds_type == "demon": skipped += 1; continue
         line = attrs.get("line_score")
         if line is None: continue
-        line = float(line)
 
         player_id   = proj.get("relationships", {}).get("new_player", {}).get("data", {}).get("id")
         player_obj  = included.get(player_id, {})
@@ -229,325 +450,62 @@ async def fetch_prizepicks_props(client):
         pkey = player_name.lower()
         if odds_type not in all_props[pkey][stat]:
             all_props[pkey][stat][odds_type] = {
-                "player_name": player_name,
-                "line": line, "team": team_abbr, "odds_type": odds_type,
+                "player_name": player_name, "line": float(line),
+                "team": team_abbr, "odds_type": odds_type,
             }
 
     total = sum(len(ot) for sv in all_props.values() for ot in sv.values())
-    logger.info(f"PrizePicks: {len(all_props)} players, {total} props (skipped {skipped_demons} demons)")
+    logger.info(f"PrizePicks: {len(all_props)} players, {total} props (skipped {skipped} demons)")
     return all_props
 
 # ---------------------------------------------------------------------------
-# ESPN — game pace + implied total
+# Game context
 # ---------------------------------------------------------------------------
 
-async def fetch_game_context(client, home_abbr, away_abbr):
-    """
-    Fetch pace and implied total for today's game between two teams.
-    Pace = possessions per 48 min (higher = more scoring opportunity).
-    Returns: {pace, implied_total} or {}
-    """
+async def fetch_implied_total(client, home_abbr, away_abbr):
     try:
         r    = await client.get(ESPN_SCOREBOARD, timeout=8)
         data = r.json()
-    except Exception:
-        return {}
+        for event in data.get("events", []):
+            competitors = event.get("competitions", [{}])[0].get("competitors", [])
+            abbrs = {normalize(c.get("team", {}).get("abbreviation", "")) for c in competitors}
+            if home_abbr in abbrs and away_abbr in abbrs:
+                for o in event.get("competitions", [{}])[0].get("odds", []):
+                    ot = o.get("overUnder")
+                    if ot:
+                        try: return float(ot)
+                        except: pass
+    except Exception: pass
+    return None
 
-    for event in data.get("events", []):
-        competitors = event.get("competitions", [{}])[0].get("competitors", [])
-        abbrs = {normalize(c.get("team", {}).get("abbreviation", "")) for c in competitors}
-        if home_abbr in abbrs and away_abbr in abbrs:
-            # Get odds for implied total
-            odds_list = event.get("competitions", [{}])[0].get("odds", [])
-            implied_total = None
-            for o in odds_list:
-                ot = o.get("overUnder")
-                if ot:
-                    try: implied_total = float(ot)
-                    except: pass
-                    break
-            return {"implied_total": implied_total}
+def get_game_info(team_abbr):
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT th.abbreviation, ta.abbreviation,
+                           g.home_b2b, g.away_b2b,
+                           g.home_rest_days, g.away_rest_days
+                    FROM games g
+                    JOIN teams th ON th.team_id = g.home_team_id
+                    JOIN teams ta ON ta.team_id = g.away_team_id
+                    WHERE g.season_id = '2025-26' AND g.home_score IS NULL
+                    AND (th.abbreviation = %s OR ta.abbreviation = %s)
+                    ORDER BY g.game_date ASC LIMIT 1
+                """, (team_abbr, team_abbr))
+                row = cur.fetchone()
+                if row:
+                    home, away = row[0], row[1]
+                    is_home    = home == team_abbr
+                    return {
+                        "home": home, "away": away,
+                        "is_home": is_home,
+                        "opponent": away if is_home else home,
+                        "is_b2b":   bool(row[2] if is_home else row[3]),
+                        "rest_days": row[4] if is_home else row[5],
+                    }
+    except Exception: pass
     return {}
-
-def normalize(abbr):
-    return ABBR_NORMALIZE.get(abbr, abbr)
-
-# ---------------------------------------------------------------------------
-# ESPN — player logs + usage rate
-# ---------------------------------------------------------------------------
-
-async def fetch_player_logs(client, player_name, team_abbr, n_games=20):
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT g.game_id, g.game_date, th.abbreviation, ta.abbreviation
-                FROM games g
-                JOIN teams th ON th.team_id = g.home_team_id
-                JOIN teams ta ON ta.team_id = g.away_team_id
-                WHERE g.season_id = '2025-26' AND g.home_score IS NOT NULL
-                AND (th.abbreviation = %s OR ta.abbreviation = %s)
-                ORDER BY g.game_date DESC LIMIT %s
-            """, (team_abbr, team_abbr, n_games))
-            games = cur.fetchall()
-
-    results = []
-    for game_id, game_date, home_abbr, away_abbr in games:
-        espn_id = game_id.replace("espn_", "")
-        try:
-            r    = await client.get(ESPN_SUMMARY, params={"event": espn_id}, timeout=8)
-            data = r.json()
-        except Exception:
-            continue
-
-        is_home = (home_abbr == team_abbr)
-        opp     = away_abbr if is_home else home_abbr
-
-        # Get team totals for usage rate calculation
-        team_fga = 0
-        team_tov = 0
-        team_fta = 0
-
-        for boxscore in data.get("boxscore", {}).get("players", []):
-            t_abbr = normalize(boxscore.get("team", {}).get("abbreviation", ""))
-            if t_abbr != team_abbr: continue
-            for stat_group in boxscore.get("statistics", []):
-                labels = stat_group.get("labels", [])
-                # Sum team totals
-                for athlete in stat_group.get("athletes", []):
-                    s = athlete.get("stats", [])
-                    if not s or s[0] == "DNP": continue
-                    try:
-                        def gs(label, default=0, _l=labels, _s=s):
-                            if label not in _l: return default
-                            idx = _l.index(label)
-                            v = _s[idx] if idx < len(_s) else None
-                            if v is None or v in ("","DNP"): return default
-                            if "-" in str(v) and label in ("FG","3PT","FT"):
-                                parts = str(v).split("-")
-                                return int(parts[1]) if len(parts) > 1 else 0
-                            try: return float(v)
-                            except: return default
-                        team_fga += gs("FG")   # attempts
-                        team_tov += gs("TO")
-                        team_fta += gs("FT")   # attempts
-                    except: pass
-
-                for athlete in stat_group.get("athletes", []):
-                    name = athlete.get("athlete", {}).get("displayName", "")
-                    if not all(tok in name.lower() for tok in player_name.lower().split()):
-                        continue
-                    stats = athlete.get("stats", [])
-                    if not stats or stats[0] == "DNP": continue
-                    try:
-                        def get_stat(label, default=0, _l=labels, _s=stats):
-                            if label not in _l: return default
-                            idx = _l.index(label)
-                            val = _s[idx] if idx < len(_s) else None
-                            if val is None or val in ("","DNP"): return default
-                            if "-" in str(val) and label in ("FG","3PT","FT"):
-                                return int(str(val).split("-")[0])
-                            try: return float(val)
-                            except: return default
-
-                        minutes = get_stat("MIN")
-                        if minutes < 1: continue
-
-                        # Usage rate: (FGA + 0.44*FTA + TOV) / team_possessions * 100
-                        p_fga = get_stat("FG")   # made-att format, we need attempts
-                        p_fta_raw = get_stat("FT")
-                        p_tov = get_stat("TO")
-                        # For usage we want attempts, handle "m-a" format
-                        try:
-                            fg_raw = stats[labels.index("FG")] if "FG" in labels else "0-0"
-                            ft_raw = stats[labels.index("FT")] if "FT" in labels else "0-0"
-                            p_fga_att = int(str(fg_raw).split("-")[1]) if "-" in str(fg_raw) else 0
-                            p_fta_att = int(str(ft_raw).split("-")[1]) if "-" in str(ft_raw) else 0
-                        except: p_fga_att, p_fta_att = 0, 0
-
-                        # Estimate team possessions
-                        team_poss = team_fga + 0.44 * team_fta + team_tov
-                        if team_poss > 0 and minutes > 0:
-                            # Scale to per-40-min possession usage
-                            player_poss = p_fga_att + 0.44 * p_fta_att + p_tov
-                            # Per-minute scaling
-                            usage = (player_poss / team_poss) * 5 * 100  # 5 players on court
-                        else:
-                            usage = None
-
-                        results.append({
-                            "date":    str(game_date), "opp": opp, "is_home": is_home,
-                            "min":     minutes,
-                            "pts":     int(get_stat("PTS")),
-                            "reb":     int(get_stat("REB")),
-                            "ast":     int(get_stat("AST")),
-                            "stl":     int(get_stat("STL")),
-                            "blk":     int(get_stat("BLK")),
-                            "fg3m":    int(get_stat("3PT")),
-                            "usage":   usage,
-                        })
-                    except Exception:
-                        continue
-    return results
-
-# ---------------------------------------------------------------------------
-# Stats computation
-# ---------------------------------------------------------------------------
-
-def compute_stats(logs, stat, line):
-    vals = [g[stat] for g in logs if g.get("min", 0) >= 10]
-    if not vals: return None
-    def avg(arr): return round(sum(arr)/len(arr), 1) if arr else None
-    def hr(arr):  return round(sum(1 for v in arr if v > line)/len(arr)*100, 1) if arr else None
-    home = [g[stat] for g in logs if     g.get("is_home") and g.get("min",0) >= 10]
-    away = [g[stat] for g in logs if not g.get("is_home") and g.get("min",0) >= 10]
-
-    # Streak: consecutive recent games over line
-    streak = 0
-    for g in logs:
-        if g.get("min", 0) >= 10 and g[stat] > line:
-            streak += 1
-        else:
-            break
-
-    # Usage rate: average over last 10 qualified games
-    usage_vals = [g["usage"] for g in logs[:10] if g.get("min",0) >= 10 and g.get("usage") is not None]
-    avg_usage  = round(sum(usage_vals)/len(usage_vals), 1) if usage_vals else None
-
-    return {
-        "avg_season":      avg(vals),
-        "avg_last5":       avg(vals[:5]),
-        "avg_last10":      avg(vals[:10]),
-        "avg_last20":      avg(vals[:20]),
-        "home_avg":        avg(home),
-        "away_avg":        avg(away),
-        "hit_rate_season": hr(vals),
-        "hit_rate_last5":  hr(vals[:5]),
-        "hit_rate_last10": hr(vals[:10]),
-        "streak":          streak,
-        "avg_usage":       avg_usage,
-        "game_log": [
-            {"date": g["date"], "opp": g["opp"], "home": g["is_home"],
-             "val": g[stat], "min": g["min"]} for g in logs[:20]
-        ],
-    }
-
-# ---------------------------------------------------------------------------
-# Scoring — outputs raw heuristic score, then calibrated probability
-# ---------------------------------------------------------------------------
-
-def compute_raw_score(stats, opp_def_margin, is_b2b, is_home, line, stat,
-                      odds_type, implied_total=None):
-    """
-    Compute raw heuristic score (anchored at 57.7).
-    Calibration applied separately after this.
-    """
-    score   = PP_IMPLIED_PROB
-    factors = []
-
-    # 1. L5 hit rate
-    if stats.get("hit_rate_last5") is not None:
-        delta = stats["hit_rate_last5"] - PP_IMPLIED_PROB
-        score += delta * 0.40
-        factors.append({"label": "Last 5 hit rate", "value": f"{stats['hit_rate_last5']}%",
-                         "impact": "positive" if delta > 0 else "negative"})
-
-    # 2. Season hit rate
-    if stats.get("hit_rate_season") is not None:
-        delta = stats["hit_rate_season"] - PP_IMPLIED_PROB
-        score += delta * 0.15
-        factors.append({"label": "Season hit rate", "value": f"{stats['hit_rate_season']}%",
-                         "impact": "positive" if delta > 0 else "negative"})
-
-    # 3. L10 avg vs line — stat-specific weight
-    if stats.get("avg_last10") is not None:
-        margin       = stats["avg_last10"] - line
-        weight       = STAT_AVG_WEIGHT.get(stat, 2.5)
-        contribution = max(-10, min(10, margin * weight))
-        score       += contribution
-        factors.append({"label": "L10 avg vs line", "value": f"{'+' if margin>=0 else ''}{margin:.1f}",
-                         "impact": "positive" if margin > 0 else "negative"})
-
-    # 4. Consistency bonus
-    l5_avg = stats.get("avg_last5")
-    l10_avg = stats.get("avg_last10")
-    if l5_avg is not None and l10_avg is not None:
-        if l5_avg > line and l10_avg > line:
-            score += 3.0
-            factors.append({"label": "Consistent form", "value": "L5+L10 above", "impact": "positive"})
-        elif l5_avg < line and l10_avg < line:
-            score -= 3.0
-            factors.append({"label": "Consistent slump", "value": "L5+L10 below", "impact": "negative"})
-
-    # 5. Hot streak
-    streak = stats.get("streak", 0)
-    if streak >= 5:
-        score += 5.0
-        factors.append({"label": "Hot streak", "value": f"{streak} straight", "impact": "positive"})
-    elif streak >= 3:
-        score += 3.0
-        factors.append({"label": "Hot streak", "value": f"{streak} straight", "impact": "positive"})
-
-    # 6. Usage rate — high usage = more involvement = more scoring/reb/ast opportunity
-    avg_usage = stats.get("avg_usage")
-    if avg_usage is not None and stat in ("pts", "reb", "ast"):
-        if avg_usage > 25:
-            score += 2.0
-            factors.append({"label": "High usage", "value": f"{avg_usage:.0f}%", "impact": "positive"})
-        elif avg_usage < 12:
-            score -= 2.0
-            factors.append({"label": "Low usage", "value": f"{avg_usage:.0f}%", "impact": "negative"})
-
-    # 7. Implied total — high total = fast game = more opportunities
-    if implied_total is not None and stat in ("pts", "fg3m"):
-        if implied_total > 230:
-            score += 2.0
-            factors.append({"label": "High total", "value": f"{implied_total}", "impact": "positive"})
-        elif implied_total < 210:
-            score -= 1.5
-            factors.append({"label": "Low total", "value": f"{implied_total}", "impact": "negative"})
-
-    # 8. Opponent defense
-    if opp_def_margin is not None:
-        score -= opp_def_margin * 1.5
-        lbl = "good" if opp_def_margin < -2 else "poor" if opp_def_margin > 2 else "average"
-        factors.append({"label": "Opp defense", "value": lbl,
-                         "impact": "negative" if opp_def_margin < -1 else "positive" if opp_def_margin > 1 else "neutral"})
-
-    # 9. Back-to-back
-    if is_b2b:
-        score -= 5
-        factors.append({"label": "Back-to-back", "value": "yes", "impact": "negative"})
-
-    # 10. Home court
-    if is_home:
-        score += 1.5
-        factors.append({"label": "Home game", "value": "yes", "impact": "positive"})
-
-    # Cap at 78: data shows 80-95 bucket only hits 40% (overconfident)
-    return max(5, min(78, score)), factors
-
-
-def score_to_label(cal_prob, odds_type):
-    """Convert calibrated probability (0-100) to label + color.
-    Colors: green = strong over, red = strong under, amber = marginal.
-    RatingBadge uses abs(edge) so both directions show as high-rated when confident.
-    """
-    edge = cal_prob - PP_IMPLIED_PROB
-    if odds_type == "goblin":
-        if edge >= 10:    return "Strong Over",  "#4ade80"
-        elif edge >= 5:   return "Lean Over",    "#86efac"
-        elif edge <= -5:  return "Risky Pick",   "#f87171"
-        else:             return "Marginal",     "#fbbf24"
-    else:
-        if edge >= 10:    return "Strong Over",  "#4ade80"
-        elif edge >= 5:   return "Lean Over",    "#86efac"
-        elif edge <= -10: return "Strong Under", "#f87171"
-        elif edge <= -5:  return "Lean Under",   "#fb923c"
-        else:             return "Toss-up",      "#fbbf24"
-
-# ---------------------------------------------------------------------------
-# Game context helpers
-# ---------------------------------------------------------------------------
 
 def get_opp_defense(opp_abbr):
     try:
@@ -555,61 +513,66 @@ def get_opp_defense(opp_abbr):
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT ROUND(AVG(
-                        CASE WHEN g.home_team_id = t.team_id THEN g.away_score - g.home_score
+                        CASE WHEN g.home_team_id = t.team_id
+                             THEN g.away_score - g.home_score
                              ELSE g.home_score - g.away_score END
                     )::numeric, 1)
                     FROM teams t
-                    JOIN games g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                    WHERE t.abbreviation = %s AND g.season_id = '2025-26' AND g.home_score IS NOT NULL
+                    JOIN games g ON (g.home_team_id=t.team_id OR g.away_team_id=t.team_id)
+                    WHERE t.abbreviation=%s AND g.season_id='2025-26' AND g.home_score IS NOT NULL
                 """, (opp_abbr,))
                 row = cur.fetchone()
                 return float(row[0]) if row and row[0] else 0.0
     except Exception: return 0.0
 
-def get_rest_info(team_abbr):
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT g.home_b2b, g.away_b2b, g.home_rest_days, g.away_rest_days,
-                           th.abbreviation, ta.abbreviation
-                    FROM games g
-                    JOIN teams th ON th.team_id = g.home_team_id
-                    JOIN teams ta ON ta.team_id = g.away_team_id
-                    WHERE g.season_id = '2025-26' AND g.home_score IS NULL
-                    AND (th.abbreviation = %s OR ta.abbreviation = %s)
-                    ORDER BY g.game_date ASC LIMIT 1
-                """, (team_abbr, team_abbr))
-                row = cur.fetchone()
-                if row:
-                    is_home = row[4] == team_abbr
-                    return {"is_b2b": bool(row[0] if is_home else row[1]),
-                            "rest_days": row[2] if is_home else row[3]}
-    except Exception: pass
-    return {}
+# ---------------------------------------------------------------------------
+# DB: ensure prop_board has model_details column
+# ---------------------------------------------------------------------------
 
-def get_team_game_info(team_abbr):
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT th.abbreviation, ta.abbreviation
-                    FROM games g
-                    JOIN teams th ON th.team_id = g.home_team_id
-                    JOIN teams ta ON ta.team_id = g.away_team_id
-                    WHERE g.season_id = '2025-26' AND g.home_score IS NULL
-                    AND (th.abbreviation = %s OR ta.abbreviation = %s)
-                    ORDER BY g.game_date ASC LIMIT 1
-                """, (team_abbr, team_abbr))
-                row = cur.fetchone()
-                if row:
-                    home_abbr, away_abbr = row
-                    is_home = home_abbr == team_abbr
-                    return {"home": home_abbr, "away": away_abbr,
-                            "is_home": is_home,
-                            "opponent": away_abbr if is_home else home_abbr}
-    except Exception: pass
-    return {}
+def ensure_table():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS prop_board (
+                    prop_id         SERIAL PRIMARY KEY,
+                    player_name     VARCHAR(100) NOT NULL,
+                    team            VARCHAR(5),
+                    opponent        VARCHAR(5),
+                    is_home         BOOLEAN,
+                    stat            VARCHAR(20) NOT NULL,
+                    odds_type       VARCHAR(10) NOT NULL DEFAULT 'standard',
+                    line            FLOAT NOT NULL,
+                    pp_implied_prob FLOAT DEFAULT 57.7,
+                    pp_american_odds INTEGER DEFAULT -136,
+                    avg_season      FLOAT,
+                    avg_last5       FLOAT,
+                    avg_last10      FLOAT,
+                    avg_last20      FLOAT,
+                    home_avg        FLOAT,
+                    away_avg        FLOAT,
+                    hit_rate_season FLOAT,
+                    hit_rate_last5  FLOAT,
+                    hit_rate_last10 FLOAT,
+                    composite_score FLOAT,
+                    score_label     VARCHAR(30),
+                    score_color     VARCHAR(10),
+                    factors         JSONB,
+                    game_log        JSONB,
+                    is_b2b          BOOLEAN DEFAULT FALSE,
+                    rest_days       INTEGER,
+                    opp_def_label   VARCHAR(20),
+                    opp_def_margin  FLOAT,
+                    usage_rate      FLOAT,
+                    game_pace       FLOAT,
+                    model_details   JSONB,
+                    computed_at     TIMESTAMPTZ DEFAULT NOW(),
+                    game_date       DATE NOT NULL,
+                    UNIQUE (player_name, stat, odds_type, game_date)
+                )
+            """)
+            cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS model_details JSONB")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date  ON prop_board(game_date)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
 
 # ---------------------------------------------------------------------------
 # Main
@@ -618,76 +581,83 @@ def get_team_game_info(team_abbr):
 async def run():
     init_pool()
     ensure_table()
-    load_calibration()  # pre-load cache
+    load_calibration()
 
     pst   = timezone(timedelta(hours=-8))
     today = datetime.now(pst).date()
 
-    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True) as client:
-        logger.info("Fetching NBA props from PrizePicks (v11 — calibrated)...")
+    async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True) as client:
+        logger.info("Fetching PrizePicks props (v12 — distribution model)...")
         all_props = await fetch_prizepicks_props(client)
         if not all_props:
-            logger.info("No props from PrizePicks — exiting")
+            logger.info("No props — exiting")
             return
 
-        # Cache game context per team pair
-        game_context_cache: dict = {}
-
+        ctx_cache = {}
         rows_written = 0
         rows_skipped = 0
+        no_data      = 0
 
         for pkey, stat_map in all_props.items():
-            first_prop  = next(prop for sv in stat_map.values() for prop in sv.values())
-            player_name = first_prop["player_name"]
-            team_abbr   = first_prop.get("team", "")
+            first       = next(p for sv in stat_map.values() for p in sv.values())
+            player_name = first["player_name"]
+            team_abbr   = first.get("team", "")
             if not team_abbr: continue
 
-            game_info = get_team_game_info(team_abbr)
-            is_home   = game_info.get("is_home", False)
-            opponent  = game_info.get("opponent", "")
+            game_info   = get_game_info(team_abbr)
+            is_home     = game_info.get("is_home", False)
+            opponent    = game_info.get("opponent", "")
+            is_b2b      = game_info.get("is_b2b", False)
+            rest_days   = game_info.get("rest_days", 1)
+            opp_def     = get_opp_defense(opponent) if opponent else 0.0
+            opp_def_lbl = "good" if opp_def < -2 else "poor" if opp_def > 2 else "average"
 
-            # Fetch game context (pace/total) once per team pair
+            # Implied total (cached per game pair)
             ctx_key = tuple(sorted([team_abbr, opponent]))
-            if ctx_key not in game_context_cache:
+            if ctx_key not in ctx_cache:
                 home = game_info.get("home", team_abbr)
                 away = game_info.get("away", opponent)
-                game_context_cache[ctx_key] = await fetch_game_context(client, home, away)
-            game_ctx = game_context_cache.get(ctx_key, {})
+                ctx_cache[ctx_key] = await fetch_implied_total(client, home, away)
+            implied_total = ctx_cache.get(ctx_key)
 
-            player_logs   = await fetch_player_logs(client, player_name, team_abbr)
-            rest          = get_rest_info(team_abbr)
-            is_b2b        = rest.get("is_b2b", False)
-            rest_days     = rest.get("rest_days", 1)
-            opp_def       = get_opp_defense(opponent) if opponent else 0.0
-            opp_def_label = "good" if opp_def < -2 else "poor" if opp_def > 2 else "average"
-            implied_total = game_ctx.get("implied_total")
+            # Pull cached game logs
+            logs = get_player_logs(player_name, team_abbr)
 
             for stat, tiers in stat_map.items():
                 for odds_type, prop_info in tiers.items():
-                    line  = prop_info["line"]
-                    stats = compute_stats(player_logs, stat, line) if player_logs else None
+                    line = prop_info["line"]
 
-                    if stats:
-                        raw_score, factors = compute_raw_score(
-                            stats, opp_def, is_b2b, is_home,
-                            line, stat, odds_type, implied_total
-                        )
-                        # Apply calibration — this is the key v11 change
-                        cal_score = calibrate_prob(raw_score, stat, odds_type)
-                    else:
-                        cal_score   = PP_IMPLIED_PROB
-                        factors     = [{"label": "No history", "value": "—", "impact": "neutral"}]
+                    cal_score, factors, model_details = compute_distribution_score(
+                        logs, line, stat, odds_type,
+                        is_b2b, opp_def, implied_total,
+                        team_abbr, opponent
+                    )
+
+                    if cal_score is None:
+                        no_data += 1
+                        continue
 
                     score_label, score_color = score_to_label(cal_score, odds_type)
-
-                    # Filter: skip standard props with weak signal in EITHER direction
-                    # edge > +5 → confident over | edge < -5 → confident under | else skip
                     edge = cal_score - PP_IMPLIED_PROB
+
+                    # Filter toss-ups
                     if odds_type == "standard" and abs(edge) < 5:
                         rows_skipped += 1
                         continue
 
-                    avg_usage = stats.get("avg_usage") if stats else None
+                    # Build legacy stat fields for API compatibility
+                    qualified = [g for g in logs if g.get("minutes", 0) >= 10]
+                    def avg(arr): return round(sum(arr)/len(arr),1) if arr else None
+                    def hr(arr, n):
+                        s = [g[stat] for g in arr[:n] if g[stat] is not None]
+                        return round(sum(1 for v in s if v > line)/len(s)*100,1) if s else None
+
+                    vals = [g[stat] for g in qualified if g[stat] is not None]
+                    game_log = [
+                        {"date": str(g["game_date"]), "opp": g["opponent_abbr"],
+                         "home": g["is_home"], "val": g[stat], "min": g["minutes"]}
+                        for g in qualified[:20]
+                    ]
 
                     with get_conn() as conn:
                         with conn.cursor() as cur:
@@ -696,57 +666,44 @@ async def run():
                                     player_name, team, opponent, is_home,
                                     stat, odds_type, line,
                                     pp_implied_prob, pp_american_odds,
-                                    avg_season, avg_last5, avg_last10, avg_last20,
-                                    home_avg, away_avg,
+                                    avg_season, avg_last5, avg_last10,
                                     hit_rate_season, hit_rate_last5, hit_rate_last10,
                                     composite_score, score_label, score_color,
                                     factors, game_log,
                                     is_b2b, rest_days, opp_def_label, opp_def_margin,
-                                    usage_rate, game_pace,
+                                    usage_rate, game_pace, model_details,
                                     game_date
                                 ) VALUES (
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,
-                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,
-                                    %s,%s,%s
+                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                                 )
                                 ON CONFLICT (player_name, stat, odds_type, game_date) DO UPDATE SET
-                                    line            = EXCLUDED.line,
                                     composite_score = EXCLUDED.composite_score,
                                     score_label     = EXCLUDED.score_label,
                                     score_color     = EXCLUDED.score_color,
-                                    avg_last5       = EXCLUDED.avg_last5,
-                                    avg_last10      = EXCLUDED.avg_last10,
-                                    hit_rate_last5  = EXCLUDED.hit_rate_last5,
-                                    hit_rate_last10 = EXCLUDED.hit_rate_last10,
                                     factors         = EXCLUDED.factors,
+                                    model_details   = EXCLUDED.model_details,
                                     game_log        = EXCLUDED.game_log,
-                                    usage_rate      = EXCLUDED.usage_rate,
-                                    game_pace       = EXCLUDED.game_pace,
                                     computed_at     = NOW()
                             """, (
                                 player_name, team_abbr, opponent, is_home,
                                 stat, odds_type, line,
                                 PP_IMPLIED_PROB, PP_AMERICAN_ODDS,
-                                stats.get("avg_season")      if stats else None,
-                                stats.get("avg_last5")       if stats else None,
-                                stats.get("avg_last10")      if stats else None,
-                                stats.get("avg_last20")      if stats else None,
-                                stats.get("home_avg")        if stats else None,
-                                stats.get("away_avg")        if stats else None,
-                                stats.get("hit_rate_season") if stats else None,
-                                stats.get("hit_rate_last5")  if stats else None,
-                                stats.get("hit_rate_last10") if stats else None,
+                                avg(vals), avg(vals[:5]), avg(vals[:10]),
+                                hr(qualified, len(qualified)),
+                                hr(qualified, 5), hr(qualified, 10),
                                 cal_score, score_label, score_color,
-                                json.dumps(factors),
-                                json.dumps(stats.get("game_log",[]) if stats else []),
-                                is_b2b, rest_days, opp_def_label, opp_def,
-                                avg_usage, implied_total,
+                                json.dumps(factors), json.dumps(game_log),
+                                is_b2b, rest_days, opp_def_lbl, opp_def,
+                                model_details.get("shrunk_rate"),
+                                model_details.get("pace_factor"),
+                                json.dumps(model_details),
                                 today,
                             ))
                     rows_written += 1
 
-        logger.info(f"Written {rows_written} props, skipped {rows_skipped} toss-ups for {today}")
+        logger.info(f"v12 done: {rows_written} written, {rows_skipped} toss-ups filtered, {no_data} no data")
 
 if __name__ == "__main__":
     asyncio.run(run())
