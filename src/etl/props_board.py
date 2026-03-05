@@ -105,20 +105,28 @@ def load_calibration():
         logger.warning(f"No calibration data found ({e}) — using uncalibrated scores")
     return _CAL_CACHE
 
-def calibrate_prob(raw_score: float, stat: str) -> float:
+# Maximum credible edge vs PrizePicks implied prob (57.7%).
+# Best prop models sustain ~5-10% edge. Cap at 15% for standard, 10% for goblins.
+# Goblins have lower multipliers — a 3.5 PTS goblin cannot be 37% edge.
+MAX_EDGE_STANDARD = 15.0   # cal_score range: 42.7 – 72.7
+MAX_EDGE_GOBLIN   = 10.0   # cal_score range: 47.7 – 67.7
+
+def calibrate_prob(raw_score: float, stat: str, odds_type: str = 'standard') -> float:
     """
-    Convert raw heuristic score to calibrated probability.
-    Uses per-stat coefficients if available, else global, else linear fallback.
-    Returns probability as 0-100 (to stay compatible with existing score column).
+    Convert raw heuristic score to calibrated probability (0-100).
+    Caps edge at MAX_EDGE so output is always plausible.
     """
-    cal = load_calibration()
+    cal   = load_calibration()
     coefs = cal.get(stat) or cal.get('all')
     if coefs:
         a, b = coefs
-        prob = sigmoid(a * raw_score + b)
-        return round(min(95, max(5, prob * 100)), 1)
-    # Fallback: linear rescale (no calibration data yet)
-    return round(min(95, max(5, raw_score)), 1)
+        prob = sigmoid(a * raw_score + b) * 100
+    else:
+        prob = raw_score  # already anchored at PP_IMPLIED_PROB
+
+    max_edge = MAX_EDGE_GOBLIN if odds_type == 'goblin' else MAX_EDGE_STANDARD
+    prob = max(PP_IMPLIED_PROB - max_edge, min(PP_IMPLIED_PROB + max_edge, prob))
+    return round(prob, 1)
 
 # ---------------------------------------------------------------------------
 # DB
@@ -665,7 +673,7 @@ async def run():
                             line, stat, odds_type, implied_total
                         )
                         # Apply calibration — this is the key v11 change
-                        cal_score = calibrate_prob(raw_score, stat)
+                        cal_score = calibrate_prob(raw_score, stat, odds_type)
                     else:
                         cal_score   = PP_IMPLIED_PROB
                         factors     = [{"label": "No history", "value": "—", "impact": "neutral"}]

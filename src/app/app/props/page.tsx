@@ -77,15 +77,16 @@ interface BoardStats {
 
 const PP_IMPLIED = 57.7
 
-// Convert edge (abs distance from 57.7) to 1-5 rating
-// Direction-agnostic: a Strong Under scores 5 just like a Strong Over
+// Convert edge (abs distance from 57.7) to 1-5 rating.
+// Edge is now capped at ±15 by the model, so scale accordingly.
+// Direction-agnostic: a Strong Under scores 5 just like a Strong Over.
 function edgeToRating(edge: number): number {
   const abs = Math.abs(edge)
-  if (abs >= 15) return 5
-  if (abs >= 10) return 4
-  if (abs >= 6)  return 3
-  if (abs >= 3)  return 2
-  return 1
+  if (abs >= 12) return 5   // top tier — very rare
+  if (abs >= 9)  return 4   // strong edge
+  if (abs >= 6)  return 3   // solid edge
+  if (abs >= 3)  return 2   // slight edge
+  return 1                   // toss-up (filtered out, but fallback)
 }
 
 function RatingBadge({ score, label, color }: { score: number; label: string; color: string }) {
