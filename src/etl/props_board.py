@@ -520,20 +520,21 @@ def compute_raw_score(stats, opp_def_margin, is_b2b, is_home, line, stat,
 
 
 def score_to_label(cal_prob, odds_type):
-    """Convert calibrated probability (0-100) to label + color."""
+    """Convert calibrated probability (0-100) to label + color.
+    Colors: green = strong over, red = strong under, amber = marginal.
+    RatingBadge uses abs(edge) so both directions show as high-rated when confident.
+    """
     edge = cal_prob - PP_IMPLIED_PROB
     if odds_type == "goblin":
         if edge >= 10:    return "Strong Over",  "#4ade80"
-        elif edge >= 4:   return "Lean Over",    "#86efac"
-        elif edge <= -4:  return "Risky Pick",   "#f87171"
+        elif edge >= 5:   return "Lean Over",    "#86efac"
+        elif edge <= -5:  return "Risky Pick",   "#f87171"
         else:             return "Marginal",     "#fbbf24"
     else:
-        # Standard: symmetric labels for over AND under
         if edge >= 10:    return "Strong Over",  "#4ade80"
-        elif edge >= 4:   return "Lean Over",    "#86efac"
-        elif edge <= -10: return "Strong Under", "#818cf8"  # purple for unders
-        elif edge <= -4:  return "Lean Under",   "#a5b4fc"
-        elif edge <= -3:  return "Slight Under", "#c4b5fd"
+        elif edge >= 5:   return "Lean Over",    "#86efac"
+        elif edge <= -10: return "Strong Under", "#f87171"
+        elif edge <= -5:  return "Lean Under",   "#fb923c"
         else:             return "Toss-up",      "#fbbf24"
 
 # ---------------------------------------------------------------------------
@@ -671,11 +672,10 @@ async def run():
 
                     score_label, score_color = score_to_label(cal_score, odds_type)
 
-                    # Filter: skip true toss-ups only (no directional signal)
-                    # Keep overs (edge > 0) AND unders (edge < 0) if signal is strong enough
-                    # Data shows 55-60 bucket hits only 47.1% — below break-even
+                    # Filter: skip standard props with weak signal in EITHER direction
+                    # edge > +5 → confident over | edge < -5 → confident under | else skip
                     edge = cal_score - PP_IMPLIED_PROB
-                    if odds_type == "standard" and abs(edge) < 3:
+                    if odds_type == "standard" and abs(edge) < 5:
                         rows_skipped += 1
                         continue
 

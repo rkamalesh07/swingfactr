@@ -4,8 +4,6 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const PP_IMPLIED = 57.7
-
 const STATS = [
   { key: 'all',  label: 'All' },
   { key: 'pts',  label: 'Points' },
@@ -19,7 +17,13 @@ const STATS = [
 const TIERS = [
   { key: 'all',      label: 'All Tiers' },
   { key: 'standard', label: 'Standard' },
-  { key: 'goblin',   label: 'Goblin' },
+  { key: 'goblin',   label: '🟢 Goblin' },
+]
+
+const DIRECTIONS = [
+  { key: 'all',   label: 'All' },
+  { key: 'over',  label: '⬆ Overs' },
+  { key: 'under', label: '⬇ Unders' },
 ]
 
 const STAT_LABEL: Record<string, string> = {
@@ -71,20 +75,42 @@ interface BoardStats {
   message?:      string
 }
 
-function ScoreBadge({ score, label, color }: { score: number; label: string; color: string }) {
-  const pct = ((score - 5) / 90) * 88
+const PP_IMPLIED = 57.7
+
+// Convert edge (abs distance from 57.7) to 1-5 rating
+// Direction-agnostic: a Strong Under scores 5 just like a Strong Over
+function edgeToRating(edge: number): number {
+  const abs = Math.abs(edge)
+  if (abs >= 15) return 5
+  if (abs >= 10) return 4
+  if (abs >= 6)  return 3
+  if (abs >= 3)  return 2
+  return 1
+}
+
+function RatingBadge({ score, label, color }: { score: number; label: string; color: string }) {
+  const edge   = score - PP_IMPLIED
+  const rating = edgeToRating(edge)
+  const dots   = [1, 2, 3, 4, 5]
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <div style={{ position: 'relative', width: '36px', height: '36px', flexShrink: 0 }}>
-        <svg width="36" height="36" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="14" fill="none" stroke="#111" strokeWidth="4" />
-          <circle cx="18" cy="18" r="14" fill="none" stroke={color} strokeWidth="4"
-            strokeDasharray={`${pct} 88`} strokeLinecap="round"
-            transform="rotate(-90 18 18)" />
-        </svg>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', fontWeight: 700, color }}>{Math.round(score)}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+        {/* 5-dot rating */}
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {dots.map(d => (
+            <div key={d} style={{
+              width: '7px', height: '7px', borderRadius: '50%',
+              background: d <= rating ? color : '#1a1a1a',
+              boxShadow: d <= rating ? `0 0 4px ${color}66` : 'none',
+              transition: 'background 0.2s',
+            }} />
+          ))}
         </div>
+        {/* Rating number */}
+        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#444' }}>
+          {rating}/5
+        </span>
       </div>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color, lineHeight: 1.2 }}>{label}</span>
     </div>
@@ -176,6 +202,7 @@ export default function PropsPage() {
   const [minScore, setMinScore]     = useState(0)
   const [sortBy, setSortBy]         = useState<'composite_score' | 'edge'>('composite_score')
   const [hideTossups, setHideTossups] = useState(false)
+  const [directionFilter, setDirectionFilter] = useState('all')
   const [expanded, setExpanded]     = useState<string | null>(null)
 
   useEffect(() => {
@@ -196,6 +223,7 @@ export default function PropsPage() {
         if (tierFilter !== 'all' && p.odds_type !== tierFilter) return false
         if (search && !p.player_name.toLowerCase().includes(search.toLowerCase())) return false
         if (p.composite_score < minScore) return false
+        if (directionFilter !== 'all' && p.pick_side !== directionFilter) return false
         if (hideTossups && p.is_tossup) return false
         return true
       })
@@ -204,13 +232,13 @@ export default function PropsPage() {
           ? Math.abs(b.edge) - Math.abs(a.edge)
           : b.composite_score - a.composite_score
       )
-  }, [props, statFilter, tierFilter, search, minScore, sortBy, hideTossups])
+  }, [props, statFilter, tierFilter, directionFilter, search, minScore, sortBy, hideTossups])
 
   const lastUpdated = boardStats?.last_computed
     ? new Date(boardStats.last_computed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
     : null
 
-  const COLS = '24px 170px 60px 56px 80px 72px 72px 80px 80px 110px 64px 36px'
+  const COLS = '24px 170px 60px 56px 80px 72px 72px 80px 80px 130px 64px 36px'
 
   return (
     <div>
@@ -240,12 +268,13 @@ export default function PropsPage() {
 
       {/* Summary stats */}
       {boardStats && boardStats.total > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', marginBottom: '16px' }}>
           {([
-            ['TOTAL PROPS', boardStats.total,        '#888'],
-            ['STRONG OVER', boardStats.strong_overs, '#4ade80'],
-            ['LEAN OVER',   boardStats.lean_overs,   '#86efac'],
-            ['PLAYERS',     boardStats.players,       '#888'],
+            ['TOTAL PROPS',  boardStats.total,          '#888'],
+            ['STRONG OVER',  boardStats.strong_overs,   '#4ade80'],
+            ['LEAN OVER',    boardStats.lean_overs,     '#86efac'],
+            ['STRONG UNDER', boardStats.strong_unders,  '#f87171'],
+            ['PLAYERS',      boardStats.players,        '#888'],
           ] as [string, number, string][]).map(([label, val, color]) => (
             <div key={label} style={{ border: '1px solid #1a1a1a', padding: '12px 16px' }}>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
@@ -273,6 +302,19 @@ export default function PropsPage() {
             color: tierFilter === t.key ? '#4ade80' : '#444',
             padding: '6px 10px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', cursor: 'pointer',
           }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Direction filter */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', marginRight: '4px' }}>PICK</span>
+        {DIRECTIONS.map(d => (
+          <button key={d.key} onClick={() => setDirectionFilter(d.key)} style={{
+            background: directionFilter === d.key ? (d.key === 'over' ? '#0f1f0f' : d.key === 'under' ? '#1f0f0f' : '#0f0f0f') : 'transparent',
+            border: `1px solid ${directionFilter === d.key ? (d.key === 'over' ? '#4ade80' : d.key === 'under' ? '#f87171' : '#4ade80') : '#1a1a1a'}`,
+            color: directionFilter === d.key ? (d.key === 'over' ? '#4ade80' : d.key === 'under' ? '#f87171' : '#aaa') : '#444',
+            padding: '6px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', cursor: 'pointer',
+          }}>{d.label}</button>
         ))}
       </div>
 
@@ -327,7 +369,7 @@ export default function PropsPage() {
             fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em' }}>
             <span>#</span><span>PLAYER</span><span>MATCHUP</span><span>STAT</span>
             <span>LINE / TIER</span><span>L5 HIT%</span><span>L10 HIT%</span>
-            <span>L10 AVG</span><span>OPP DEF</span><span>SCORE</span><span>EDGE</span><span>PICK</span>
+            <span>L10 AVG</span><span>OPP DEF</span><span>RATING</span><span>EDGE</span><span>PICK</span>
           </div>
 
           {filtered.map((row, i) => {
@@ -398,7 +440,7 @@ export default function PropsPage() {
                     {row.opp_def_label ?? '—'}
                   </span>
 
-                  <ScoreBadge score={row.composite_score} label={row.score_label} color={row.score_color} />
+                  <RatingBadge score={row.composite_score} label={row.score_label} color={row.score_color} />
 
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600,
                     color: row.edge > 4 ? '#4ade80' : row.edge < -4 ? '#f87171' : '#555' }}>
