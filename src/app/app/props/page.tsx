@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const PP_IMPLIED = 57.7
@@ -18,18 +19,16 @@ const STATS = [
 const TIERS = [
   { key: 'all',      label: 'All Tiers' },
   { key: 'standard', label: 'Standard' },
-  { key: 'goblin',   label: '🟢 Goblin' },
-  { key: 'demon',    label: '🔴 Demon' },
+  { key: 'goblin',   label: 'Goblin' },
 ]
 
 const STAT_LABEL: Record<string, string> = {
   pts: 'PTS', reb: 'REB', ast: 'AST', fg3m: '3PM', stl: 'STL', blk: 'BLK'
 }
 
-const TIER_BADGE: Record<string, { icon: string; color: string; bg: string }> = {
-  demon:    { icon: '🔴', color: '#f87171', bg: 'rgba(248,113,113,0.1)' },
-  goblin:   { icon: '🟢', color: '#4ade80', bg: 'rgba(74,222,128,0.1)'  },
-  standard: { icon: '',   color: '#555',    bg: 'transparent'            },
+const TIER_BADGE: Record<string, { color: string; bg: string }> = {
+  goblin:   { color: '#4ade80', bg: 'rgba(74,222,128,0.1)' },
+  standard: { color: '#555',   bg: 'transparent'           },
 }
 
 interface PropRow {
@@ -63,13 +62,13 @@ interface PropRow {
 }
 
 interface BoardStats {
-  total:          number
-  strong_overs:   number
-  lean_overs:     number
-  strong_unders:  number
-  last_computed:  string
-  players:        number
-  message?:       string
+  total:         number
+  strong_overs:  number
+  lean_overs:    number
+  strong_unders: number
+  last_computed: string
+  players:       number
+  message?:      string
 }
 
 function ScoreBadge({ score, label, color }: { score: number; label: string; color: string }) {
@@ -101,21 +100,6 @@ function HitBar({ pct }: { pct: number }) {
       </div>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color, width: '34px' }}>{pct.toFixed(0)}%</span>
     </div>
-  )
-}
-
-function TierBadge({ tier }: { tier: string }) {
-  const b = TIER_BADGE[tier] || TIER_BADGE.standard
-  if (!b.icon) return null
-  return (
-    <span style={{
-      fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
-      color: b.color, background: b.bg,
-      border: `1px solid ${b.color}40`,
-      padding: '1px 4px', marginLeft: '4px',
-    }}>
-      {tier.toUpperCase()}
-    </span>
   )
 }
 
@@ -168,6 +152,14 @@ function ExpandedRow({ row }: { row: PropRow }) {
           <div style={{ marginTop: '6px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>
             green = over {line} · red = under
           </div>
+          <Link href="/props/parlay" style={{
+            display: 'inline-block', marginTop: '10px',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
+            color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)',
+            padding: '4px 8px', textDecoration: 'none',
+          }}>
+            + Add to Parlay Builder →
+          </Link>
         </div>
       </div>
     </div>
@@ -228,7 +220,16 @@ export default function PropsPage() {
           PROP BOARD · PRIZEPICKS · UPDATES 3× DAILY · NOT BETTING ADVICE
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Tonight's Props</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', margin: 0 }}>Tonight's Props</h1>
+            <Link href="/props/parlay" style={{
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
+              color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)',
+              padding: '5px 12px', textDecoration: 'none', letterSpacing: '0.06em',
+            }}>
+              ⚡ Parlay Builder →
+            </Link>
+          </div>
           {lastUpdated && (
             <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
               Updated {lastUpdated}
@@ -241,7 +242,7 @@ export default function PropsPage() {
       {boardStats && boardStats.total > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', marginBottom: '16px' }}>
           {([
-            ['TOTAL PROPS', boardStats.total, '#888'],
+            ['TOTAL PROPS', boardStats.total,        '#888'],
             ['STRONG OVER', boardStats.strong_overs, '#4ade80'],
             ['LEAN OVER',   boardStats.lean_overs,   '#86efac'],
             ['PLAYERS',     boardStats.players,       '#888'],
@@ -275,7 +276,7 @@ export default function PropsPage() {
         ))}
       </div>
 
-      {/* Filters row 2 — sort + search + score + tossup */}
+      {/* Filters row 2 */}
       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '1px', alignItems: 'center' }}>
         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>SORT</span>
         {(['composite_score', 'edge'] as const).map(key => (
@@ -321,26 +322,16 @@ export default function PropsPage() {
         </div>
       ) : (
         <div style={{ border: '1px solid #1a1a1a' }}>
-          {/* Table header */}
           <div style={{ display: 'grid', gridTemplateColumns: COLS, padding: '8px 16px',
             borderBottom: '1px solid #1a1a1a',
             fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em' }}>
-            <span>#</span>
-            <span>PLAYER</span>
-            <span>MATCHUP</span>
-            <span>STAT</span>
-            <span>LINE / TIER</span>
-            <span>L5 HIT%</span>
-            <span>L10 HIT%</span>
-            <span>L10 AVG</span>
-            <span>OPP DEF</span>
-            <span>SCORE</span>
-            <span>EDGE</span>
-            <span>PICK</span>
+            <span>#</span><span>PLAYER</span><span>MATCHUP</span><span>STAT</span>
+            <span>LINE / TIER</span><span>L5 HIT%</span><span>L10 HIT%</span>
+            <span>L10 AVG</span><span>OPP DEF</span><span>SCORE</span><span>EDGE</span><span>PICK</span>
           </div>
 
           {filtered.map((row, i) => {
-            const key       = `${row.player_name}|${row.stat}|${row.odds_type}`
+            const key        = `${row.player_name}|${row.stat}|${row.odds_type}`
             const isExpanded = expanded === key
             const tier       = TIER_BADGE[row.odds_type] || TIER_BADGE.standard
             const isOver     = row.pick_side === 'over'
@@ -348,19 +339,16 @@ export default function PropsPage() {
             return (
               <div key={key} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #0d0d0d' : 'none' }}>
                 <div onClick={() => setExpanded(isExpanded ? null : key)}
-                  className="row-link"
                   style={{
                     display: 'grid', gridTemplateColumns: COLS,
                     padding: '11px 16px', cursor: 'pointer', alignItems: 'center',
                     background: isExpanded ? '#0d0d0d'
-                      : row.composite_score >= 67.7 ? 'rgba(74,222,128,0.02)'
-                      : row.is_tossup ? 'rgba(255,255,255,0.01)' : 'transparent',
+                      : row.composite_score >= 67.7 ? 'rgba(74,222,128,0.02)' : 'transparent',
                     opacity: row.is_tossup ? 0.6 : 1,
                   }}>
 
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>{i + 1}</span>
 
-                  {/* Player */}
                   <div>
                     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>
                       {row.player_name}
@@ -371,17 +359,14 @@ export default function PropsPage() {
                     </div>
                   </div>
 
-                  {/* Matchup */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>
                     {row.is_home ? 'vs' : '@'} {row.opponent}
                   </span>
 
-                  {/* Stat */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600, color: '#666' }}>
                     {STAT_LABEL[row.stat] || row.stat}
                   </span>
 
-                  {/* Line + tier badge */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 700, color: '#e0e0e0' }}>
                       {row.line}
@@ -390,46 +375,36 @@ export default function PropsPage() {
                       <span style={{
                         fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
                         color: tier.color, background: tier.bg,
-                        border: `1px solid ${tier.color}40`,
-                        padding: '1px 4px',
+                        border: `1px solid ${tier.color}40`, padding: '1px 4px',
                       }}>{row.odds_type.toUpperCase()}</span>
                     )}
                   </div>
 
-                  {/* L5 hit% */}
-                  <div>{row.hit_rate_last5 != null
-                    ? <HitBar pct={row.hit_rate_last5} />
+                  <div>{row.hit_rate_last5 != null ? <HitBar pct={row.hit_rate_last5} />
                     : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
                   </div>
 
-                  {/* L10 hit% */}
-                  <div>{row.hit_rate_last10 != null
-                    ? <HitBar pct={row.hit_rate_last10} />
+                  <div>{row.hit_rate_last10 != null ? <HitBar pct={row.hit_rate_last10} />
                     : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
                   </div>
 
-                  {/* L10 avg */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
                     color: row.avg_last10 != null && row.avg_last10 > row.line ? '#4ade80' : '#f87171' }}>
                     {row.avg_last10 ?? '—'}
                   </span>
 
-                  {/* Opp def */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
                     color: row.opp_def_label === 'good' ? '#f87171' : row.opp_def_label === 'poor' ? '#4ade80' : '#555' }}>
                     {row.opp_def_label ?? '—'}
                   </span>
 
-                  {/* Score */}
                   <ScoreBadge score={row.composite_score} label={row.score_label} color={row.score_color} />
 
-                  {/* Edge */}
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600,
                     color: row.edge > 4 ? '#4ade80' : row.edge < -4 ? '#f87171' : '#555' }}>
                     {row.edge > 0 ? '+' : ''}{row.edge.toFixed(1)}
                   </span>
 
-                  {/* Pick side — O always for demon/goblin, O or U for standard */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', fontWeight: 800,
                       color: isOver ? '#4ade80' : '#f87171' }}>
@@ -439,7 +414,6 @@ export default function PropsPage() {
                       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#333', marginTop: '-2px' }}>only</span>
                     )}
                   </div>
-
                 </div>
                 {isExpanded && <ExpandedRow row={row} />}
               </div>
@@ -449,7 +423,7 @@ export default function PropsPage() {
       )}
 
       <div style={{ marginTop: '14px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#222', lineHeight: 1.8 }}>
-        <div>🟢 Goblin = discounted line (over only) · 🔴 Demon = boosted line (over only) · Standard = over or under available</div>
+        <div>🟢 Goblin = discounted line (over only) · Standard = over or under available</div>
         <div>Score anchored at 57.7% (PrizePicks 6-pick flex break-even) · Edge = model prob minus 57.7%</div>
         <div>Lines from PrizePicks · ⚠ For informational purposes only. Not betting advice.</div>
       </div>
