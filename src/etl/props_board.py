@@ -46,8 +46,12 @@ PP_HEADERS      = {
 
 PP_IMPLIED_PROB  = 57.7
 PP_AMERICAN_ODDS = -136
-MAX_EDGE_STANDARD = 15.0
-MAX_EDGE_GOBLIN   = 10.0
+# Normal CDF outputs true probabilities that naturally span a wider range
+# than heuristic scores. A player with mean 4.0 on a 4.5 line genuinely
+# has ~30% over probability — that's a real -27.7 edge, not a model error.
+# We cap at ±25 to prevent only truly absurd outliers (>82.7% or <32.7%)
+MAX_EDGE_STANDARD = 25.0
+MAX_EDGE_GOBLIN   = 20.0
 LEAGUE_AVG_PACE   = 98.5   # NBA avg possessions per team per game 2025-26
 
 PP_STAT_MAP = {
@@ -115,19 +119,16 @@ def load_calibration():
 
 def calibrate_and_cap(raw_prob_0_1, stat, odds_type):
     """
-    Apply Platt scaling then cap edge.
-    raw_prob_0_1: P(Y > line) from normal distribution (0-1 float)
-    Returns calibrated probability as 0-100.
+    Cap the raw normal-CDF probability within the credible edge range.
+
+    v12 outputs true probabilities from a normal distribution — these are
+    already calibrated by construction (no Platt scaling needed until we have
+    enough v12 outcomes to fit new coefficients).
+
+    The old Platt coefficients were fit on v11 heuristic scores (0-100 scale)
+    and compress v12 probabilities to garbage. Skip them until recalibrated.
     """
-    # Convert to score space for Platt (model was trained on 0-100 scores)
-    raw_score = raw_prob_0_1 * 100
-    cal = load_calibration()
-    coefs = cal.get(stat) or cal.get('all')
-    if coefs:
-        a, b = coefs
-        prob = sigmoid(a * raw_score + b) * 100
-    else:
-        prob = raw_score
+    prob = raw_prob_0_1 * 100  # convert 0-1 → 0-100
 
     max_edge = MAX_EDGE_GOBLIN if odds_type == 'goblin' else MAX_EDGE_STANDARD
     prob = max(PP_IMPLIED_PROB - max_edge, min(PP_IMPLIED_PROB + max_edge, prob))
@@ -394,17 +395,21 @@ def compute_distribution_score(logs, line, stat, odds_type,
 # ---------------------------------------------------------------------------
 
 def score_to_label(cal_prob, odds_type):
+    """
+    Labels calibrated to normal-CDF probability range (wider than heuristic).
+    Edge thresholds adjusted: distribution model produces genuine edges >10%.
+    """
     edge = cal_prob - PP_IMPLIED_PROB
     if odds_type == "goblin":
-        if edge >= 8:    return "Strong Over",  "#4ade80"
-        elif edge >= 4:  return "Lean Over",    "#86efac"
-        elif edge <= -4: return "Risky Pick",   "#f87171"
+        if edge >= 12:   return "Strong Over",  "#4ade80"
+        elif edge >= 6:  return "Lean Over",    "#86efac"
+        elif edge <= -6: return "Risky Pick",   "#f87171"
         else:            return "Marginal",     "#fbbf24"
     else:
-        if edge >= 10:   return "Strong Over",  "#4ade80"
-        elif edge >= 5:  return "Lean Over",    "#86efac"
-        elif edge <= -10:return "Strong Under", "#f87171"
-        elif edge <= -5: return "Lean Under",   "#fb923c"
+        if edge >= 15:   return "Strong Over",  "#4ade80"
+        elif edge >= 8:  return "Lean Over",    "#86efac"
+        elif edge <= -15:return "Strong Under", "#f87171"
+        elif edge <= -8: return "Lean Under",   "#fb923c"
         else:            return "Toss-up",      "#fbbf24"
 
 # ---------------------------------------------------------------------------
