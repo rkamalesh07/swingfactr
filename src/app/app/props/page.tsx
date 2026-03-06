@@ -63,6 +63,12 @@ interface PropRow {
   edge:             number
   pick_side:        string
   is_tossup:        boolean
+  p_over?:          number
+  p_under?:         number
+  predicted_mean?:  number
+  predicted_std?:   number
+  projected_min?:   number
+  model_details?:   Record<string, number>
 }
 
 interface BoardStats {
