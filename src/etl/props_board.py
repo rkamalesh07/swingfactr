@@ -29,6 +29,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.etl.db import get_conn, init_pool
+from src.etl.injury_engine import (
+    run as fetch_injuries,
+    load_availability_cache,
+    get_player_status,
+    get_team_injured_players,
+    compute_usage_boost,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
 logger = logging.getLogger("props_board_v12")
@@ -213,7 +220,9 @@ def get_team_pace(team_abbr):
 
 def compute_distribution_score(logs, line, stat, odds_type,
                                  is_b2b, opp_def_margin, implied_total,
-                                 team_abbr, opp_abbr):
+                                 team_abbr, opp_abbr,
+                                 usage_boost_mult=1.0,
+                                 injured_teammates=None):
     """
     Returns (cal_prob_0_100, factors, model_details) using distribution model.
 
@@ -328,6 +337,17 @@ def compute_distribution_score(logs, line, stat, odds_type,
     # ── 4. Predicted mean ───────────────────────────────────────────────────
     predicted_mean = shrunk_rate * projected_min * pace_factor
 
+    # ── 4b. Usage boost from injured teammates ─────────────────────────────
+    if usage_boost_mult and usage_boost_mult > 1.0:
+        predicted_mean *= usage_boost_mult
+        boost_pct = (usage_boost_mult - 1.0) * 100
+        teammates_str = ", ".join((injured_teammates or [])[:3])
+        factors.append({
+            "label":  "Injury boost",
+            "value":  f"+{boost_pct:.0f}% ({teammates_str} out)",
+            "impact": "positive"
+        })
+
     # ── 5. Opponent defense adjustment ─────────────────────────────────────
     if opp_def_margin is not None:
         # opp_def_margin > 0 = bad defense (opponent gives up points)
@@ -387,7 +407,9 @@ def compute_distribution_score(logs, line, stat, odds_type,
         "pace_factor":    round(pace_factor, 3),
         "season_rate":    round(season_rate, 4),
         "recent_rate":    round(recent_rate, 4),
-        "n_games":        len(qualified),
+        "n_games":          len(qualified),
+        "usage_boost_mult": round(float(usage_boost_mult or 1.0), 3),
+        "injured_teammates": list(injured_teammates or []),
     }
 
     return cal_prob, factors, model_details
@@ -594,6 +616,11 @@ async def run():
     today = datetime.now(pst).date()
 
     async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True) as client:
+        # Fetch fresh injury report for all teams before computing props
+        logger.info("Fetching injury reports...")
+        await fetch_injuries()
+        load_availability_cache()
+
         logger.info("Fetching PrizePicks props (v12 — distribution model)...")
         all_props = await fetch_prizepicks_props(client)
         if not all_props:
@@ -627,6 +654,12 @@ async def run():
                 ctx_cache[ctx_key] = await fetch_implied_total(client, home, away)
             implied_total = ctx_cache.get(ctx_key)
 
+            # Skip if player is OUT themselves
+            player_avail = get_player_status(player_name)
+            if player_avail and player_avail["is_out"]:
+                logger.debug(f"  Skipping {player_name} — OUT ({player_avail['injury_type']})")
+                continue
+
             # Pull cached game logs
             logs = get_player_logs(player_name, team_abbr)
 
@@ -634,10 +667,17 @@ async def run():
                 for odds_type, prop_info in tiers.items():
                     line = prop_info["line"]
 
+                    # Usage boost from injured teammates
+                    usage_boost_mult, injured_teammates = compute_usage_boost(
+                        player_name, team_abbr, stat
+                    )
+
                     cal_score, factors, model_details = compute_distribution_score(
                         logs, line, stat, odds_type,
                         is_b2b, opp_def, implied_total,
-                        team_abbr, opponent
+                        team_abbr, opponent,
+                        usage_boost_mult=usage_boost_mult,
+                        injured_teammates=injured_teammates,
                     )
 
                     if cal_score is None:

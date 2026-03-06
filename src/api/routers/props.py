@@ -79,13 +79,26 @@ async def get_board(
         if isinstance(r.get("model_details"), str): r["model_details"] = json.loads(r["model_details"])
         if r["computed_at"]: r["computed_at"] = r["computed_at"].isoformat()
 
+        # Attach player's own availability status (GTD flag for UI)
+        try:
+            from src.etl.injury_engine import load_availability_cache
+            cache = load_availability_cache()
+            avail = cache.get(r["player_name"].lower())
+            r["player_status"] = avail["status"] if avail and avail["status"] != "Active" else None
+        except Exception:
+            r["player_status"] = None
+
         # Expose p_over and p_under directly for UI display
         md = r.get("model_details") or {}
-        r["p_over"]        = md.get("prob_over_raw")   # e.g. 42.7
-        r["p_under"]       = round(100 - md["prob_over_raw"], 1) if md.get("prob_over_raw") else None
-        r["predicted_mean"]= md.get("predicted_mean")
-        r["predicted_std"] = md.get("predicted_std")
-        r["projected_min"] = md.get("projected_min")
+        r["p_over"]           = md.get("prob_over_raw")
+        r["p_under"]          = round(100 - md["prob_over_raw"], 1) if md.get("prob_over_raw") else None
+        r["predicted_mean"]   = md.get("predicted_mean")
+        r["predicted_std"]    = md.get("predicted_std")
+        r["projected_min"]    = md.get("projected_min")
+        r["usage_boost_mult"]  = md.get("usage_boost_mult", 1.0)
+        r["injured_teammates"] = md.get("injured_teammates", [])
+        avail2 = cache.get(r["player_name"].lower()) if 'cache' in dir() else None
+        r["confirmed_starter"] = avail2["is_starter"] if avail2 else False
 
         results.append(r)
 

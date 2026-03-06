@@ -68,7 +68,11 @@ interface PropRow {
   predicted_mean?:  number
   predicted_std?:   number
   projected_min?:   number
-  model_details?:   Record<string, number>
+  model_details?:    Record<string, number>
+  player_status?:    string | null
+  usage_boost_mult?: number
+  injured_teammates?:string[]
+  confirmed_starter?:boolean
 }
 
 interface BoardStats {
@@ -155,6 +159,9 @@ function ExpandedRow({ row }: { row: PropRow }) {
                   ['P(over)',   `${row.p_over}%`],
                   ['P(under)',  `${row.p_under}%`],
                   ['Break-even', '57.7%'],
+                  ...(row.usage_boost_mult && row.usage_boost_mult > 1.01
+                    ? [['Usage boost', `+${((row.usage_boost_mult-1)*100).toFixed(0)}%`] as [string,string]]
+                    : []),
                 ] as [string,string][]).map(([lbl, val]) => (
                   <div key={lbl}>
                     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444' }}>{lbl}</div>
@@ -165,6 +172,16 @@ function ExpandedRow({ row }: { row: PropRow }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {row.injured_teammates && row.injured_teammates.length > 0 && (
+            <div style={{ marginBottom: '10px', padding: '6px 10px', background: '#fbbf2408', border: '1px solid #fbbf2430' }}>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#fbbf24' }}>
+                ⚠ Teammate(s) OUT: {row.injured_teammates.slice(0,3).join(', ')}
+                {row.usage_boost_mult && row.usage_boost_mult > 1.01
+                  ? ` → +${((row.usage_boost_mult-1)*100).toFixed(0)}% usage boost applied`
+                  : ''}
+              </span>
             </div>
           )}
           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>AVERAGES</div>
@@ -424,8 +441,17 @@ export default function PropsPage() {
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>{i + 1}</span>
 
                   <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {row.player_name}
+                      {row.player_status === 'GTD' && (
+                        <span style={{ fontSize: '9px', fontWeight: 700, color: '#fbbf24', background: '#fbbf2420', border: '1px solid #fbbf2440', padding: '1px 4px' }}>GTD</span>
+                      )}
+                    {row.confirmed_starter && (
+                        <span style={{ fontSize: '9px', fontWeight: 700, color: '#4ade80', background: '#4ade8015', border: '1px solid #4ade8030', padding: '1px 4px' }}>START</span>
+                      )}
+                      {row.injured_teammates && row.injured_teammates.length > 0 && (
+                        <span style={{ fontSize: '9px', color: '#fb923c' }} title={`Teammates OUT: ${row.injured_teammates.join(', ')}`}>⚡</span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
                       {row.team && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#555' }}>{row.team}</span>}
