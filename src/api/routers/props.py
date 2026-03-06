@@ -42,7 +42,7 @@ async def get_board(
                     composite_score, score_label, score_color,
                     factors, game_log,
                     is_b2b, rest_days, opp_def_label, opp_def_margin,
-                    computed_at
+                    model_details, computed_at
                 FROM prop_board
                 WHERE game_date = %s
                 ORDER BY ABS(composite_score - %s) DESC
@@ -72,7 +72,16 @@ async def get_board(
 
         if isinstance(r["factors"],  str): r["factors"]  = json.loads(r["factors"])
         if isinstance(r["game_log"], str): r["game_log"] = json.loads(r["game_log"])
+        if isinstance(r.get("model_details"), str): r["model_details"] = json.loads(r["model_details"])
         if r["computed_at"]: r["computed_at"] = r["computed_at"].isoformat()
+
+        # Expose p_over and p_under directly for UI display
+        md = r.get("model_details") or {}
+        r["p_over"]        = md.get("prob_over_raw")   # e.g. 42.7
+        r["p_under"]       = round(100 - md["prob_over_raw"], 1) if md.get("prob_over_raw") else None
+        r["predicted_mean"]= md.get("predicted_mean")
+        r["predicted_std"] = md.get("predicted_std")
+        r["projected_min"] = md.get("projected_min")
 
         results.append(r)
 

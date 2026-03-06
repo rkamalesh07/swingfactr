@@ -118,14 +118,16 @@ function RatingBadge({ score, label, color }: { score: number; label: string; co
   )
 }
 
-function HitBar({ pct }: { pct: number }) {
-  const color = pct >= 65 ? '#4ade80' : pct >= 55 ? '#86efac' : pct >= 40 ? '#fbbf24' : '#f87171'
+function HitBar({ pct, pickSide }: { pct: number; pickSide?: string }) {
+  // For unders: flip the hit% so we show "under hit rate" not "over hit rate"
+  const displayPct = pickSide === 'under' ? 100 - pct : pct
+  const color = displayPct >= 65 ? '#4ade80' : displayPct >= 55 ? '#86efac' : displayPct >= 40 ? '#fbbf24' : '#f87171'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <div style={{ width: '40px', height: '4px', background: '#111', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color }} />
+        <div style={{ height: '100%', width: `${displayPct}%`, background: color }} />
       </div>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color, width: '34px' }}>{pct.toFixed(0)}%</span>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color, width: '34px' }}>{displayPct.toFixed(0)}%</span>
     </div>
   )
 }
@@ -136,6 +138,29 @@ function ExpandedRow({ row }: { row: PropRow }) {
     <div style={{ padding: '16px 20px', background: '#070707', borderTop: '1px solid #0d0d0d' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
         <div>
+          {/* Model prediction summary */}
+          {row.predicted_mean != null && (
+            <div style={{ marginBottom: '12px', padding: '8px', background: '#0a0a0a', border: '1px solid #1a1a1a' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '6px' }}>MODEL OUTPUT</div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                {([
+                  ['Predicted', `${row.predicted_mean} ± ${row.predicted_std}`],
+                  ['Proj. Min', `${row.projected_min}`],
+                  ['P(over)',   `${row.p_over}%`],
+                  ['P(under)',  `${row.p_under}%`],
+                  ['Break-even', '57.7%'],
+                ] as [string,string][]).map(([lbl, val]) => (
+                  <div key={lbl}>
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444' }}>{lbl}</div>
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 600,
+                      color: lbl === 'P(over)' ? (row.p_over! > 57.7 ? '#4ade80' : '#f87171')
+                           : lbl === 'P(under)' ? (row.p_under! > 57.7 ? '#4ade80' : '#f87171')
+                           : '#aaa' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>AVERAGES</div>
           {([['Season', row.avg_season], ['Last 10', row.avg_last10], ['Last 5', row.avg_last5]] as [string, number][]).map(([l, v]) => (
             <div key={l} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -369,7 +394,7 @@ export default function PropsPage() {
             borderBottom: '1px solid #1a1a1a',
             fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em' }}>
             <span>#</span><span>PLAYER</span><span>MATCHUP</span><span>STAT</span>
-            <span>LINE / TIER</span><span>L5 HIT%</span><span>L10 HIT%</span>
+            <span>LINE / TIER</span><span>{directionFilter === 'under' ? 'L5 U%' : 'L5 HIT%'}</span><span>{directionFilter === 'under' ? 'L10 U%' : 'L10 HIT%'}</span>
             <span>L10 AVG</span><span>OPP DEF</span><span>RATING</span><span>EDGE</span><span>PICK</span>
           </div>
 
@@ -423,16 +448,20 @@ export default function PropsPage() {
                     )}
                   </div>
 
-                  <div>{row.hit_rate_last5 != null ? <HitBar pct={row.hit_rate_last5} />
+                  <div>{row.hit_rate_last5 != null ? <HitBar pct={row.hit_rate_last5} pickSide={row.pick_side} />
                     : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
                   </div>
 
-                  <div>{row.hit_rate_last10 != null ? <HitBar pct={row.hit_rate_last10} />
+                  <div>{row.hit_rate_last10 != null ? <HitBar pct={row.hit_rate_last10} pickSide={row.pick_side} />
                     : <span style={{ color: '#333', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px' }}>—</span>}
                   </div>
 
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-                    color: row.avg_last10 != null && row.avg_last10 > row.line ? '#4ade80' : '#f87171' }}>
+                    color: row.avg_last10 != null
+                      ? (row.pick_side === 'under'
+                          ? (row.avg_last10 < row.line ? '#4ade80' : '#f87171')   // under: good if avg < line
+                          : (row.avg_last10 > row.line ? '#4ade80' : '#f87171'))  // over: good if avg > line
+                      : '#555' }}>
                     {row.avg_last10 ?? '—'}
                   </span>
 
