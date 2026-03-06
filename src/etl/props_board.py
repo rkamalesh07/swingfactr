@@ -349,12 +349,14 @@ def compute_distribution_score(logs, line, stat, odds_type,
     hist_std  = std(game_vals) if len(game_vals) >= 3 else None
 
     # Fallback std by stat if insufficient history
+    # Fallback floors calibrated to actual NBA variance (from debug_std.py analysis)
+    # PTS: CV~30%, REB: CV~60%, AST: CV~45%, 3PM: CV~40%, STL/BLK: CV~70%
     fallback_std = {
-        "pts": max(4.0, predicted_mean * 0.28),
-        "reb": max(2.0, predicted_mean * 0.40),
-        "ast": max(1.5, predicted_mean * 0.45),
-        "fg3m": max(1.0, predicted_mean * 0.60),
-        "stl": max(0.5, predicted_mean * 0.70),
+        "pts":  max(3.0, predicted_mean * 0.30),
+        "reb":  max(1.0, predicted_mean * 0.55),  # was max(2.0) — too wide for small rebounders
+        "ast":  max(0.8, predicted_mean * 0.45),
+        "fg3m": max(0.8, predicted_mean * 0.55),  # was max(1.0) — too wide for low 3PM players
+        "stl":  max(0.4, predicted_mean * 0.70),
         "blk": max(0.5, predicted_mean * 0.70),
     }
     predicted_std = hist_std if hist_std else fallback_std.get(stat, predicted_mean * 0.35)
@@ -646,7 +648,7 @@ async def run():
                     edge = cal_score - PP_IMPLIED_PROB
 
                     # Filter toss-ups
-                    if odds_type == "standard" and abs(edge) < 5:
+                    if odds_type == "standard" and abs(edge) <= 5.5:
                         rows_skipped += 1
                         continue
 

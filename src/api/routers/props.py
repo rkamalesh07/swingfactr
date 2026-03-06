@@ -58,12 +58,16 @@ async def get_board(
         r["edge"]      = round((r["composite_score"] or 0) - PP_IMPLIED_PROB, 1)
         ot             = r.get("odds_type", "standard")
         r["pick_side"] = "over" if (ot in ("demon","goblin") or r["edge"] > 0) else "under"
-        r["is_tossup"] = (ot == "standard" and abs(r["edge"]) < 5)
+        r["is_tossup"] = (ot == "standard" and abs(r["edge"]) <= 5.5)
 
         if stat      and r["stat"]      != stat:            continue
         if odds_type and r["odds_type"] != odds_type:       continue
         if pick_side and r["pick_side"] != pick_side:       continue
         if search    and search.lower() not in r["player_name"].lower(): continue
+
+        # Server-side: never serve genuine toss-ups regardless of client filter
+        # A pick where P(under) < 57.7% is a losing bet — don't show it
+        if r["is_tossup"]: continue
 
         # For min_score filter: overs need score >= min_score, unders need score <= (PP - (min_score - PP))
         if min_score > 0:
