@@ -35,6 +35,7 @@ from src.etl.injury_engine import (
     get_player_status,
     get_team_injured_players,
     compute_usage_boost,
+    reset_boost_cache,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
@@ -222,7 +223,8 @@ def compute_distribution_score(logs, line, stat, odds_type,
                                  is_b2b, opp_def_margin, implied_total,
                                  team_abbr, opp_abbr,
                                  usage_boost_mult=1.0,
-                                 injured_teammates=None):
+                                 injured_teammates=None,
+                                 pos_def_ratio=1.0):
     """
     Returns (cal_prob_0_100, factors, model_details) using distribution model.
 
@@ -349,12 +351,22 @@ def compute_distribution_score(logs, line, stat, odds_type,
         })
 
     # ── 5. Opponent defense adjustment ─────────────────────────────────────
-    if opp_def_margin is not None:
-        # opp_def_margin > 0 = bad defense (opponent gives up points)
-        # Scale: 1 point of margin ≈ 2% impact on stat
+    # Positional def_ratio takes priority over generic margin
+    if pos_def_ratio != 1.0:
+        predicted_mean *= pos_def_ratio
+        pct = (pos_def_ratio - 1.0) * 100
+        if abs(pct) >= 3:
+            lbl = "weak defense" if pct > 0 else "strong defense"
+            factors.append({
+                "label":  "Positional matchup",
+                "value":  f"{lbl} ({pct:+.1f}%)",
+                "impact": "positive" if pct > 0 else "negative"
+            })
+    elif opp_def_margin is not None:
+        # Fallback: generic team defense margin when no positional data
         def_factor = 1.0 + (opp_def_margin * 0.015)
-        def_factor = max(0.85, min(1.15, def_factor))  # cap at ±15%
-        if stat in ("pts", "ast", "fg3m"):  # offense-dependent stats
+        def_factor = max(0.85, min(1.15, def_factor))
+        if stat in ("pts", "ast", "fg3m"):
             predicted_mean *= def_factor
         if abs(opp_def_margin) > 2:
             lbl = "poor" if opp_def_margin > 2 else "good"
@@ -409,6 +421,7 @@ def compute_distribution_score(logs, line, stat, odds_type,
         "recent_rate":    round(recent_rate, 4),
         "n_games":          len(qualified),
         "usage_boost_mult": round(float(usage_boost_mult or 1.0), 3),
+        "pos_def_ratio":    round(float(pos_def_ratio), 4),
         "injured_teammates": list(injured_teammates or []),
     }
 
@@ -536,6 +549,44 @@ def get_game_info(team_abbr):
     except Exception: pass
     return {}
 
+def get_positional_defense(opp_abbr, position, stat, season_id="2025-26"):
+    """
+    Returns positional def_ratio for opp_abbr vs position for stat.
+    def_ratio > 1.0 = easy (opponent allows more than league avg)
+    def_ratio < 1.0 = tough matchup
+    Returns 1.0 if no data (neutral).
+    """
+    if not opp_abbr or not position or not stat:
+        return 1.0
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT def_ratio, sample_size FROM defensive_profiles
+                    WHERE season_id=%s AND team_abbr=%s AND position=%s AND stat=%s
+                """, (season_id, opp_abbr, position, stat))
+                row = cur.fetchone()
+                if row and row[1] >= 20:
+                    return float(row[0])
+    except Exception:
+        pass
+    return 1.0
+
+def get_player_position(player_name):
+    """Look up player position from players table."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT position FROM players
+                    WHERE LOWER(full_name) = LOWER(%s) AND position IS NOT NULL
+                    LIMIT 1
+                """, (player_name,))
+                row = cur.fetchone()
+                return row[0] if row else None
+    except Exception:
+        return None
+
 def get_opp_defense(opp_abbr):
     try:
         with get_conn() as conn:
@@ -620,6 +671,7 @@ async def run():
         logger.info("Fetching injury reports...")
         await fetch_injuries()
         load_availability_cache()
+        reset_boost_cache()  # clear per-player boost cache for fresh run
 
         logger.info("Fetching PrizePicks props (v12 — distribution model)...")
         all_props = await fetch_prizepicks_props(client)
@@ -672,12 +724,16 @@ async def run():
                         player_name, team_abbr, stat
                     )
 
+                    position      = get_player_position(player_name)
+                    pos_def_ratio = get_positional_defense(opponent, position, stat)
+
                     cal_score, factors, model_details = compute_distribution_score(
                         logs, line, stat, odds_type,
                         is_b2b, opp_def, implied_total,
                         team_abbr, opponent,
                         usage_boost_mult=usage_boost_mult,
                         injured_teammates=injured_teammates,
+                        pos_def_ratio=pos_def_ratio,
                     )
 
                     if cal_score is None:

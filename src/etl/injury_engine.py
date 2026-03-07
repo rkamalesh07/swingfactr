@@ -146,6 +146,8 @@ async def fetch_espn_team(client, team_abbr):
     for athlete in data.get("athletes", []):
         name     = athlete.get("displayName", "")
         injuries = athlete.get("injuries", [])
+        pos_data = athlete.get("position", {})
+        position = pos_data.get("abbreviation", "") if isinstance(pos_data, dict) else ""
         if not name: continue
 
         if injuries:
@@ -158,7 +160,10 @@ async def fetch_espn_team(client, team_abbr):
         else:
             status = "Active"
 
-        results.append({"player_name": name, "team_abbr": team_abbr, "status": status})
+        results.append({
+            "player_name": name, "team_abbr": team_abbr,
+            "status": status, "position": position,
+        })
     return results
 
 # ---------------------------------------------------------------------------
@@ -234,6 +239,12 @@ def get_team_injured_players(team_abbr):
     return [v for v in cache.values()
             if v["team_abbr"] == team_abbr and v["status"] in ("Out", "GTD")]
 
+_BOOST_CACHE = {}
+
+def reset_boost_cache():
+    global _BOOST_CACHE
+    _BOOST_CACHE = {}
+
 def compute_usage_boost(player_name, team_abbr, stat):
     """
     Apply usage boost only when a teammate's absence is genuinely new
@@ -244,8 +255,16 @@ def compute_usage_boost(player_name, team_abbr, stat):
     if stat not in ("pts", "reb", "ast", "fg3m"):
         return 1.0, []
 
-    all_injured = get_team_injured_players(team_abbr)
+    # Cache per (player, team) — boost multiplier is identical across all stats for same player
+    cache_key = (player_name.lower(), team_abbr)
+    if cache_key in _BOOST_CACHE:
+        return _BOOST_CACHE[cache_key]
+
+    # Only consider players who are genuinely OUT (not GTD or Active)
+    all_injured = [p for p in get_team_injured_players(team_abbr)
+                   if p["status"] == "Out"]
     if not all_injured:
+        _BOOST_CACHE[cache_key] = (1.0, [])
         return 1.0, []
 
     injured = []
@@ -277,35 +296,59 @@ def compute_usage_boost(player_name, team_abbr, stat):
                 row = cur.fetchone()
                 games_missed = int(row[0]) if row and row[0] else 0
 
-                if games_missed < MAX_GAMES_MISSED_FOR_BOOST:
+                if 1 <= games_missed < MAX_GAMES_MISSED_FOR_BOOST:
                     injured.append(inj)
                     logger.info(f"  Boost: {inj['player_name']} missed {games_missed} games → {player_name} gets usage bump")
 
     if not injured:
+        _BOOST_CACHE[cache_key] = (1.0, [])
         return 1.0, []
 
-    # Estimate missing usage and redistribute
+    # Estimate missing usage and redistribute.
+    # Only count teammates who are genuine usage contributors:
+    #   - avg possessions (fga + 0.44*fta + tov) >= MIN_POSSESSIONS_FOR_BOOST
+    # This filters out spot-up shooters and defensive specialists whose
+    # absence doesn't meaningfully free up offensive possessions.
+    MIN_POSSESSIONS_FOR_BOOST = 8.0  # ~10+ mpg of real offensive involvement
+
     total_missing = 0.0
+    meaningful_injured = []
     with get_conn() as conn:
         with conn.cursor() as cur:
             for inj in injured:
                 cur.execute("""
-                    SELECT AVG((fga + 0.44*fta + tov)::float / NULLIF(minutes,0))
+                    SELECT
+                        AVG((fga + 0.44*fta + tov)::float / NULLIF(minutes,0)) as rate,
+                        AVG(fga + 0.44*fta + tov) as avg_poss
                     FROM player_game_logs
                     WHERE player_name = %s AND season_id = '2025-26' AND minutes >= 10
                 """, (inj["player_name"],))
                 row = cur.fetchone()
-                if row and row[0]:
-                    total_missing += float(row[0]) * 5 * 100
+                rate     = float(row[0]) if row and row[0] else None
+                avg_poss = float(row[1]) if row and row[1] else 0.0
+
+                if avg_poss < MIN_POSSESSIONS_FOR_BOOST:
+                    logger.debug(f"  Skip boost: {inj['player_name']} only {avg_poss:.1f} poss/g (below threshold)")
+                    continue
+
+                meaningful_injured.append(inj)
+                if rate:
+                    total_missing += rate * 5 * 100
                 else:
-                    total_missing += 18.0  # fallback
+                    total_missing += 18.0  # fallback ~18% usage
+
+    if not meaningful_injured:
+        _BOOST_CACHE[cache_key] = (1.0, [])
+        return 1.0, []
 
     redistributed    = total_missing * 0.60
     player_share     = 0.20
     boost_pct        = redistributed * player_share / 100.0
     boost_multiplier = min(1.15, 1.0 + boost_pct)
 
-    context = [i["player_name"] for i in injured]
+    context = [i["player_name"] for i in meaningful_injured]
+    logger.info(f"  {player_name} usage boost: {boost_multiplier:.3f}x from {context}")
+    _BOOST_CACHE[cache_key] = (boost_multiplier, context)
     return boost_multiplier, context
 
 # ---------------------------------------------------------------------------
@@ -341,14 +384,30 @@ async def run():
         espn_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         rw_player_names = {r["player_name"].lower() for r in all_rows}
+        position_map = {}  # player_name → position from ESPN
 
         for team_rows in espn_results:
             if isinstance(team_rows, Exception): continue
             for r in team_rows:
                 pname = r["player_name"].lower()
+                if r.get("position"):
+                    position_map[pname] = r["position"]
                 # Only add ESPN data if RotoWire didn't already cover this player
                 if pname not in rw_player_names:
                     all_rows.append({**r, "confirmed_starter": False, "source": "espn"})
+
+        # Backfill position into players table
+        if position_map:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    updated = 0
+                    for pname_lower, pos in position_map.items():
+                        cur.execute("""
+                            UPDATE players SET position = %s
+                            WHERE LOWER(full_name) = %s AND (position IS NULL OR position = '')
+                        """, (pos, pname_lower))
+                        updated += cur.rowcount
+                    logger.info(f"Updated positions for {updated} players")
 
     written = store_availability(all_rows)
 
