@@ -18,7 +18,7 @@ export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [season, setSeason] = useState('2024-25')
+  const [season, setSeason] = useState('2025-26')
   const [team, setTeam] = useState('')
   const [minMinutes, setMinMinutes] = useState(300)
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')

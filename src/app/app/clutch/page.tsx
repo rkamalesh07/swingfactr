@@ -29,7 +29,7 @@ export default function ClutchPage() {
   const [teams, setTeams] = useState<TeamRow[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [season, setSeason] = useState('2024-25')
+  const [season, setSeason] = useState('2025-26')
   const [teamFilter, setTeamFilter] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
