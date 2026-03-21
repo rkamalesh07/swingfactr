@@ -645,12 +645,16 @@ def ensure_table():
                     usage_rate      FLOAT,
                     game_pace       FLOAT,
                     model_details   JSONB,
+                    opening_line    FLOAT,
+                    line_moved_at   TIMESTAMPTZ,
                     computed_at     TIMESTAMPTZ DEFAULT NOW(),
                     game_date       DATE NOT NULL,
                     UNIQUE (player_name, stat, odds_type, game_date)
                 )
             """)
             cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS model_details JSONB")
+            cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS opening_line FLOAT")
+            cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS line_moved_at TIMESTAMPTZ")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date  ON prop_board(game_date)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
 
@@ -767,7 +771,7 @@ async def run():
                             cur.execute("""
                                 INSERT INTO prop_board (
                                     player_name, team, opponent, is_home,
-                                    stat, odds_type, line,
+                                    stat, odds_type, line, opening_line,
                                     pp_implied_prob, pp_american_odds,
                                     avg_season, avg_last5, avg_last10,
                                     hit_rate_season, hit_rate_last5, hit_rate_last10,
@@ -777,11 +781,20 @@ async def run():
                                     usage_rate, game_pace, model_details,
                                     game_date
                                 ) VALUES (
-                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                                 )
                                 ON CONFLICT (player_name, stat, odds_type, game_date) DO UPDATE SET
+                                    -- preserve opening_line on first insert, never overwrite
+                                    opening_line    = COALESCE(prop_board.opening_line, EXCLUDED.opening_line),
+                                    -- track when line moves
+                                    line_moved_at   = CASE
+                                                        WHEN prop_board.line IS DISTINCT FROM EXCLUDED.line
+                                                        THEN NOW()
+                                                        ELSE prop_board.line_moved_at
+                                                      END,
+                                    line            = EXCLUDED.line,
                                     composite_score = EXCLUDED.composite_score,
                                     score_label     = EXCLUDED.score_label,
                                     score_color     = EXCLUDED.score_color,
@@ -791,7 +804,7 @@ async def run():
                                     computed_at     = NOW()
                             """, (
                                 player_name, team_abbr, opponent, is_home,
-                                stat, odds_type, line,
+                                stat, odds_type, line, line,  # opening_line = line on first insert
                                 PP_IMPLIED_PROB, PP_AMERICAN_ODDS,
                                 avg(vals), avg(vals[:5]), avg(vals[:10]),
                                 hr(qualified, len(qualified)),

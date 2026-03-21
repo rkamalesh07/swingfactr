@@ -478,6 +478,17 @@ export default function PropsPage() {
                         border: `1px solid ${tier.color}40`, padding: '1px 4px',
                       }}>{row.odds_type.toUpperCase()}</span>
                     )}
+                    {row.line_movement !== 0 && row.line_movement != null && (
+                      <span title={`Opened at ${row.opening_line}`} style={{
+                        fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', fontWeight: 700,
+                        color: row.line_movement > 0 ? '#4ade80' : '#f87171',
+                        background: row.line_movement > 0 ? '#4ade8015' : '#f8717115',
+                        border: `1px solid ${row.line_movement > 0 ? '#4ade8040' : '#f8717140'}`,
+                        padding: '1px 4px', borderRadius: '3px',
+                      }}>
+                        {row.line_movement > 0 ? '▲' : '▼'}{Math.abs(row.line_movement)}
+                      </span>
+                    )}
                   </div>
 
                   <div>{row.hit_rate_last5 != null ? <HitBar pct={row.hit_rate_last5} pickSide={row.pick_side} />
