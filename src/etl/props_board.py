@@ -713,7 +713,7 @@ async def run():
             # Skip if player is OUT themselves
             player_avail = get_player_status(player_name)
             if player_avail and player_avail["is_out"]:
-                logger.debug(f"  Skipping {player_name} — OUT ({player_avail['injury_type']})")
+                logger.debug(f"  Skipping {player_name} — OUT ({player_avail.get('injury_type', 'unknown')})")
                 continue
 
             # Pull cached game logs
