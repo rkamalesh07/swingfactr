@@ -4,7 +4,14 @@ import { useState, useEffect, useMemo } from 'react'
 
 const API           = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const PASSWORD_HASH = '6bde5eb933b7bb25535f8f5d62c5c65e0b5110fe654a9caf2cdcc32a077d8b97'
-const PP_IMPLIED    = 57.7
+// Dynamic break-even probability per leg count
+// Formula: (1 / payout) ** (1 / num_legs) * 100
+const PP_PAYOUTS: Record<number, number> = { 2: 3.0, 3: 5.0, 4: 10.0, 5: 20.0, 6: 25.0 }
+function ppBreakEven(numLegs = 2): number {
+  const payout = PP_PAYOUTS[numLegs] ?? PP_PAYOUTS[2]
+  return parseFloat(((1.0 / payout) ** (1.0 / numLegs) * 100).toFixed(2))
+}
+const PP_IMPLIED = ppBreakEven(2)   // ≈ 57.74 — single-leg 2-pick default
 
 async function sha256(msg: string): Promise<string> {
   const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg))
@@ -219,8 +226,8 @@ export default function AdminPage() {
             {([
               ['PICKS TRACKED', withOutcome.length, '#888'],
               ['CORRECT',       totalCorrect,        '#4ade80'],
-              ['ACCURACY',      pct(totalCorrect, withOutcome.length), totalCorrect / withOutcome.length > 0.577 ? '#4ade80' : '#f87171'],
-              ['VS PP IMPLIED', `${((totalCorrect / withOutcome.length - 0.577) * 100).toFixed(1)}%`, totalCorrect / withOutcome.length > 0.577 ? '#4ade80' : '#f87171'],
+              ['ACCURACY',      pct(totalCorrect, withOutcome.length), totalCorrect / withOutcome.length > PP_IMPLIED / 100 ? '#4ade80' : '#f87171'],
+              ['VS PP IMPLIED', `${((totalCorrect / withOutcome.length - PP_IMPLIED / 100) * 100).toFixed(1)}%`, totalCorrect / withOutcome.length > PP_IMPLIED / 100 ? '#4ade80' : '#f87171'],
             ] as [string, string | number, string][]).map(([label, val, color]) => (
               <div key={label} style={{ border: '1px solid #1a1a1a', padding: '12px 16px' }}>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
@@ -238,14 +245,14 @@ export default function AdminPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{b.label}</span>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
-                      color: b.total > 0 && b.correct / b.total > 0.577 ? '#4ade80' : b.total > 0 ? '#f87171' : '#333' }}>
+                      color: b.total > 0 && b.correct / b.total > PP_IMPLIED / 100 ? '#4ade80' : b.total > 0 ? '#f87171' : '#333' }}>
                       {pct(b.correct, b.total)} <span style={{ color: '#333' }}>({b.total})</span>
                     </span>
                   </div>
                   {b.total > 0 && (
                     <div style={{ height: '3px', background: '#111', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${b.correct / b.total * 100}%`,
-                        background: b.correct / b.total > 0.577 ? '#4ade80' : '#f87171' }} />
+                        background: b.correct / b.total > PP_IMPLIED / 100 ? '#4ade80' : '#f87171' }} />
                     </div>
                   )}
                 </div>
@@ -259,7 +266,7 @@ export default function AdminPage() {
                   <StatRow
                     label={`${t.tier === 'goblin' ? '🟢 ' : t.tier === 'demon' ? '🔴 ' : ''}${t.tier} (${t.total})`}
                     val={pct(t.correct, t.total)}
-                    color={t.total > 0 && t.correct / t.total > 0.577 ? '#4ade80' : t.total > 0 ? '#f87171' : '#555'}
+                    color={t.total > 0 && t.correct / t.total > PP_IMPLIED / 100 ? '#4ade80' : t.total > 0 ? '#f87171' : '#555'}
                   />
                 </div>
               ))}
@@ -271,7 +278,7 @@ export default function AdminPage() {
                 <StatRow key={s.stat}
                   label={`${STAT_LABEL[s.stat]} (${s.total})`}
                   val={pct(s.correct, s.total)}
-                  color={s.correct / s.total > 0.577 ? '#4ade80' : '#f87171'}
+                  color={s.correct / s.total > PP_IMPLIED / 100 ? '#4ade80' : '#f87171'}
                 />
               ))}
             </Card>
@@ -282,7 +289,7 @@ export default function AdminPage() {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px' }}>
               {calibration.map(c => {
                 const height = c.hitRate != null ? `${c.hitRate}%` : '0%'
-                const color  = c.hitRate != null && c.hitRate > 57.7 ? '#4ade80' : '#f87171'
+                const color  = c.hitRate != null && c.hitRate > PP_IMPLIED ? '#4ade80' : '#f87171'
                 return (
                   <div key={c.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
                     <div style={{ width: '100%', height, background: c.hitRate != null ? color : '#1a1a1a', minHeight: '2px', position: 'relative' }}>
@@ -300,7 +307,7 @@ export default function AdminPage() {
               })}
             </div>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333', marginTop: '8px' }}>
-              Ideal: bars should increase left to right. Green = above 57.7% break-even.
+              Ideal: bars should increase left to right. Green = above {PP_IMPLIED.toFixed(1)}% break-even.
             </div>
           </Card>
 
@@ -346,4 +353,3 @@ export default function AdminPage() {
     </div>
   )
 }
-
