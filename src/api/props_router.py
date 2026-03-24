@@ -13,7 +13,13 @@ from src.etl.db import get_conn
 from datetime import datetime, timezone, timedelta
 import json
 
-PP_IMPLIED_PROB = 57.7
+PP_PAYOUTS = {2: 3.0, 3: 5.0, 4: 10.0, 5: 20.0, 6: 25.0}
+
+def pp_break_even(num_legs: int = 2) -> float:
+    payout = PP_PAYOUTS.get(num_legs, PP_PAYOUTS[2])
+    return round((1.0 / payout) ** (1.0 / num_legs) * 100, 2)
+
+PP_IMPLIED_PROB = pp_break_even(2)   # ≈ 57.7 — default single-leg
 
 def get_today():
     pst = timezone(timedelta(hours=-8))
@@ -37,6 +43,7 @@ async def get_board(
                     player_name, team, opponent, is_home,
                     stat, odds_type, line, opening_line, line_moved_at,
                     pp_implied_prob, pp_american_odds,
+                    pp_break_even_prob, raw_edge_vs_pp,
                     avg_season, avg_last5, avg_last10,
                     hit_rate_season, hit_rate_last5, hit_rate_last10,
                     composite_score, score_label, score_color,
@@ -58,9 +65,22 @@ async def get_board(
         r["edge"]      = round((r["composite_score"] or 0) - PP_IMPLIED_PROB, 1)
         ot             = r.get("odds_type", "standard")
         r["pick_side"] = "over" if (ot in ("demon","goblin") or r["edge"] > 0) else "under"
-        r["is_tossup"] = (ot == "standard" and abs(r["edge"]) <= 5.5)
 
-        # Line movement: positive = line went up, negative = line went down
+        # Use stored pp_break_even_prob if available, else default
+        bep = r.get("pp_break_even_prob") or PP_IMPLIED_PROB
+        r["pp_break_even_prob"] = round(bep, 2)
+        r["raw_edge_vs_pp"]     = round((r["composite_score"] or 0) - bep, 2)
+
+        # Asymmetric toss-up: unders need stronger edge (right-skew correction)
+        if ot == "standard":
+            if r["pick_side"] == "under":
+                r["is_tossup"] = abs(r["edge"]) <= 8.0
+            else:
+                r["is_tossup"] = abs(r["edge"]) <= 5.5
+        else:
+            r["is_tossup"] = False
+
+        # Line movement
         opening = r.get("opening_line")
         current = r.get("line")
         if opening is not None and current is not None and opening != current:
@@ -96,16 +116,20 @@ async def get_board(
         except Exception:
             r["player_status"] = None
 
-        # Expose p_over and p_under directly for UI display
+        # Expose model fields directly for UI display
         md = r.get("model_details") or {}
-        r["p_over"]           = md.get("prob_over_raw")
-        r["p_under"]          = round(100 - md["prob_over_raw"], 1) if md.get("prob_over_raw") else None
-        r["predicted_mean"]   = md.get("predicted_mean")
-        r["predicted_std"]    = md.get("predicted_std")
-        r["projected_min"]    = md.get("projected_min")
-        r["usage_boost_mult"]  = md.get("usage_boost_mult", 1.0)
-        r["injured_teammates"] = md.get("injured_teammates", [])
-        avail2 = cache.get(r["player_name"].lower()) if 'cache' in dir() else None
+        r["p_over"]               = md.get("prob_over_raw")
+        r["p_under"]              = round(100 - md["prob_over_raw"], 1) if md.get("prob_over_raw") else None
+        r["predicted_mean"]       = md.get("predicted_mean")
+        r["predicted_std"]        = md.get("predicted_std")
+        r["projected_min"]        = md.get("projected_min")
+        r["usage_boost_mult"]     = md.get("usage_boost_mult", 1.0)
+        r["injured_teammates"]    = md.get("injured_teammates", [])
+        r["direction"]            = md.get("direction", r["pick_side"])
+        r["market_consensus_prob"]= md.get("market_consensus_prob")   # None until market engine
+        r["edge_vs_market"]       = md.get("edge_vs_market")          # None until market engine
+        r["clv_after_close"]      = None                               # populated post-game
+        avail2 = cache.get(r["player_name"].lower()) if 'cache' in locals() else None
         r["confirmed_starter"] = avail2["is_starter"] if avail2 else False
 
         results.append(r)

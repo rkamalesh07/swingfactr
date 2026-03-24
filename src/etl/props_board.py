@@ -52,15 +52,32 @@ PP_HEADERS      = {
     "Origin": "https://app.prizepicks.com",
 }
 
-PP_IMPLIED_PROB  = 57.7
+# ---------------------------------------------------------------------------
+# PrizePicks payout config — break-even probability per leg count
+# Formula: pp_break_even_prob = (1 / payout) ** (1 / num_legs)
+# ---------------------------------------------------------------------------
+PP_PAYOUTS = {2: 3.0, 3: 5.0, 4: 10.0, 5: 20.0, 6: 25.0}
+
+def pp_break_even(num_legs: int) -> float:
+    """Per-leg break-even probability for a PrizePicks power play."""
+    payout = PP_PAYOUTS.get(num_legs, PP_PAYOUTS[2])
+    return round((1.0 / payout) ** (1.0 / num_legs) * 100, 2)
+
+# Default single-leg break-even (2-pick power play = 57.74%)
+PP_IMPLIED_PROB  = pp_break_even(2)   # ≈ 57.7
 PP_AMERICAN_ODDS = -136
-# Normal CDF outputs true probabilities that naturally span a wider range
-# than heuristic scores. A player with mean 4.0 on a 4.5 line genuinely
-# has ~30% over probability — that's a real -27.7 edge, not a model error.
-# We cap at ±25 to prevent only truly absurd outliers (>82.7% or <32.7%)
 MAX_EDGE_STANDARD = 25.0
 MAX_EDGE_GOBLIN   = 20.0
-LEAGUE_AVG_PACE   = 98.5   # NBA avg possessions per team per game 2025-26
+LEAGUE_AVG_PACE   = 98.5
+
+# Under picks need a HIGHER confidence threshold to overcome model bias
+# (right-skewed distributions make under edges systematically overestimated)
+UNDER_TOSSUP_THRESHOLD = 8.0   # unders filtered unless |edge| > 8.0
+OVER_TOSSUP_THRESHOLD  = 5.5   # overs filtered unless |edge| > 5.5
+# Strong under: only surface if model score is sufficiently extreme AND
+# hit rate confirms (applied in run loop)
+STRONG_UNDER_MIN_EDGE  = 8.0
+STRONG_UNDER_MIN_HIT_L10 = 60.0  # L10 hit rate must be >= 60% for unders
 
 PP_STAT_MAP = {
     "Points": "pts", "Rebounds": "reb", "Assists": "ast",
@@ -114,6 +131,8 @@ def load_calibration():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                # Load direction-aware calibration if available (stat + direction)
+                # Falls back to stat-only calibration for backwards compat
                 cur.execute("SELECT stat, a, b FROM model_calibration ORDER BY fitted_at DESC")
                 seen = set()
                 for stat, a, b in cur.fetchall():
@@ -125,18 +144,23 @@ def load_calibration():
         logger.warning(f"No calibration ({e}) — using uncalibrated probabilities")
     return _CAL_CACHE
 
-def calibrate_and_cap(raw_prob_0_1, stat, odds_type):
+def calibrate_and_cap(raw_prob_0_1, stat, odds_type, direction="over"):
     """
     Cap the raw normal-CDF probability within the credible edge range.
+    Direction-aware: unders get a separate shrinkage to correct for
+    right-skew bias that systematically overestimates P(under).
 
-    v12 outputs true probabilities from a normal distribution — these are
-    already calibrated by construction (no Platt scaling needed until we have
-    enough v12 outcomes to fit new coefficients).
-
-    The old Platt coefficients were fit on v11 heuristic scores (0-100 scale)
-    and compress v12 probabilities to garbage. Skip them until recalibrated.
+    Under correction: shrink under probability 8% toward 50% to
+    account for NBA stat right-skew (players can spike high but not low).
     """
     prob = raw_prob_0_1 * 100  # convert 0-1 → 0-100
+
+    # Under bias correction — right-skewed distributions overestimate P(under)
+    if direction == "under":
+        p_under_raw = 100.0 - prob
+        # Shrink under edge 20% toward break-even before capping
+        shrunk_under = PP_IMPLIED_PROB + (p_under_raw - PP_IMPLIED_PROB) * 0.80
+        prob = 100.0 - shrunk_under
 
     max_edge = MAX_EDGE_GOBLIN if odds_type == 'goblin' else MAX_EDGE_STANDARD
     prob = max(PP_IMPLIED_PROB - max_edge, min(PP_IMPLIED_PROB + max_edge, prob))
@@ -395,6 +419,7 @@ def compute_distribution_score(logs, line, stat, odds_type,
 
     # ── 7. P(Y > line) ──────────────────────────────────────────────────────
     prob_over = p_over_line(line, predicted_mean, predicted_std)
+    direction = "over" if prob_over >= 0.5 else "under"
 
     factors.insert(0, {
         "label":  "Predicted",
@@ -404,25 +429,37 @@ def compute_distribution_score(logs, line, stat, odds_type,
     factors.insert(1, {
         "label":  "P(over line)",
         "value":  f"{prob_over*100:.1f}%",
-        "impact": "positive" if prob_over > 0.577 else "negative"
+        "impact": "positive" if prob_over > (PP_IMPLIED_PROB / 100) else "negative"
     })
 
     # ── 8. Calibrate and cap ────────────────────────────────────────────────
-    cal_prob = calibrate_and_cap(prob_over, stat, odds_type)
+    cal_prob = calibrate_and_cap(prob_over, stat, odds_type, direction)
+
+    # ── 9. Edge framework ───────────────────────────────────────────────────
+    pp_break_even_prob = PP_IMPLIED_PROB   # single-leg 2-pick default
+    raw_edge_vs_pp     = round(cal_prob - pp_break_even_prob, 2)
+    # market_consensus_prob placeholder — will be filled by market engine later
+    market_consensus_prob = None
+    edge_vs_market        = None
 
     model_details = {
-        "predicted_mean": round(predicted_mean, 2),
-        "predicted_std":  round(predicted_std, 2),
-        "prob_over_raw":  round(prob_over * 100, 1),
-        "projected_min":  round(projected_min, 1),
-        "shrunk_rate":    round(shrunk_rate, 4),
-        "pace_factor":    round(pace_factor, 3),
-        "season_rate":    round(season_rate, 4),
-        "recent_rate":    round(recent_rate, 4),
-        "n_games":          len(qualified),
-        "usage_boost_mult": round(float(usage_boost_mult or 1.0), 3),
-        "pos_def_ratio":    round(float(pos_def_ratio), 4),
-        "injured_teammates": list(injured_teammates or []),
+        "predicted_mean":      round(predicted_mean, 2),
+        "predicted_std":       round(predicted_std, 2),
+        "prob_over_raw":       round(prob_over * 100, 1),
+        "direction":           direction,
+        "pp_break_even_prob":  pp_break_even_prob,
+        "raw_edge_vs_pp":      raw_edge_vs_pp,
+        "market_consensus_prob": market_consensus_prob,
+        "edge_vs_market":      edge_vs_market,
+        "projected_min":       round(projected_min, 1),
+        "shrunk_rate":         round(shrunk_rate, 4),
+        "pace_factor":         round(pace_factor, 3),
+        "season_rate":         round(season_rate, 4),
+        "recent_rate":         round(recent_rate, 4),
+        "n_games":             len(qualified),
+        "usage_boost_mult":    round(float(usage_boost_mult or 1.0), 3),
+        "pos_def_ratio":       round(float(pos_def_ratio), 4),
+        "injured_teammates":   list(injured_teammates or []),
     }
 
     return cal_prob, factors, model_details
@@ -655,6 +692,8 @@ def ensure_table():
             cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS model_details JSONB")
             cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS opening_line FLOAT")
             cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS line_moved_at TIMESTAMPTZ")
+            cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS pp_break_even_prob FLOAT")
+            cur.execute("ALTER TABLE prop_board ADD COLUMN IF NOT EXISTS raw_edge_vs_pp FLOAT")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_date  ON prop_board(game_date)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prop_board_score ON prop_board(composite_score DESC)")
 
@@ -745,12 +784,18 @@ async def run():
                         continue
 
                     score_label, score_color = score_to_label(cal_score, odds_type)
-                    edge = cal_score - PP_IMPLIED_PROB
+                    edge      = cal_score - PP_IMPLIED_PROB
+                    direction = model_details.get("direction", "over" if edge > 0 else "under")
 
-                    # Filter toss-ups
-                    if odds_type == "standard" and abs(edge) <= 5.5:
-                        rows_skipped += 1
-                        continue
+                    # Asymmetric toss-up filter:
+                    # Unders need stronger edge to overcome right-skew model bias
+                    if odds_type == "standard":
+                        if direction == "under" and abs(edge) <= UNDER_TOSSUP_THRESHOLD:
+                            rows_skipped += 1
+                            continue
+                        elif direction == "over" and abs(edge) <= OVER_TOSSUP_THRESHOLD:
+                            rows_skipped += 1
+                            continue
 
                     # Build legacy stat fields for API compatibility
                     qualified = [g for g in logs if g.get("minutes", 0) >= 10]
@@ -760,6 +805,14 @@ async def run():
                         return round(sum(1 for v in s if v > line)/len(s)*100,1) if s else None
 
                     vals = [g[stat] for g in qualified if g[stat] is not None]
+
+                    # Strong under cap: require L10 hit rate confirmation
+                    if direction == "under" and odds_type == "standard":
+                        hit_l10 = hr(qualified, 10)
+                        under_hit_l10 = round(100 - hit_l10, 1) if hit_l10 is not None else 0
+                        if under_hit_l10 < STRONG_UNDER_MIN_HIT_L10:
+                            rows_skipped += 1
+                            continue
                     game_log = [
                         {"date": str(g["game_date"]), "opp": g["opponent_abbr"],
                          "home": g["is_home"], "val": g[stat], "min": g["minutes"]}
@@ -773,6 +826,7 @@ async def run():
                                     player_name, team, opponent, is_home,
                                     stat, odds_type, line, opening_line,
                                     pp_implied_prob, pp_american_odds,
+                                    pp_break_even_prob, raw_edge_vs_pp,
                                     avg_season, avg_last5, avg_last10,
                                     hit_rate_season, hit_rate_last5, hit_rate_last10,
                                     composite_score, score_label, score_color,
@@ -782,30 +836,31 @@ async def run():
                                     game_date
                                 ) VALUES (
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                                     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                                 )
                                 ON CONFLICT (player_name, stat, odds_type, game_date) DO UPDATE SET
-                                    -- preserve opening_line on first insert, never overwrite
-                                    opening_line    = COALESCE(prop_board.opening_line, EXCLUDED.opening_line),
-                                    -- track when line moves
-                                    line_moved_at   = CASE
-                                                        WHEN prop_board.line IS DISTINCT FROM EXCLUDED.line
-                                                        THEN NOW()
-                                                        ELSE prop_board.line_moved_at
-                                                      END,
-                                    line            = EXCLUDED.line,
-                                    composite_score = EXCLUDED.composite_score,
-                                    score_label     = EXCLUDED.score_label,
-                                    score_color     = EXCLUDED.score_color,
-                                    factors         = EXCLUDED.factors,
-                                    model_details   = EXCLUDED.model_details,
-                                    game_log        = EXCLUDED.game_log,
-                                    computed_at     = NOW()
+                                    opening_line       = COALESCE(prop_board.opening_line, EXCLUDED.opening_line),
+                                    line_moved_at      = CASE
+                                                           WHEN prop_board.line IS DISTINCT FROM EXCLUDED.line
+                                                           THEN NOW()
+                                                           ELSE prop_board.line_moved_at
+                                                         END,
+                                    line               = EXCLUDED.line,
+                                    pp_break_even_prob = EXCLUDED.pp_break_even_prob,
+                                    raw_edge_vs_pp     = EXCLUDED.raw_edge_vs_pp,
+                                    composite_score    = EXCLUDED.composite_score,
+                                    score_label        = EXCLUDED.score_label,
+                                    score_color        = EXCLUDED.score_color,
+                                    factors            = EXCLUDED.factors,
+                                    model_details      = EXCLUDED.model_details,
+                                    game_log           = EXCLUDED.game_log,
+                                    computed_at        = NOW()
                             """, (
                                 player_name, team_abbr, opponent, is_home,
-                                stat, odds_type, line, line,  # opening_line = line on first insert
+                                stat, odds_type, line, line,
                                 PP_IMPLIED_PROB, PP_AMERICAN_ODDS,
+                                PP_IMPLIED_PROB, model_details.get("raw_edge_vs_pp"),
                                 avg(vals), avg(vals[:5]), avg(vals[:10]),
                                 hr(qualified, len(qualified)),
                                 hr(qualified, 5), hr(qualified, 10),
