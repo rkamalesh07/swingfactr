@@ -442,7 +442,15 @@ export default function PropsPage() {
 
                   <div>
                     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {row.player_name}
+                      <a
+                        href={`/player/${row.player_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
+                        onClick={e => e.stopPropagation()}
+                        style={{ color: '#e0e0e0', textDecoration: 'none', transition: 'color 0.1s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#4ade80')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#e0e0e0')}
+                      >
+                        {row.player_name}
+                      </a>
                       {row.player_status === 'GTD' && (
                         <span style={{ fontSize: '9px', fontWeight: 700, color: '#fbbf24', background: '#fbbf2420', border: '1px solid #fbbf2440', padding: '1px 4px' }}>GTD</span>
                       )}
@@ -478,15 +486,15 @@ export default function PropsPage() {
                         border: `1px solid ${tier.color}40`, padding: '1px 4px',
                       }}>{row.odds_type.toUpperCase()}</span>
                     )}
-                    {(row as any).line_movement != null && (row as any).line_movement !== 0 && (
-                      <span title={`Opened at ${(row as any).opening_line}`} style={{
+                    {row.line_movement !== 0 && row.line_movement != null && (
+                      <span title={`Opened at ${row.opening_line}`} style={{
                         fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', fontWeight: 700,
-                        color: (row as any).line_movement > 0 ? '#4ade80' : '#f87171',
-                        background: (row as any).line_movement > 0 ? '#4ade8015' : '#f8717115',
-                        border: `1px solid ${(row as any).line_movement > 0 ? '#4ade8040' : '#f8717140'}`,
+                        color: row.line_movement > 0 ? '#4ade80' : '#f87171',
+                        background: row.line_movement > 0 ? '#4ade8015' : '#f8717115',
+                        border: `1px solid ${row.line_movement > 0 ? '#4ade8040' : '#f8717140'}`,
                         padding: '1px 4px', borderRadius: '3px',
                       }}>
-                        {(row as any).line_movement > 0 ? '▲' : '▼'}{Math.abs((row as any).line_movement)}
+                        {row.line_movement > 0 ? '▲' : '▼'}{Math.abs(row.line_movement)}
                       </span>
                     )}
                   </div>
