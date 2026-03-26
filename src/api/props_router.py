@@ -206,6 +206,111 @@ async def player_detail(name: str = Query(...), stat: str = Query("pts")):
         results.append(r)
     return JSONResponse(results)
 
+
+@router.get("/player/profile")
+async def player_profile(name: str = Query(...)):
+    """
+    Full player profile — season game logs, per-stat averages,
+    hit rates vs PrizePicks lines, today's props if available.
+    """
+    STATS = ["pts", "reb", "ast", "fg3m", "stl", "blk"]
+    today = get_today()
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Resolve exact player name
+            cur.execute("""
+                SELECT DISTINCT player_name, team_abbr, position
+                FROM player_game_logs
+                WHERE LOWER(player_name) LIKE %s AND season_id = '2025-26'
+                ORDER BY player_name LIMIT 1
+            """, (f"%{name.lower()}%",))
+            row = cur.fetchone()
+            if not row:
+                return JSONResponse({"error": f"Player '{name}' not found"}, status_code=404)
+            player_name, team_abbr, position = row
+
+            # Full season game log
+            cur.execute("""
+                SELECT game_date, minutes, pts, reb, ast, fg3m, stl, blk,
+                       fga, fta, tov, is_home, opponent_abbr, is_b2b, rest_days
+                FROM player_game_logs
+                WHERE player_name = %s AND season_id = '2025-26'
+                ORDER BY game_date DESC
+                LIMIT 50
+            """, (player_name,))
+            log_cols = ["game_date","minutes","pts","reb","ast","fg3m","stl","blk",
+                        "fga","fta","tov","is_home","opponent_abbr","is_b2b","rest_days"]
+            game_logs = [dict(zip(log_cols, r)) for r in cur.fetchall()]
+            for g in game_logs:
+                g["game_date"] = str(g["game_date"])
+
+            # Per-stat summary
+            qualified = [g for g in game_logs if g["minutes"] and g["minutes"] >= 10]
+            def _avg(vals): return round(sum(vals)/len(vals), 1) if vals else None
+            def _std(vals):
+                if len(vals) < 2: return None
+                import math; m = _avg(vals)
+                return round(math.sqrt(sum((v-m)**2 for v in vals)/(len(vals)-1)), 1)
+
+            stat_summary = {}
+            for s in STATS:
+                vals = [g[s] for g in qualified if g[s] is not None]
+                l5   = [g[s] for g in qualified[:5]  if g[s] is not None]
+                l10  = [g[s] for g in qualified[:10] if g[s] is not None]
+                stat_summary[s] = {
+                    "avg_season": _avg(vals),
+                    "avg_l5":     _avg(l5),
+                    "avg_l10":    _avg(l10),
+                    "std":        _std(vals),
+                    "n_games":    len(vals),
+                }
+
+            # Today's props for this player
+            cur.execute("""
+                SELECT stat, odds_type, line, composite_score, score_label,
+                       model_details, opening_line, line_movement
+                FROM prop_board
+                WHERE game_date = %s AND LOWER(player_name) = %s
+                ORDER BY stat, odds_type
+            """, (today, player_name.lower()))
+            prop_cols = ["stat","odds_type","line","composite_score","score_label",
+                         "model_details","opening_line","line_movement"]
+            todays_props = []
+            for r in cur.fetchall():
+                p = dict(zip(prop_cols, r))
+                p["edge"] = round((p["composite_score"] or 0) - PP_IMPLIED_PROB, 1)
+                p["pick_side"] = "over" if p["edge"] > 0 else "under"
+                if isinstance(p.get("model_details"), str):
+                    p["model_details"] = json.loads(p["model_details"])
+                todays_props.append(p)
+
+            # Hit rates vs season prop lines (use today's lines if available)
+            hit_rates = {}
+            for s in STATS:
+                prop = next((p for p in todays_props if p["stat"] == s
+                             and p["odds_type"] == "standard"), None)
+                if prop and qualified:
+                    line = prop["line"]
+                    vals_all = [g[s] for g in qualified if g[s] is not None]
+                    vals_l10 = [g[s] for g in qualified[:10] if g[s] is not None]
+                    hit_rates[s] = {
+                        "line":     line,
+                        "season":   round(sum(1 for v in vals_all if v > line)/len(vals_all)*100, 1) if vals_all else None,
+                        "l10":      round(sum(1 for v in vals_l10 if v > line)/len(vals_l10)*100, 1) if vals_l10 else None,
+                    }
+
+    return JSONResponse({
+        "player_name":  player_name,
+        "team":         team_abbr,
+        "position":     position,
+        "games_played": len(qualified),
+        "stat_summary": stat_summary,
+        "hit_rates":    hit_rates,
+        "todays_props": todays_props,
+        "game_logs":    game_logs[:30],
+    })
+
 @router.get("/results")
 async def get_results(days: int = Query(30)):
     """Outcome tracker results for admin dashboard."""
