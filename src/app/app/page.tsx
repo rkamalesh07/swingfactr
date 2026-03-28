@@ -61,7 +61,7 @@ function PlayerSearch() {
       fetch(`${API}/props/board?search=${encodeURIComponent(query)}`)
         .then(r => r.json())
         .then(d => {
-          const names = [...new Set<string>((d.results || []).map((r: any) => r.player_name))]
+          const names = (d.results || []).map((r: any) => r.player_name as string).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
           setResults(names.slice(0, 8))
         })
         .catch(() => setResults([]))
