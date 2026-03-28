@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -100,10 +99,8 @@ function HitBar({ pct, side }: { pct: number | null; side: 'over' | 'under' }) {
   )
 }
 
-export default function PlayerProfilePage() {
-  const params   = useParams()
-  const router   = useRouter()
-  const slug     = params?.slug as string || ''
+export default function PlayerProfilePage({ params }: { params: { slug: string } }) {
+  const slug     = params?.slug || ''
   const nameStr  = decodeURIComponent(slug).replace(/-/g, ' ')
 
   const [profile,  setProfile]  = useState<Profile | null>(null)
