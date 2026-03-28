@@ -1,86 +1,390 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-const STATS = ['pts','reb','ast','fg3m','stl','blk']
-const STAT_LABEL: Record<string,string> = {
-  pts:'PTS', reb:'REB', ast:'AST', fg3m:'3PM', stl:'STL', blk:'BLK'
-}
-const STAT_COLOR: Record<string,string> = {
-  pts:'#60a5fa', reb:'#34d399', ast:'#f59e0b',
-  fg3m:'#a78bfa', stl:'#f87171', blk:'#fb923c'
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Player {
+  player_name: string
+  team_abbr:   string
+  position:    string | null
+  gp:          number
+  mpg:         number | null
+  ppg:         number | null
+  rpg:         number | null
+  apg:         number | null
+  spg:         number | null
+  bpg:         number | null
+  fg3m:        number | null
+  tov:         number | null
+  fg_pct:      number | null
 }
 
-interface PlayerCard {
-  player_name:  string
-  team:         string
-  stat:         string
-  line:         number
-  edge:         number
-  pick_side:    string
-  score_label:  string
-  avg_last10:   number | null
-  p_over:       number | null
+interface Shot {
+  x:         number
+  y:         number
+  made:      boolean
+  shot_type: string
+  zone:      string
+  distance:  number
+  date:      string
 }
 
-function toSlug(name: string) {
-  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+interface ShotData {
+  player_name: string
+  range:       string
+  total:       number
+  made:        number
+  fg_pct:      number
+  shots:       Shot[]
+  error?:      string
 }
+
+// ─── Sort config ──────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { key: 'ppg',    label: 'PTS' },
+  { key: 'rpg',    label: 'REB' },
+  { key: 'apg',    label: 'AST' },
+  { key: 'spg',    label: 'STL' },
+  { key: 'bpg',    label: 'BLK' },
+  { key: 'fg3m',   label: '3PM' },
+  { key: 'fg_pct', label: 'FG%' },
+  { key: 'tov',    label: 'TOV' },
+  { key: 'mpg',    label: 'MIN' },
+  { key: 'gp',     label: 'GP'  },
+]
+
+// ─── Basketball court SVG ─────────────────────────────────────────────────────
+// Court is 500×470 units. NBA shot coordinates: x in [-250,250], y in [-50,420]
+
+function CourtSVG() {
+  const stroke = '#333'
+  const sw = 1.5
+  return (
+    <g>
+      {/* Court outline */}
+      <rect x={-250} y={-50} width={500} height={470} fill="none" stroke={stroke} strokeWidth={sw}/>
+      {/* Paint */}
+      <rect x={-80} y={-50} width={160} height={190} fill="none" stroke={stroke} strokeWidth={sw}/>
+      {/* Restricted area */}
+      <path d="M -40 -50 A 40 40 0 0 1 40 -50" fill="none" stroke={stroke} strokeWidth={sw}/>
+      {/* Free throw circle */}
+      <circle cx={0} cy={140} r={60} fill="none" stroke={stroke} strokeWidth={sw}/>
+      {/* Basket */}
+      <circle cx={0} cy={0} r={7.5} fill="none" stroke={stroke} strokeWidth={2}/>
+      <line x1={-30} y1={-7.5} x2={30} y2={-7.5} stroke={stroke} strokeWidth={2}/>
+      {/* 3pt line */}
+      <path
+        d="M -220 -50 L -220 90 A 237.5 237.5 0 0 0 220 90 L 220 -50"
+        fill="none" stroke={stroke} strokeWidth={sw}
+      />
+      {/* Half court */}
+      <line x1={-250} y1={420} x2={250} y2={420} stroke={stroke} strokeWidth={sw}/>
+      <circle cx={0} cy={420} r={60} fill="none" stroke={stroke} strokeWidth={sw}/>
+      <circle cx={0} cy={420} r={6} fill={stroke}/>
+    </g>
+  )
+}
+
+// ─── Hexagonal shot chart ─────────────────────────────────────────────────────
+
+interface HexBin {
+  cx:    number
+  cy:    number
+  shots: Shot[]
+  made:  number
+}
+
+function hexKey(col: number, row: number) { return `${col},${row}` }
+
+function shotsToHexBins(shots: Shot[], hexR = 18): Map<string, HexBin> {
+  const bins = new Map<string, HexBin>()
+  const w = hexR * 2
+  const h = Math.sqrt(3) * hexR
+
+  for (const s of shots) {
+    const col = Math.round(s.x / w)
+    const row = Math.round(s.y / h)
+    const key = hexKey(col, row)
+    const cx  = col * w + (row % 2 === 0 ? 0 : hexR)
+    const cy  = row * h
+
+    if (!bins.has(key)) bins.set(key, { cx, cy, shots: [], made: 0 })
+    const bin = bins.get(key)!
+    bin.shots.push(s)
+    if (s.made) bin.made++
+  }
+  return bins
+}
+
+function hexPath(r: number): string {
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 3) * i - Math.PI / 6
+    return `${r * Math.cos(a)},${r * Math.sin(a)}`
+  })
+  return `M ${pts.join(' L ')} Z`
+}
+
+function ShotChart({ shots, loading }: { shots: Shot[]; loading: boolean }) {
+  const bins = useMemo(() => shotsToHexBins(shots, 16), [shots])
+  const maxCount = useMemo(() =>
+    Math.max(1, ...Array.from(bins.values()).map(b => b.shots.length)), [bins])
+
+  // scale: viewBox maps court coords
+  const VW = 500, VH = 470
+  const path = hexPath(14)
+
+  if (loading) return (
+    <div style={{ width: '100%', aspectRatio: '500/470', background: '#0a0a0a',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+      Loading shot chart...
+    </div>
+  )
+
+  if (shots.length === 0) return (
+    <div style={{ width: '100%', aspectRatio: '500/470', background: '#0a0a0a',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
+      No shots found for this range
+    </div>
+  )
+
+  return (
+    <svg viewBox={`${-VW/2} -50 ${VW} ${VH}`} style={{ width: '100%', background: '#080808' }}
+      xmlns="http://www.w3.org/2000/svg">
+      <CourtSVG />
+      {Array.from(bins.values()).map((bin, i) => {
+        const freq    = bin.shots.length / maxCount
+        const fgPct   = bin.made / bin.shots.length
+        // B&W: size by frequency, fill by made/missed
+        const opacity = 0.25 + freq * 0.75
+        const fill    = fgPct >= 0.5 ? '#e0e0e0' : '#2a2a2a'
+        const stroke  = fgPct >= 0.5 ? '#888' : '#1a1a1a'
+        const scale   = 0.4 + freq * 0.6
+        return (
+          <g key={i} transform={`translate(${bin.cx},${bin.cy}) scale(${scale})`} opacity={opacity}>
+            <path d={path} fill={fill} stroke={stroke} strokeWidth={1}/>
+          </g>
+        )
+      })}
+
+      {/* Legend */}
+      <g transform={`translate(${-VW/2 + 8}, ${VH - 60})`}>
+        <rect width={8} height={8} fill="#e0e0e0" stroke="#888" strokeWidth={0.5}/>
+        <text x={12} y={8} fill="#555" fontSize={9} fontFamily="IBM Plex Mono, monospace">Above avg FG%</text>
+        <rect y={14} width={8} height={8} fill="#2a2a2a" stroke="#1a1a1a" strokeWidth={0.5}/>
+        <text x={12} y={22} fill="#555" fontSize={9} fontFamily="IBM Plex Mono, monospace">Below avg FG%</text>
+        <text y={38} fill="#444" fontSize={8} fontFamily="IBM Plex Mono, monospace">Size = frequency</text>
+      </g>
+    </svg>
+  )
+}
+
+// ─── Player modal ─────────────────────────────────────────────────────────────
+
+function PlayerModal({ player, onClose }: { player: Player; onClose: () => void }) {
+  const [shotRange, setShotRange] = useState<'season'|'l25'|'l10'>('season')
+  const [shotData,  setShotData]  = useState<ShotData | null>(null)
+  const [shotLoading, setShotLoading] = useState(false)
+  const [shotError,   setShotError]   = useState<string | null>(null)
+
+  const loadShots = useCallback(async (range: 'season'|'l25'|'l10') => {
+    setShotLoading(true)
+    setShotError(null)
+    try {
+      // Try backend proxy first
+      const r = await fetch(`${API}/props/shotchart?name=${encodeURIComponent(player.player_name)}&range=${range}`)
+      const d = await r.json()
+      if (d.error) {
+        setShotError(d.error)
+        setShotData(null)
+      } else {
+        setShotData(d)
+      }
+    } catch {
+      setShotError('Shot chart unavailable')
+      setShotData(null)
+    }
+    setShotLoading(false)
+  }, [player.player_name])
+
+  useEffect(() => { loadShots('season') }, [loadShots])
+  useEffect(() => { loadShots(shotRange) }, [shotRange, loadShots])
+
+  // Close on backdrop click
+  const onBackdrop = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const STATS = [
+    { key: 'ppg',    label: 'PTS' },
+    { key: 'rpg',    label: 'REB' },
+    { key: 'apg',    label: 'AST' },
+    { key: 'spg',    label: 'STL' },
+    { key: 'bpg',    label: 'BLK' },
+    { key: 'fg3m',   label: '3PM' },
+    { key: 'fg_pct', label: 'FG%' },
+    { key: 'tov',    label: 'TOV' },
+    { key: 'mpg',    label: 'MIN' },
+    { key: 'gp',     label: 'GP'  },
+  ]
+
+  const shots = shotData?.shots ?? []
+
+  return (
+    <div onClick={onBackdrop} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+      zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '20px', backdropFilter: 'blur(4px)',
+    }}>
+      <div style={{
+        background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '6px',
+        width: '100%', maxWidth: '860px', maxHeight: '90vh', overflow: 'auto',
+        fontFamily: 'IBM Plex Mono, monospace',
+      }}>
+        {/* Modal header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #111',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em', marginBottom: '6px' }}>
+              {player.team_abbr} · {player.position || '—'} · {player.gp}G
+            </div>
+            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#e0e0e0',
+              margin: 0, letterSpacing: '-0.01em' }}>{player.player_name}</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none',
+            cursor: 'pointer', color: '#333', fontSize: '20px', padding: '4px',
+            lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Stat line */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0',
+          borderBottom: '1px solid #111' }}>
+          {STATS.map(s => {
+            const val = player[s.key as keyof Player]
+            const display = s.key === 'fg_pct' && val != null
+              ? `${val}%`
+              : val ?? '—'
+            return (
+              <div key={s.key} style={{ padding: '14px 16px', borderRight: '1px solid #0d0d0d',
+                minWidth: '72px', textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: '#e0e0e0',
+                  marginBottom: '4px' }}>{display}</div>
+                <div style={{ fontSize: '8px', color: '#333', letterSpacing: '0.1em' }}>{s.label}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Shot chart section */}
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '16px' }}>
+            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em' }}>
+              SHOT CHART
+              {shotData && !shotLoading && (
+                <span style={{ color: '#555', marginLeft: '12px' }}>
+                  {shotData.made}/{shotData.total} FGM · {shotData.fg_pct}% FG
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {(['season','l25','l10'] as const).map(r => (
+                <button key={r} onClick={() => setShotRange(r)} style={{
+                  padding: '4px 10px', background: shotRange === r ? '#1a1a1a' : 'none',
+                  border: `1px solid ${shotRange === r ? '#333' : '#111'}`,
+                  borderRadius: '3px', cursor: 'pointer',
+                  fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
+                  color: shotRange === r ? '#e0e0e0' : '#333',
+                  letterSpacing: '0.08em',
+                }}>
+                  {r === 'season' ? 'SEASON' : r === 'l25' ? 'L25' : 'L10'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {shotError ? (
+            <div style={{ padding: '40px', textAlign: 'center', fontSize: '11px',
+              color: '#2a2a2a', background: '#080808', borderRadius: '4px' }}>
+              {shotError}
+              <div style={{ marginTop: '8px', fontSize: '10px', color: '#1a1a1a' }}>
+                NBA Stats API may be temporarily unavailable
+              </div>
+            </div>
+          ) : (
+            <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+              <ShotChart shots={shots} loading={shotLoading} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main profiles page ───────────────────────────────────────────────────────
 
 export default function ProfilesPage() {
-  const [players, setPlayers] = useState<PlayerCard[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
-  const [statFilter, setStatFilter] = useState('all')
-  const [sortBy, setSortBy] = useState<'edge'|'name'>('edge')
+  const [players,     setPlayers]     = useState<Player[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [search,      setSearch]      = useState('')
+  const [sortKey,     setSortKey]     = useState('ppg')
+  const [sortDir,     setSortDir]     = useState<'desc'|'asc'>('desc')
+  const [selected,    setSelected]    = useState<Player | null>(null)
+  const [teamFilter,  setTeamFilter]  = useState('ALL')
 
   useEffect(() => {
-    fetch(`${API}/props/board`)
+    fetch(`${API}/props/players/list`)
       .then(r => r.json())
-      .then(d => {
-        // Dedupe — one card per player (strongest edge prop)
-        const map = new Map<string, PlayerCard>()
-        for (const r of (d.results || [])) {
-          const key = r.player_name
-          const existing = map.get(key)
-          if (!existing || Math.abs(r.edge) > Math.abs(existing.edge)) {
-            map.set(key, {
-              player_name: r.player_name,
-              team:        r.team,
-              stat:        r.stat,
-              line:        r.line,
-              edge:        r.edge,
-              pick_side:   r.pick_side,
-              score_label: r.score_label,
-              avg_last10:  r.avg_last10,
-              p_over:      r.p_over,
-            })
-          }
-        }
-        setPlayers(Array.from(map.values()))
-      })
+      .then(d => setPlayers(d.players || []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
+  const teams = useMemo(() =>
+    ['ALL', ...Array.from(new Set(players.map(p => p.team_abbr))).sort()],
+    [players]
+  )
+
   const filtered = useMemo(() => {
     let list = [...players]
     if (search) list = list.filter(p =>
-      p.player_name.toLowerCase().includes(search.toLowerCase()) ||
-      p.team.toLowerCase().includes(search.toLowerCase())
+      p.player_name.toLowerCase().includes(search.toLowerCase())
     )
-    if (statFilter !== 'all') list = list.filter(p => p.stat === statFilter)
-    if (sortBy === 'edge') list.sort((a, b) => Math.abs(b.edge) - Math.abs(a.edge))
-    if (sortBy === 'name') list.sort((a, b) => a.player_name.localeCompare(b.player_name))
+    if (teamFilter !== 'ALL') list = list.filter(p => p.team_abbr === teamFilter)
+    list.sort((a, b) => {
+      const av = (a[sortKey as keyof Player] as number) ?? -Infinity
+      const bv = (b[sortKey as keyof Player] as number) ?? -Infinity
+      return sortDir === 'desc' ? bv - av : av - bv
+    })
     return list
-  }, [players, search, statFilter, sortBy])
+  }, [players, search, sortKey, sortDir, teamFilter])
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: '#888',
       fontFamily: 'IBM Plex Mono, monospace' }}>
+
+      {selected && (
+        <PlayerModal player={selected} onClose={() => setSelected(null)} />
+      )}
 
       {/* Header */}
       <div style={{ borderBottom: '1px solid #0f0f0f', padding: '12px 24px',
@@ -89,7 +393,7 @@ export default function ProfilesPage() {
           fontSize: '11px', letterSpacing: '0.05em' }}>← HOME</Link>
         <span style={{ color: '#1a1a1a' }}>·</span>
         <span style={{ color: '#333', fontSize: '11px', letterSpacing: '0.1em' }}>
-          PLAYER PROFILES
+          PLAYER PROFILES · 2025–26
         </span>
         {!loading && (
           <span style={{ color: '#222', fontSize: '11px' }}>
@@ -98,173 +402,105 @@ export default function ProfilesPage() {
         )}
       </div>
 
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '28px 24px' }}>
 
-        {/* Title + controls */}
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#e0e0e0',
-            letterSpacing: '-0.02em', margin: '0 0 20px',
-            fontFamily: 'IBM Plex Mono, monospace' }}>
+        {/* Title + search */}
+        <div style={{ marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#e0e0e0',
+            letterSpacing: '-0.02em', margin: '0 0 16px' }}>
             Player Profiles
           </h1>
-          <p style={{ fontSize: '12px', color: '#333', lineHeight: 1.7,
-            margin: '0 0 24px', maxWidth: '500px' }}>
-            Season stats, game logs, and model projections for every player
-            with PrizePicks props today. Click any card to view their full profile.
-          </p>
-
-          {/* Search + filters */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search player or team..."
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search player..."
               style={{ padding: '8px 12px', background: '#0a0a0a',
                 border: '1px solid #1a1a1a', borderRadius: '4px', outline: 'none',
                 fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-                color: '#e0e0e0', width: '220px' }}
+                color: '#e0e0e0', width: '200px' }}
             />
-
-            <div style={{ display: 'flex', gap: '2px' }}>
-              {['all', ...STATS].map(s => (
-                <button key={s} onClick={() => setStatFilter(s)} style={{
-                  padding: '6px 10px', background: statFilter === s ? '#111' : 'none',
-                  border: `1px solid ${statFilter === s ? '#222' : '#111'}`,
-                  borderRadius: '3px', cursor: 'pointer',
-                  fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: statFilter === s
-                    ? (s === 'all' ? '#e0e0e0' : STAT_COLOR[s])
-                    : '#333',
-                  letterSpacing: '0.08em',
-                }}>{s === 'all' ? 'ALL' : STAT_LABEL[s]}</button>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: '2px', marginLeft: 'auto' }}>
-              {(['edge','name'] as const).map(s => (
-                <button key={s} onClick={() => setSortBy(s)} style={{
-                  padding: '6px 10px', background: sortBy === s ? '#111' : 'none',
-                  border: `1px solid ${sortBy === s ? '#222' : '#111'}`,
-                  borderRadius: '3px', cursor: 'pointer',
-                  fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: sortBy === s ? '#e0e0e0' : '#333',
-                  letterSpacing: '0.08em',
-                }}>{s === 'edge' ? 'BY EDGE' : 'A–Z'}</button>
-              ))}
+            <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
+              style={{ padding: '8px 10px', background: '#0a0a0a',
+                border: '1px solid #1a1a1a', borderRadius: '4px', outline: 'none',
+                fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#888',
+                cursor: 'pointer' }}>
+              {teams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div style={{ fontSize: '10px', color: '#2a2a2a', marginLeft: 'auto' }}>
+              Click a player to view shot chart + stats
             </div>
           </div>
         </div>
 
-        {/* Loading state */}
-        {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: '8px' }}>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} style={{ height: '120px', background: '#0a0a0a',
-                border: '1px solid #111', borderRadius: '4px',
-                animation: 'pulse 1.5s ease-in-out infinite',
-                animationDelay: `${i * 0.05}s` }} />
-            ))}
-            <style>{`@keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:.6} }`}</style>
+        {/* Table */}
+        {loading ? (
+          <div style={{ padding: '60px', textAlign: 'center', fontSize: '11px', color: '#222' }}>
+            Loading players...
+          </div>
+        ) : (
+          <div style={{ background: '#0a0a0a', border: '1px solid #111', borderRadius: '6px',
+            overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #111' }}>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '9px',
+                    color: '#2a2a2a', letterSpacing: '0.12em', fontWeight: 400,
+                    position: 'sticky', left: 0, background: '#0a0a0a' }}>PLAYER</th>
+                  <th style={{ padding: '10px 8px', fontSize: '9px', color: '#2a2a2a',
+                    letterSpacing: '0.1em', fontWeight: 400, textAlign: 'center' }}>TEAM</th>
+                  <th style={{ padding: '10px 8px', fontSize: '9px', color: '#2a2a2a',
+                    letterSpacing: '0.1em', fontWeight: 400, textAlign: 'center' }}>POS</th>
+                  {SORT_OPTIONS.map(s => (
+                    <th key={s.key} onClick={() => toggleSort(s.key)} style={{
+                      padding: '10px 12px', fontSize: '9px', letterSpacing: '0.1em',
+                      fontWeight: 400, textAlign: 'right', cursor: 'pointer',
+                      color: sortKey === s.key ? '#4ade80' : '#2a2a2a',
+                      whiteSpace: 'nowrap', userSelect: 'none',
+                    }}>
+                      {s.label} {sortKey === s.key ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p, i) => (
+                  <tr key={p.player_name} onClick={() => setSelected(p)}
+                    style={{ borderBottom: '1px solid #0d0d0d', cursor: 'pointer',
+                      background: i % 2 === 0 ? 'transparent' : '#080808',
+                      transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#0f0f0f')}
+                    onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#080808')}>
+                    <td style={{ padding: '10px 16px', fontSize: '12px', fontWeight: 600,
+                      color: '#e0e0e0', whiteSpace: 'nowrap',
+                      position: 'sticky', left: 0, background: 'inherit' }}>
+                      {p.player_name}
+                    </td>
+                    <td style={{ padding: '10px 8px', fontSize: '10px', color: '#444',
+                      textAlign: 'center' }}>{p.team_abbr}</td>
+                    <td style={{ padding: '10px 8px', fontSize: '10px', color: '#333',
+                      textAlign: 'center' }}>{p.position || '—'}</td>
+                    {SORT_OPTIONS.map(s => {
+                      const val = p[s.key as keyof Player]
+                      const display = s.key === 'fg_pct' && val != null ? `${val}%` : val ?? '—'
+                      const isSort = sortKey === s.key
+                      return (
+                        <td key={s.key} style={{ padding: '10px 12px', textAlign: 'right',
+                          fontSize: isSort ? '12px' : '11px',
+                          fontWeight: isSort ? 700 : 400,
+                          color: isSort ? '#e0e0e0' : '#444' }}>
+                          {display}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
-        {/* Empty state */}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '80px 0',
-            fontSize: '12px', color: '#222' }}>
-            {players.length === 0
-              ? 'No props today — check back after 6:30am PST'
-              : `No players match "${search}"`}
-          </div>
-        )}
-
-        {/* Player grid */}
-        {!loading && filtered.length > 0 && (
-          <div style={{ display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
-            {filtered.map(p => {
-              const edgeColor = p.edge > 0 ? '#4ade80' : '#f87171'
-              const statColor = STAT_COLOR[p.stat] || '#888'
-              return (
-                <Link key={p.player_name} href={`/player/${toSlug(p.player_name)}`}
-                  style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    padding: '16px', background: '#0a0a0a',
-                    border: '1px solid #111', borderRadius: '4px',
-                    transition: 'border-color 0.15s, background 0.15s',
-                    cursor: 'pointer', height: '100%',
-                  }}
-                  onMouseEnter={e => {
-                    const el = e.currentTarget
-                    el.style.borderColor = edgeColor + '40'
-                    el.style.background = '#0d0d0d'
-                  }}
-                  onMouseLeave={e => {
-                    const el = e.currentTarget
-                    el.style.borderColor = '#111'
-                    el.style.background = '#0a0a0a'
-                  }}>
-                    {/* Player name + team */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700,
-                        color: '#e0e0e0', marginBottom: '3px',
-                        whiteSpace: 'nowrap', overflow: 'hidden',
-                        textOverflow: 'ellipsis' }}>
-                        {p.player_name}
-                      </div>
-                      <div style={{ fontSize: '9px', color: '#333',
-                        letterSpacing: '0.08em' }}>{p.team}</div>
-                    </div>
-
-                    {/* Stat + line */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '9px', color: statColor,
-                          letterSpacing: '0.08em' }}>{STAT_LABEL[p.stat]}</span>
-                        <span style={{ fontSize: '14px', fontWeight: 700,
-                          color: '#e0e0e0' }}>{p.line}</span>
-                      </div>
-                      <span style={{ fontSize: '9px', color: edgeColor,
-                        letterSpacing: '0.05em' }}>
-                        {p.pick_side.toUpperCase()} {p.edge > 0 ? '+' : ''}{p.edge}
-                      </span>
-                    </div>
-
-                    {/* L10 avg vs line bar */}
-                    {p.avg_last10 != null && (
-                      <div style={{ marginBottom: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between',
-                          marginBottom: '4px' }}>
-                          <span style={{ fontSize: '8px', color: '#222' }}>L10 AVG</span>
-                          <span style={{ fontSize: '8px',
-                            color: p.avg_last10 > p.line ? '#4ade80' : '#f87171' }}>
-                            {p.avg_last10}
-                          </span>
-                        </div>
-                        <div style={{ height: '2px', background: '#111',
-                          borderRadius: '1px', overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${Math.min(100, (p.avg_last10 / (p.line * 1.5)) * 100)}%`,
-                            height: '100%', borderRadius: '1px',
-                            background: p.avg_last10 > p.line ? '#4ade80' : '#f87171',
-                          }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Score label */}
-                    <div style={{ fontSize: '9px', color: edgeColor,
-                      letterSpacing: '0.06em' }}>
-                      {p.score_label}
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
+        <div style={{ marginTop: '16px', fontSize: '9px', color: '#1a1a1a' }}>
+          Min 5 games · 2025-26 regular season · Click any row to view shot chart
+        </div>
       </div>
     </div>
   )

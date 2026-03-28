@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 from src.etl.db import get_conn
 from datetime import datetime, timezone, timedelta
 import json
+import httpx
+import asyncio
+import time
 
 PP_PAYOUTS = {2: 3.0, 3: 5.0, 4: 10.0, 5: 20.0, 6: 25.0}
 
@@ -336,3 +339,168 @@ async def get_results(days: int = Query(30)):
         results.append(r)
 
     return JSONResponse({"total": len(results), "results": results})
+
+
+# ---------------------------------------------------------------------------
+# Shot chart + player list routes
+# ---------------------------------------------------------------------------
+
+_SHOT_CACHE: dict = {}  # {cache_key: (timestamp, data)}
+_PLAYER_ID_CACHE: dict = {}  # {name_lower: nba_player_id}
+CACHE_TTL = 6 * 3600  # 6 hours
+
+NBA_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.nba.com/",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Origin": "https://www.nba.com",
+    "x-nba-stats-origin": "stats",
+    "x-nba-stats-token": "true",
+    "Connection": "keep-alive",
+}
+
+
+async def get_nba_player_id(name: str) -> int | None:
+    """Resolve player name → NBA Stats player_id via commonallplayers."""
+    name_lower = name.lower().strip()
+    if name_lower in _PLAYER_ID_CACHE:
+        return _PLAYER_ID_CACHE[name_lower]
+
+    url = "https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2025-26"
+    try:
+        async with httpx.AsyncClient(headers=NBA_HEADERS, timeout=15) as client:
+            await asyncio.sleep(0.6)  # rate limit
+            r = await client.get(url)
+            data = r.json()
+            rows    = data["resultSets"][0]["rowSet"]
+            headers = data["resultSets"][0]["headers"]
+            name_idx = headers.index("DISPLAY_FIRST_LAST")
+            id_idx   = headers.index("PERSON_ID")
+            for row in rows:
+                full = row[name_idx].lower()
+                if full == name_lower or name_lower in full:
+                    _PLAYER_ID_CACHE[name_lower] = row[id_idx]
+                    return row[id_idx]
+    except Exception:
+        pass
+    return None
+
+
+async def fetch_shot_chart(player_id: int, last_n: int = 0) -> list:
+    """Fetch shot chart from NBA Stats API."""
+    cache_key = f"{player_id}_{last_n}"
+    now = time.time()
+    if cache_key in _SHOT_CACHE:
+        ts, data = _SHOT_CACHE[cache_key]
+        if now - ts < CACHE_TTL:
+            return data
+
+    url = (
+        f"https://stats.nba.com/stats/shotchartdetail"
+        f"?PlayerID={player_id}&Season=2025-26&SeasonType=Regular+Season"
+        f"&ContextMeasure=FGA&LeagueID=00&TeamID=0&GameID=&Outcome=&Location="
+        f"&Month=0&SeasonSegment=&DateFrom=&DateTo=&OpponentTeamID=0"
+        f"&VsConference=&VsDivision=&Position=&RookieYear=&GameSegment="
+        f"&Period=0&LastNGames={last_n}&AheadBehind=&PointDiff="
+        f"&RangeType=0&StartPeriod=0&EndPeriod=0&StartRange=0&EndRange=0"
+    )
+
+    try:
+        async with httpx.AsyncClient(headers=NBA_HEADERS, timeout=20) as client:
+            await asyncio.sleep(0.8)
+            r = await client.get(url)
+            data = r.json()
+            rows    = data["resultSets"][0]["rowSet"]
+            headers = data["resultSets"][0]["headers"]
+            shots = []
+            for row in rows:
+                d = dict(zip(headers, row))
+                shots.append({
+                    "x":         d.get("LOC_X", 0),
+                    "y":         d.get("LOC_Y", 0),
+                    "made":      bool(d.get("SHOT_MADE_FLAG", 0)),
+                    "shot_type": d.get("SHOT_TYPE", ""),
+                    "zone":      d.get("SHOT_ZONE_BASIC", ""),
+                    "distance":  d.get("SHOT_DISTANCE", 0),
+                    "action":    d.get("ACTION_TYPE", ""),
+                    "date":      d.get("GAME_DATE", ""),
+                })
+            _SHOT_CACHE[cache_key] = (now, shots)
+            return shots
+    except Exception:
+        return []
+
+
+# ── Routes to add to props_router ──────────────────────────────────────────
+
+import asyncio
+
+@router.get("/shotchart")
+async def get_shotchart(
+    name:   str = Query(...),
+    range:  str = Query("season"),  # "season" | "l10" | "l25"
+):
+    """
+    Proxy NBA Stats shot chart for a player.
+    range: season=full season, l10=last 10 games, l25=last 25 games
+    """
+    last_n = {"season": 0, "l10": 10, "l25": 25}.get(range, 0)
+
+    player_id = await get_nba_player_id(name)
+    if not player_id:
+        return JSONResponse({"error": f"Player '{name}' not found in NBA Stats"}, status_code=404)
+
+    shots = await fetch_shot_chart(player_id, last_n)
+    made  = [s for s in shots if s["made"]]
+    missed = [s for s in shots if not s["made"]]
+
+    return JSONResponse({
+        "player_name": name,
+        "player_id":   player_id,
+        "range":       range,
+        "total":       len(shots),
+        "made":        len(made),
+        "fg_pct":      round(len(made) / len(shots) * 100, 1) if shots else 0,
+        "shots":       shots,
+    })
+
+
+@router.get("/players/list")
+async def players_list():
+    """All players with season averages for the profiles browse page."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    player_name,
+                    team_abbr,
+                    position,
+                    COUNT(*) as gp,
+                    ROUND(AVG(minutes)::numeric, 1) as mpg,
+                    ROUND(AVG(pts)::numeric, 1) as ppg,
+                    ROUND(AVG(reb)::numeric, 1) as rpg,
+                    ROUND(AVG(ast)::numeric, 1) as apg,
+                    ROUND(AVG(stl)::numeric, 1) as spg,
+                    ROUND(AVG(blk)::numeric, 1) as bpg,
+                    ROUND(AVG(fg3m)::numeric, 1) as fg3m,
+                    ROUND(AVG(tov)::numeric, 1) as tov,
+                    SUM(fga) as fga_total,
+                    ROUND(AVG(fg3m)::numeric, 1) as fg3m_avg
+                FROM player_game_logs
+                WHERE season_id = '2025-26' AND minutes >= 5
+                GROUP BY player_name, team_abbr, position
+                HAVING COUNT(*) >= 5
+                ORDER BY AVG(pts) DESC
+            """)
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
+
+    players = []
+    for row in rows:
+        r = dict(zip(cols, row))
+        r.pop("fga_total", None)
+        players.append(r)
+
+    return JSONResponse({"players": players, "total": len(players)})
