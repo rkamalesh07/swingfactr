@@ -66,6 +66,8 @@ interface PropRow {
   p_over?:          number
   p_under?:         number
   predicted_mean?:  number
+  line_movement:    number
+  opening_line?:    number | null
   predicted_std?:   number
   projected_min?:   number
   model_details?:    Record<string, number>
