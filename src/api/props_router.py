@@ -486,8 +486,7 @@ async def players_list():
                     ROUND(AVG(blk)::numeric, 1) as bpg,
                     ROUND(AVG(fg3m)::numeric, 1) as fg3m,
                     ROUND(AVG(tov)::numeric, 1) as tov,
-                    SUM(fga) as fga_total,
-                    ROUND(AVG(fg3m)::numeric, 1) as fg3m_avg
+                    SUM(fga) as fga_total
                 FROM player_game_logs
                 WHERE season_id = '2025-26' AND minutes >= 5
                 GROUP BY player_name, team_abbr, position
@@ -497,10 +496,15 @@ async def players_list():
             cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
 
+    from decimal import Decimal
     players = []
     for row in rows:
         r = dict(zip(cols, row))
         r.pop("fga_total", None)
+        # Convert Decimal to float for JSON serialization
+        for k, v in r.items():
+            if isinstance(v, Decimal):
+                r[k] = float(v)
         players.append(r)
 
     return JSONResponse({"players": players, "total": len(players)})
