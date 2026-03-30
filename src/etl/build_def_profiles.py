@@ -58,15 +58,14 @@ def build_profiles(season_id="2025-26"):
             cur.execute(f"""
                 SELECT
                     pgl.opponent_abbr  AS def_team,
-                    pl.position,
+                    pgl.position,
                     pgl.pts, pgl.reb, pgl.ast, pgl.fg3m, pgl.stl, pgl.blk,
-                    COUNT(*) OVER (PARTITION BY pgl.opponent_abbr, pl.position) AS sample
+                    COUNT(*) OVER (PARTITION BY pgl.opponent_abbr, pgl.position) AS sample
                 FROM player_game_logs pgl
-                JOIN players pl ON LOWER(pl.full_name) = LOWER(pgl.player_name)
                 WHERE pgl.season_id   = %s
                   AND pgl.minutes     >= 15
-                  AND pl.position     IS NOT NULL
-                  AND pl.position     != ''
+                  AND pgl.position     IS NOT NULL
+                  AND pgl.position     != ''
                   AND pgl.opponent_abbr IS NOT NULL
             """, (season_id,))
             rows = cur.fetchall()
