@@ -197,18 +197,84 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
     setShotLoading(true)
     setShotError(null)
     try {
-      // Try backend proxy first
-      const r = await fetch(`${API}/props/shotchart?name=${encodeURIComponent(player.player_name)}&range=${range}`)
-      const d = await r.json()
-      if (d.error) {
-        setShotError(d.error)
-        setShotData(null)
-      } else {
-        setShotData(d)
+      const lastN = range === 'l10' ? 10 : range === 'l25' ? 25 : 0
+
+      // Step 1: Get NBA player ID from commonallplayers
+      const playersUrl = `https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2025-26`
+      const playersResp = await fetch(playersUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': 'https://www.nba.com/',
+          'Accept': 'application/json',
+          'x-nba-stats-origin': 'stats',
+          'x-nba-stats-token': 'true',
+        },
+      })
+      const playersData = await playersResp.json()
+      const pHeaders = playersData.resultSets[0].headers
+      const pRows    = playersData.resultSets[0].rowSet
+      const nameIdx  = pHeaders.indexOf('DISPLAY_FIRST_LAST')
+      const idIdx    = pHeaders.indexOf('PERSON_ID')
+      const nameLower = player.player_name.toLowerCase()
+      const playerRow = pRows.find((r: any[]) =>
+        r[nameIdx]?.toLowerCase() === nameLower ||
+        r[nameIdx]?.toLowerCase().includes(nameLower)
+      )
+      if (!playerRow) {
+        setShotError(`Player '${player.player_name}' not found in NBA Stats`)
+        setShotLoading(false)
+        return
       }
-    } catch {
-      setShotError('Shot chart unavailable')
-      setShotData(null)
+      const playerId = playerRow[idIdx]
+
+      // Step 2: Fetch shot chart
+      const shotUrl = `https://stats.nba.com/stats/shotchartdetail?PlayerID=${playerId}&Season=2025-26&SeasonType=Regular+Season&ContextMeasure=FGA&LeagueID=00&TeamID=0&GameID=&Outcome=&Location=&Month=0&SeasonSegment=&DateFrom=&DateTo=&OpponentTeamID=0&VsConference=&VsDivision=&Position=&RookieYear=&GameSegment=&Period=0&LastNGames=${lastN}&AheadBehind=&PointDiff=&RangeType=0&StartPeriod=0&EndPeriod=0&StartRange=0&EndRange=0`
+      const shotResp = await fetch(shotUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': 'https://www.nba.com/',
+          'Accept': 'application/json',
+          'x-nba-stats-origin': 'stats',
+          'x-nba-stats-token': 'true',
+        },
+      })
+      const shotData = await shotResp.json()
+      const sHeaders = shotData.resultSets[0].headers
+      const sRows    = shotData.resultSets[0].rowSet
+      const shots: Shot[] = sRows.map((r: any[]) => {
+        const d = Object.fromEntries(sHeaders.map((h: string, i: number) => [h, r[i]]))
+        return {
+          x:         d.LOC_X,
+          y:         d.LOC_Y,
+          made:      Boolean(d.SHOT_MADE_FLAG),
+          shot_type: d.SHOT_TYPE || '',
+          zone:      d.SHOT_ZONE_BASIC || '',
+          distance:  d.SHOT_DISTANCE || 0,
+          date:      d.GAME_DATE || '',
+        }
+      })
+      const made = shots.filter(s => s.made).length
+      setShotData({
+        player_name: player.player_name,
+        range,
+        total:  shots.length,
+        made,
+        fg_pct: shots.length > 0 ? Math.round(made / shots.length * 1000) / 10 : 0,
+        shots,
+      })
+    } catch (err: any) {
+      // NBA Stats CORS blocked — fall back to backend proxy
+      try {
+        const r = await fetch(`${API}/props/shotchart?name=${encodeURIComponent(player.player_name)}&range=${range}`)
+        const d = await r.json()
+        if (d.error) {
+          setShotError(`Shot chart unavailable: ${d.error}`)
+        } else {
+          setShotData(d)
+        }
+      } catch {
+        setShotError('Shot chart unavailable — NBA Stats API is rate limited')
+      }
     }
     setShotLoading(false)
   }, [player.player_name])

@@ -46,6 +46,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m src.etl.incremental --season 2025-26
+      - name: Backfill player game logs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.etl.backfill_player_logs
+      - name: Rebuild defensive profiles
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.etl.build_def_profiles
 
   props-board:
     runs-on: ubuntu-latest
