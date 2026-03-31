@@ -277,7 +277,8 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
       }
     }
     setShotLoading(false)
-  }, [player.player_name])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => { loadShots(shotRange) }, [shotRange])
 
@@ -420,7 +421,7 @@ export default function ProfilesPage() {
   }, [])
 
   const teams = useMemo(() =>
-    ['ALL', ...Array.from(new Set(players.map(p => p.team_abbr))).sort()],
+    ['ALL', ...players.map(p => p.team_abbr).filter((v, i, a) => a.indexOf(v) === i).sort()],
     [players]
   )
 
