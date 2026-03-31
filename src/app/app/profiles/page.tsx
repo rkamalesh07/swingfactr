@@ -279,8 +279,7 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
     setShotLoading(false)
   }, [player.player_name])
 
-  useEffect(() => { loadShots('season') }, [loadShots])
-  useEffect(() => { loadShots(shotRange) }, [shotRange, loadShots])
+  useEffect(() => { loadShots(shotRange) }, [shotRange])
 
   // Close on backdrop click
   const onBackdrop = (e: React.MouseEvent) => {
