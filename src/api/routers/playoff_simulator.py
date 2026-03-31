@@ -367,3 +367,329 @@ async def run_simulation(n_sims: int = Query(10000, le=1000000)):
         "west_standings": west_standings,
         "sos_avg": round(sos_avg, 2),
     })
+
+# ---------------------------------------------------------------------------
+# Live standings endpoint
+# ---------------------------------------------------------------------------
+
+@router.get("/standings")
+async def get_standings():
+    """
+    Real-time NBA standings from ESPN + our net ratings.
+    Returns current W-L, net rating, GB, and play-in/playoff status.
+    """
+    ratings, standings = get_ratings_and_standings()
+
+    # Fetch real standings from ESPN
+    espn_standings = {}
+    try:
+        async with httpx.AsyncClient(headers=HEADERS, timeout=10) as client:
+            r = await client.get(
+                f"{ESPN_BASE}/standings",
+                params={"season": "2026", "seasontype": "2"}
+            )
+            data = r.json()
+            for conf in data.get("children", []):
+                for div in conf.get("children", []):
+                    for entry in div.get("standings", {}).get("entries", []):
+                        abbr = normalize(entry.get("team", {}).get("abbreviation", ""))
+                        stats = {s["name"]: s["value"] for s in entry.get("stats", [])}
+                        espn_standings[abbr] = {
+                            "wins":   int(stats.get("wins", 0)),
+                            "losses": int(stats.get("losses", 0)),
+                            "gb":     float(stats.get("gamesBehind", 0)),
+                            "pct":    float(stats.get("winPercent", 0)),
+                            "streak": stats.get("streak", ""),
+                            "l10":    stats.get("Last Ten Games", ""),
+                        }
+    except Exception:
+        pass
+
+    def build_conf(teams):
+        result = []
+        for t in teams:
+            wl = espn_standings.get(t) or standings.get(t, {"wins": 0, "losses": 0})
+            wins   = wl.get("wins", 0)
+            losses = wl.get("losses", 0)
+            result.append({
+                "team":    t,
+                "wins":    wins,
+                "losses":  losses,
+                "pct":     round(wins / (wins + losses), 3) if (wins + losses) > 0 else 0,
+                "gb":      wl.get("gb", 0),
+                "net_rtg": round(ratings.get(t, 0), 1),
+                "streak":  wl.get("streak", ""),
+                "l10":     wl.get("l10", ""),
+            })
+        result.sort(key=lambda x: (-x["wins"], x["losses"]))
+        # Add seed + playoff status
+        for i, r in enumerate(result):
+            seed = i + 1
+            r["seed"] = seed
+            if seed <= 6:
+                r["status"] = "playoff"
+            elif seed <= 10:
+                r["status"] = "playin"
+            else:
+                r["status"] = "eliminated"
+        return result
+
+    return JSONResponse({
+        "as_of": date.today().isoformat(),
+        "east":  build_conf(list(EASTERN)),
+        "west":  build_conf(list(WESTERN)),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Live bracket endpoint
+# ---------------------------------------------------------------------------
+
+@router.get("/bracket")
+async def get_bracket():
+    """
+    Live playoff bracket from ESPN.
+    Returns completed series + in-progress series with game scores.
+    """
+    bracket = {"east": [], "west": [], "finals": None, "stage": "regular_season"}
+
+    try:
+        async with httpx.AsyncClient(headers=HEADERS, timeout=15) as client:
+            # Try ESPN bracket endpoint
+            r = await client.get(
+                f"https://site.api.espn.com/apis/v2/sports/basketball/nba/playoff-schedule",
+                params={"season": "2026"}
+            )
+            data = r.json()
+
+            series_list = []
+            for item in data.get("series", data.get("schedule", [])):
+                home = normalize(item.get("home", {}).get("abbreviation", ""))
+                away = normalize(item.get("away", {}).get("abbreviation", ""))
+                home_wins = item.get("home", {}).get("wins", 0)
+                away_wins = item.get("away", {}).get("wins", 0)
+                winner = ""
+                if home_wins == 4:
+                    winner = home
+                elif away_wins == 4:
+                    winner = away
+                round_n = item.get("round", 1)
+                conf = item.get("conference", "")
+
+                series_list.append({
+                    "round":      round_n,
+                    "conference": conf,
+                    "home":       home,
+                    "away":       away,
+                    "home_wins":  home_wins,
+                    "away_wins":  away_wins,
+                    "winner":     winner,
+                    "status":     "complete" if winner else "in_progress",
+                })
+
+            if series_list:
+                bracket["east"]  = [s for s in series_list if s["conference"] == "East"]
+                bracket["west"]  = [s for s in series_list if s["conference"] == "West"]
+                bracket["finals"]= next((s for s in series_list if s["conference"] == "Finals"), None)
+                max_round = max(s["round"] for s in series_list)
+                bracket["stage"] = ["first_round", "second_round", "conf_finals", "finals"][min(max_round - 1, 3)]
+    except Exception:
+        bracket["stage"] = "regular_season"
+
+    return JSONResponse(bracket)
+
+
+# ---------------------------------------------------------------------------
+# Simulate from current state
+# ---------------------------------------------------------------------------
+
+@router.get("/simulate-from-now")
+async def simulate_from_now(n_sims: int = Query(10000, le=500000)):
+    """
+    Simulate remaining playoffs (or full playoffs) from current state.
+    - Locks teams already eliminated
+    - Locks series results already decided
+    - For in-progress series, uses actual game scores as starting point
+    - If playoffs haven't started, simulates full playoffs from projected seeds
+    """
+    ratings, standings = get_ratings_and_standings()
+
+    # Fetch bracket state
+    bracket_data = {"east": [], "west": [], "finals": None, "stage": "regular_season"}
+    try:
+        async with httpx.AsyncClient(headers=HEADERS, timeout=15) as client:
+            r = await client.get(
+                f"https://site.api.espn.com/apis/v2/sports/basketball/nba/playoff-schedule",
+                params={"season": "2026"}
+            )
+            d = r.json()
+            bracket_data = d
+    except Exception:
+        pass
+
+    stage = bracket_data.get("stage", "regular_season")
+
+    # If playoffs haven't started, simulate remaining regular season first
+    if stage == "regular_season":
+        remaining = await fetch_remaining_schedule()
+        known = set(ratings.keys())
+        remaining = [g for g in remaining if g["home"] in known and g["away"] in known]
+    else:
+        remaining = []
+
+    champ_counts   = defaultdict(int)
+    finals_counts  = defaultdict(int)
+    cf_counts      = defaultdict(int)
+    playoff_counts = defaultdict(int)
+
+    random.seed(None)  # truly random for live sim
+
+    for _ in range(n_sims):
+        # Step 1: Simulate remaining regular season if needed
+        sim_wins = {t: standings[t]["wins"] for t in standings}
+        sim_losses = {t: standings[t]["losses"] for t in standings}
+
+        for g in remaining:
+            h, a = g["home"], g["away"]
+            p = win_prob(ratings.get(h, 0), ratings.get(a, 0))
+            if random.random() < p:
+                sim_wins[h] = sim_wins.get(h, 0) + 1
+                sim_losses[a] = sim_losses.get(a, 0) + 1
+            else:
+                sim_wins[a] = sim_wins.get(a, 0) + 1
+                sim_losses[h] = sim_losses.get(h, 0) + 1
+
+        # Step 2: Determine playoff seedings
+        def seed_conf(teams):
+            return sorted(
+                [(t, sim_wins.get(t, 0)) for t in teams if t in sim_wins],
+                key=lambda x: (-x[1], -ratings.get(x[0], 0))
+            )
+
+        e_seeds = [t for t, _ in seed_conf(EASTERN)]
+        w_seeds = [t for t, _ in seed_conf(WESTERN)]
+
+        e_playoff = apply_playin(e_seeds, ratings)
+        w_playoff = apply_playin(w_seeds, ratings)
+
+        if len(e_playoff) < 8 or len(w_playoff) < 8:
+            continue
+
+        for t in e_playoff + w_playoff:
+            playoff_counts[t] += 1
+
+        # Step 3: Simulate playoffs — locking completed series
+        def sim_series_from_state(team_a: str, team_b: str,
+                                   a_wins: int = 0, b_wins: int = 0) -> str:
+            """Simulate series with existing wins locked in."""
+            if a_wins == 4:
+                return team_a
+            if b_wins == 4:
+                return team_b
+            # team_a is higher seed (has home court first two games)
+            home_games = {1, 2, 5, 7}
+            game = a_wins + b_wins
+            while a_wins < 4 and b_wins < 4:
+                game += 1
+                if game in home_games:
+                    p = win_prob(ratings.get(team_a, 0), ratings.get(team_b, 0))
+                else:
+                    p = win_prob(ratings.get(team_b, 0), ratings.get(team_a, 0))
+                    p = 1 - p
+                if random.random() < p:
+                    a_wins += 1
+                else:
+                    b_wins += 1
+            return team_a if a_wins >= 4 else team_b
+
+        def run_bracket_half(seeds: list, existing_series: list) -> tuple:
+            """Run one conference bracket, respecting locked results."""
+            # Build lookup of locked series by participants
+            locked = {}
+            for s in existing_series:
+                key = frozenset([s["home"], s["away"]])
+                locked[key] = s
+
+            def get_series_state(a, b):
+                key = frozenset([a, b])
+                s = locked.get(key, {})
+                return s.get("home_wins", 0) if s.get("home") == a else s.get("away_wins", 0), \
+                       s.get("away_wins", 0) if s.get("home") == a else s.get("home_wins", 0)
+
+            r1_winners = []
+            for i in range(0, 8, 2):
+                if i + 1 >= len(seeds):
+                    break
+                a, b = seeds[i], seeds[i + 1]
+                aw, bw = get_series_state(a, b)
+                winner = sim_series_from_state(a, b, aw, bw)
+                r1_winners.append(winner)
+
+            r2_winners = []
+            for i in range(0, len(r1_winners), 2):
+                if i + 1 >= len(r1_winners):
+                    break
+                a, b = r1_winners[i], r1_winners[i + 1]
+                aw, bw = get_series_state(a, b)
+                winner = sim_series_from_state(a, b, aw, bw)
+                r2_winners.append(winner)
+
+            conf_finals_teams = set(r1_winners + r2_winners)
+            cf_a = r2_winners[0] if len(r2_winners) > 0 else seeds[0]
+            cf_b = r2_winners[1] if len(r2_winners) > 1 else seeds[1]
+            aw, bw = get_series_state(cf_a, cf_b)
+            conf_champ = sim_series_from_state(cf_a, cf_b, aw, bw)
+            return conf_champ, conf_finals_teams
+
+        east_series = bracket_data.get("east", [])
+        west_series = bracket_data.get("west", [])
+
+        e_champ, e_cf = run_bracket_half(e_playoff, east_series)
+        w_champ, w_cf = run_bracket_half(w_playoff, west_series)
+
+        for t in e_cf | w_cf:
+            cf_counts[t] += 1
+        finals_counts[e_champ] += 1
+        finals_counts[w_champ] += 1
+
+        # Finals
+        finals = bracket_data.get("finals") or {}
+        f_home = normalize(finals.get("home", e_champ))
+        f_away = normalize(finals.get("away", w_champ))
+        fhw = finals.get("home_wins", 0)
+        faw = finals.get("away_wins", 0)
+        p_east = win_prob(ratings.get(e_champ, 0), ratings.get(w_champ, 0), home_adv=0)
+        champion = e_champ if random.random() < p_east else w_champ
+        champ_counts[champion] += 1
+
+    # Build results
+    results = []
+    for team in sorted(standings.keys()):
+        wl = standings[team]
+        conf = "East" if team in EASTERN else "West"
+        results.append({
+            "team":          team,
+            "conference":    conf,
+            "current_wins":  wl["wins"],
+            "current_losses":wl["losses"],
+            "net_rtg":       round(ratings.get(team, 0), 1),
+            "playoff_pct":   round(playoff_counts[team] / n_sims * 100, 1),
+            "conf_finals_pct": round(cf_counts[team] / n_sims * 100, 1),
+            "finals_pct":    round(finals_counts[team] / n_sims * 100, 1),
+            "champion_pct":  round(champ_counts[team] / n_sims * 100, 1),
+        })
+
+    results.sort(key=lambda x: -x["champion_pct"])
+
+    return JSONResponse({
+        "n_sims":   n_sims,
+        "stage":    stage,
+        "as_of":    date.today().isoformat(),
+        "results":  results,
+        "east":     sorted([r for r in results if r["conference"] == "East"],
+                           key=lambda x: -x["champion_pct"]),
+        "west":     sorted([r for r in results if r["conference"] == "West"],
+                           key=lambda x: -x["champion_pct"]),
+        "top_champions": [{"team": r["team"], "pct": r["champion_pct"]}
+                         for r in results[:5] if r["champion_pct"] > 0],
+    })
