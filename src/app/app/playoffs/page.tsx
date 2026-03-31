@@ -260,6 +260,74 @@ function SimTable({ results, title, color }: {
   )
 }
 
+
+// ─── Chart components ─────────────────────────────────────────────────────────
+
+function ChampBar({ results }: { results: SimResult[] }) {
+  const top = results.filter(r => r.champion_pct >= 0.5).slice(0, 12)
+  const max = Math.max(...top.map(r => r.champion_pct), 1)
+  return (
+    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#0a0a0a', borderRadius: '4px' }}>
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#fbbf24', letterSpacing: '0.08em', marginBottom: '16px' }}>
+        🏆 CHAMPIONSHIP PROBABILITY
+      </div>
+      {top.map((r, i) => (
+        <div key={r.team} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', width: '14px', textAlign: 'right' }}>{i + 1}</span>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0', width: '34px' }}>{r.team}</span>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: r.conference === 'East' ? '#60a5fa' : '#f87171', width: '26px' }}>{r.conference[0]}</span>
+          <div style={{ flex: 1, height: '8px', background: '#111', overflow: 'hidden', borderRadius: '1px' }}>
+            <div style={{
+              height: '100%', width: `${(r.champion_pct / max) * 100}%`,
+              background: i === 0 ? '#fbbf24' : i === 1 ? '#9ca3af' : i === 2 ? '#92400e' : '#2a2a2a',
+              transition: 'width 0.5s ease', borderRadius: '1px',
+            }} />
+          </div>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: i < 3 ? 600 : 400, color: i === 0 ? '#fbbf24' : '#666', width: '42px', textAlign: 'right' }}>
+            {r.champion_pct.toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function BubbleChart({ results }: { results: SimResult[] }) {
+  const w = 520, h = 280, pad = { l: 44, r: 16, t: 16, b: 32 }
+  const rtgs = results.map(r => r.net_rtg)
+  const minR = Math.min(...rtgs) - 1, maxR = Math.max(...rtgs) + 1
+  const toX = (r: number) => pad.l + ((r - minR) / (maxR - minR)) * (w - pad.l - pad.r)
+  const toY = (p: number) => pad.t + ((100 - p) / 100) * (h - pad.t - pad.b)
+  const toSize = (c: number) => Math.max(3, Math.sqrt(c + 0.1) * 3.2)
+  return (
+    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#0a0a0a', borderRadius: '4px' }}>
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>
+        NET RATING vs PLAYOFF ODDS · bubble size = championship %
+      </div>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`}>
+        {[0, 25, 50, 75, 100].map(p => (
+          <g key={p}>
+            <line x1={pad.l} y1={toY(p)} x2={w - pad.r} y2={toY(p)} stroke="#111" strokeWidth="1" />
+            <text x={pad.l - 4} y={toY(p) + 4} textAnchor="end" fontSize="8" fill="#2a2a2a" fontFamily="monospace">{p}%</text>
+          </g>
+        ))}
+        <line x1={toX(0)} y1={pad.t} x2={toX(0)} y2={h - pad.b} stroke="#1a1a1a" strokeDasharray="3,3" strokeWidth="1" />
+        {results.map(r => {
+          const x = toX(r.net_rtg), y = toY(r.playoff_pct), s = toSize(r.champion_pct)
+          const c = r.conference === 'East' ? '#60a5fa' : '#f87171'
+          return (
+            <g key={r.team}>
+              <circle cx={x} cy={y} r={s} fill={c} fillOpacity={0.25} stroke={c} strokeWidth="1" />
+              <text x={x} y={y - s - 2} textAnchor="middle" fontSize="7" fill="#555" fontFamily="monospace">{r.team}</text>
+            </g>
+          )
+        })}
+        <text x={w / 2} y={h - 2} textAnchor="middle" fontSize="8" fill="#333" fontFamily="monospace">Net Rating</text>
+      </svg>
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type Tab = 'standings' | 'bracket' | 'simulator'
@@ -271,6 +339,7 @@ export default function PlayoffsPage() {
   const [simResult,   setSimResult]   = useState<{results: SimResult[]; east: SimResult[]; west: SimResult[]; stage: string; top_champions: any[]; n_sims: number; as_of: string} | null>(null)
   const [simLoading,  setSimLoading]  = useState(false)
   const [nSims,       setNSims]       = useState(10000)
+  const [simView,     setSimView]     = useState<'table'|'charts'>('table')
   const [loadingStandings, setLoadingStandings] = useState(false)
   const [loadingBracket,   setLoadingBracket]   = useState(false)
 
@@ -458,7 +527,6 @@ export default function PlayoffsPage() {
                 { label: '1K',   value: 1000 },
                 { label: '10K',  value: 10000 },
                 { label: '100K', value: 100000 },
-                { label: '1M',   value: 1000000 },
               ].map(o => (
                 <button key={o.value} onClick={() => setNSims(o.value)} style={{
                   padding: '6px 14px', background: nSims === o.value ? '#111' : 'none',
@@ -479,7 +547,7 @@ export default function PlayoffsPage() {
               </button>
               {simResult && (
                 <div style={{ fontSize: '10px', color: '#2a2a2a' }}>
-                  {(simResult.n_sims || 0).toLocaleString()} sims ·{' '}
+                  {simResult.n_sims.toLocaleString()} sims ·{' '}
                   {stageLabel(simResult.stage)} ·{' '}
                   as of {simResult.as_of}
                 </div>
@@ -532,13 +600,33 @@ export default function PlayoffsPage() {
                   </div>
                 )}
 
-                {/* Sim tables */}
-                <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
-                  <SimTable results={simResult.east} title="EASTERN CONFERENCE"
-                    color={CONF_COLORS.East} />
-                  <SimTable results={simResult.west} title="WESTERN CONFERENCE"
-                    color={CONF_COLORS.West} />
+                {/* View toggle */}
+                <div style={{ display: 'flex', gap: '2px', marginBottom: '20px' }}>
+                  {(['table', 'charts'] as const).map(v => (
+                    <button key={v} onClick={() => setSimView(v)} style={{
+                      padding: '6px 16px', background: simView === v ? '#111' : 'none',
+                      border: `1px solid ${simView === v ? '#333' : '#111'}`,
+                      borderRadius: '3px', cursor: 'pointer',
+                      fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
+                      color: simView === v ? '#e0e0e0' : '#333',
+                      letterSpacing: '0.08em',
+                    }}>{v === 'table' ? '📋 TABLE' : '📊 CHARTS'}</button>
+                  ))}
                 </div>
+                {simView === 'charts' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                    <ChampBar results={simResult.results} />
+                    <BubbleChart results={simResult.results} />
+                  </div>
+                )}
+                {simView === 'table' && (
+                  <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
+                    <SimTable results={simResult.east} title="EASTERN CONFERENCE"
+                      color={CONF_COLORS.East} />
+                    <SimTable results={simResult.west} title="WESTERN CONFERENCE"
+                      color={CONF_COLORS.West} />
+                  </div>
+                )}
               </>
             )}
           </div>
