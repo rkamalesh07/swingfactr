@@ -458,6 +458,7 @@ export default function PlayoffsPage() {
                 { label: '1K',   value: 1000 },
                 { label: '10K',  value: 10000 },
                 { label: '100K', value: 100000 },
+                { label: '1M',   value: 1000000 },
               ].map(o => (
                 <button key={o.value} onClick={() => setNSims(o.value)} style={{
                   padding: '6px 14px', background: nSims === o.value ? '#111' : 'none',
