@@ -230,7 +230,6 @@ export default function Home() {
           Bayesian shrinkage, and positional opponent defense — plus lineup chemistry,
           win probability, and fatigue from every 2025–26 NBA game.
         </p>
-        <PlayerSearch />
       </div>
 
       {/* Live stats bar */}
