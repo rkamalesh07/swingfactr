@@ -504,7 +504,7 @@ async def get_bracket():
 # ---------------------------------------------------------------------------
 
 @router.get("/simulate-from-now")
-async def simulate_from_now(n_sims: int = Query(10000, le=500000)):
+async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
     """
     Simulate remaining playoffs (or full playoffs) from current state.
     - Locks teams already eliminated

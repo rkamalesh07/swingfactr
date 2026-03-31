@@ -479,7 +479,7 @@ export default function PlayoffsPage() {
               </button>
               {simResult && (
                 <div style={{ fontSize: '10px', color: '#2a2a2a' }}>
-                  {simResult.n_sims.toLocaleString()} sims ·{' '}
+                  {(simResult.n_sims || 0).toLocaleString()} sims ·{' '}
                   {stageLabel(simResult.stage)} ·{' '}
                   as of {simResult.as_of}
                 </div>
