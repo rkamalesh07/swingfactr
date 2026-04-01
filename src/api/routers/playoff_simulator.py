@@ -165,16 +165,34 @@ def get_ratings_and_standings():
         for margin, gdate in d["games"]:
             w = exp_weight(gdate, today)
             tw += w
-            twm += w * margin
-        ratings[abbr] = twm / tw if tw > 0 else 0.0
-        standings[abbr] = {"wins": d["wins"], "losses": d["losses"]}
+            # Cap margin at ±20 to prevent blowouts from distorting ratings
+            twm += w * max(-20, min(20, margin))
+        raw_rtg = twm / tw if tw > 0 else 0.0
+
+        wins   = d["wins"]
+        losses = d["losses"]
+        gp     = wins + losses
+        win_pct = wins / gp if gp > 0 else 0.5
+
+        # Convert win% to a point-differential scale
+        # 0.700 wpct ≈ +7 pts, 0.500 ≈ 0, 0.300 ≈ -7 pts
+        win_rtg = (win_pct - 0.5) * 20.0
+
+        # Blend: 60% net rating, 40% win% signal
+        # This prevents teams with recent easy-schedule blowouts from spiking
+        blended = 0.60 * raw_rtg + 0.40 * win_rtg
+
+        # Sample size shrinkage: regress toward 0 for small samples
+        shrink = min(1.0, gp / 30.0)
+        ratings[abbr] = round(blended * shrink, 2)
+        standings[abbr] = {"wins": wins, "losses": losses, "raw_rtg": round(raw_rtg, 2)}
 
     # Ensure all 30 teams exist
     for t in EASTERN | WESTERN:
         if t not in ratings:
             ratings[t] = 0.0
         if t not in standings:
-            standings[t] = {"wins": 0, "losses": 0}
+            standings[t] = {"wins": 0, "losses": 0, "raw_rtg": 0.0}
 
     return ratings, standings
 
