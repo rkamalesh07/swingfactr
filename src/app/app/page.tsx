@@ -1,338 +1,582 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const MONO = 'IBM Plex Mono, monospace'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface StoryCard {
+  type:     'hot' | 'cold' | 'breakout' | 'matchup' | 'prop_edge'
+  headline: string
+  subline:  string
+  player:   string
+  team:     string
+  stat:     string
+  value:    string
+  delta?:   string
+  tag:      string
+  tagColor: string
+  link:     string
+}
 
 interface BoardStats {
-  total:         number
-  strong_overs:  number
-  lean_overs:    number
+  total: number
+  strong_overs: number
   strong_unders: number
-  lean_unders:   number
-  players:       number
+  players: number
   last_computed: string | null
 }
 
-function useLiveStats(refreshMs = 60000) {
-  const [stats, setStats] = useState<BoardStats | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+// ─── Story generation ─────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const fetch_ = () =>
-      fetch(`${API}/props/board/stats`)
-        .then(r => r.json())
-        .then(d => { setStats(d); setLastUpdated(new Date()) })
-        .catch(() => {})
+function generateStreakStories(data: any): StoryCard[] {
+  const stories: StoryCard[] = []
+  if (!data) return stories
 
-    fetch_()
-    const id = setInterval(fetch_, refreshMs)
-    return () => clearInterval(id)
-  }, [refreshMs])
+  const STAT_LABEL: Record<string,string> = {
+    pts:'PPG', reb:'RPG', ast:'APG', fg3m:'3PM', stl:'SPG', blk:'BPG'
+  }
 
-  return { stats, lastUpdated }
+  for (const p of (data.hot || []).slice(0, 6)) {
+    const label = STAT_LABEL[p.stat] || p.stat.toUpperCase()
+    const pct = Math.abs(p.pct_change)
+    const z = p.z_score
+
+    let headline = ''
+    if (p.stat === 'pts' && p.l5_avg >= 30) {
+      headline = `${p.player_name} is going off — averaging ${p.l5_avg} PPG over his last 5`
+    } else if (pct >= 40) {
+      headline = `${p.player_name} has been a different player lately`
+    } else if (z >= 2.5) {
+      headline = `${p.player_name}'s ${label} is at an all-time season high`
+    } else {
+      headline = `${p.player_name} is heating up in the ${label} column`
+    }
+
+    stories.push({
+      type: 'hot',
+      headline,
+      subline: `${p.l5_avg} ${label} over L5 vs ${p.season_avg} season avg · ${pct.toFixed(0)}% above normal`,
+      player:   p.player_name,
+      team:     p.team,
+      stat:     p.stat,
+      value:    String(p.l5_avg),
+      delta:    `+${pct.toFixed(0)}%`,
+      tag:      'ON FIRE',
+      tagColor: '#f97316',
+      link:     `/player/${p.player_name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}`,
+    })
+  }
+
+  for (const p of (data.cold || []).slice(0, 4)) {
+    const label = STAT_LABEL[p.stat] || p.stat.toUpperCase()
+    const pct = Math.abs(p.pct_change)
+
+    stories.push({
+      type: 'cold',
+      headline: `${p.player_name} is struggling — down ${pct.toFixed(0)}% in ${label} over L5`,
+      subline: `${p.l5_avg} ${label} over L5 vs ${p.season_avg} season avg · z=${p.z_score}`,
+      player:   p.player_name,
+      team:     p.team,
+      stat:     p.stat,
+      value:    String(p.l5_avg),
+      delta:    `-${pct.toFixed(0)}%`,
+      tag:      'ICE COLD',
+      tagColor: '#60a5fa',
+      link:     `/player/${p.player_name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}`,
+    })
+  }
+
+  return stories
 }
 
-function Ticker({ value, label, color = '#4ade80' }: { value: string | number; label: string; color?: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '20px 24px', background: '#0a0a0a',
-      border: '1px solid #111', borderRadius: '4px', minWidth: '100px' }}>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '28px',
-        fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-        color: '#333', letterSpacing: '0.12em', marginTop: '6px' }}>{label}</span>
-    </div>
-  )
+function generateBreakoutStories(data: any): StoryCard[] {
+  if (!data?.results) return []
+  return data.results.slice(0, 5).map((p: any) => {
+    const ptsDiff = (p.pts_l5 - p.pts_season).toFixed(1)
+    const minDiff = (p.min_l10 - p.min_season).toFixed(1)
+    const positive = parseFloat(ptsDiff) > 0
+
+    return {
+      type: 'breakout',
+      headline: `${p.player_name} is getting more opportunities — and making the most of them`,
+      subline: `${p.pts_l5} PPG over L5 (${positive ? '+' : ''}${ptsDiff} vs season) · ${parseFloat(minDiff) > 0 ? '+' : ''}${minDiff} min/game recently`,
+      player:   p.player_name,
+      team:     p.team,
+      stat:     'pts',
+      value:    String(p.pts_l5),
+      delta:    `${positive ? '+' : ''}${ptsDiff} pts`,
+      tag:      'BREAKOUT',
+      tagColor: '#a78bfa',
+      link:     `/insights`,
+    }
+  })
 }
 
-function PlayerSearch() {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-    const debounce = useRef<ReturnType<typeof setTimeout>>()
+function generatePropStories(data: any): StoryCard[] {
+  if (!data?.results) return []
+  const strong = data.results
+    .filter((r: any) => r.score_label === 'Strong Over' || r.score_label === 'Strong Under')
+    .slice(0, 4)
 
-  useEffect(() => {
-    if (!query || query.length < 2) { setResults([]); return }
-    clearTimeout(debounce.current)
-    debounce.current = setTimeout(() => {
-      setLoading(true)
-      fetch(`${API}/props/board?search=${encodeURIComponent(query)}`)
-        .then(r => r.json())
-        .then(d => {
-          const names = (d.results || []).map((r: any) => r.player_name as string).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
-          setResults(names.slice(0, 8))
-        })
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false))
-    }, 300)
-  }, [query])
+  return strong.map((r: any) => {
+    const isOver = r.pick_side === 'over'
+    const STAT: Record<string,string> = {pts:'points',reb:'rebounds',ast:'assists',fg3m:'threes',stl:'steals',blk:'blocks'}
+    const statWord = STAT[r.stat] || r.stat
 
-  const go = (name: string) => {
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-    window.location.href = `/player/${slug}`
+    return {
+      type: isOver ? 'hot' : 'cold',
+      headline: isOver
+        ? `Our model likes ${r.player_name} to go over ${r.line} ${statWord} tonight`
+        : `Our model flags ${r.player_name} under ${r.line} ${statWord} — edge is real`,
+      subline: `L10 avg: ${r.avg_last10} · Line: ${r.line} · Edge: ${r.edge > 0 ? '+' : ''}${r.edge} · ${r.score_label}`,
+      player:   r.player_name,
+      team:     r.team,
+      stat:     r.stat,
+      value:    String(r.line),
+      delta:    `${r.edge > 0 ? '+' : ''}${r.edge}`,
+      tag:      r.score_label.toUpperCase(),
+      tagColor: isOver ? '#4ade80' : '#f87171',
+      link:     `/props`,
+    }
+  })
+}
+
+// ─── Carousel card ────────────────────────────────────────────────────────────
+
+function StoryCardEl({ card, active }: { card: StoryCard; active: boolean }) {
+  const typeIcon: Record<string, string> = {
+    hot: '🔥', cold: '🧊', breakout: '⚡', matchup: '⚔️', prop_edge: '📊'
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: '480px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px',
-        background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '4px',
-        padding: '10px 14px' }}>
-        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-          color: '#2a2a2a' }}>SEARCH</span>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && results[0]) go(results[0]) }}
-          placeholder="player name..."
-          style={{ flex: 1, background: 'none', border: 'none', outline: 'none',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#e0e0e0' }}
-        />
-        {loading && <span style={{ fontFamily: 'IBM Plex Mono, monospace',
-          fontSize: '9px', color: '#333' }}>...</span>}
-      </div>
-      {results.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-          background: '#0d0d0d', border: '1px solid #1a1a1a', borderTop: 'none',
-          borderRadius: '0 0 4px 4px' }}>
-          {results.map(name => (
-            <button key={name} onClick={() => go(name)} style={{
-              display: 'block', width: '100%', textAlign: 'left',
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '10px 14px', fontFamily: 'IBM Plex Mono, monospace',
-              fontSize: '12px', color: '#888', borderBottom: '1px solid #111',
-              transition: 'color 0.1s, background 0.1s',
-            }}
-            onMouseEnter={e => { const el = e.currentTarget; el.style.color = '#4ade80'; el.style.background = '#4ade8008' }}
-            onMouseLeave={e => { const el = e.currentTarget; el.style.color = '#888'; el.style.background = 'none' }}>
-              {name}
-            </button>
-          ))}
+    <div style={{
+      position: 'absolute', inset: 0,
+      opacity: active ? 1 : 0,
+      transform: active ? 'translateY(0)' : 'translateY(8px)',
+      transition: 'opacity 0.5s ease, transform 0.5s ease',
+      pointerEvents: active ? 'auto' : 'none',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      padding: '32px 40px',
+    }}>
+      {/* Tag */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{
+          fontFamily: MONO, fontSize: '9px', letterSpacing: '0.18em',
+          color: card.tagColor, padding: '4px 10px',
+          border: `1px solid ${card.tagColor}40`,
+          borderRadius: '2px', background: `${card.tagColor}10`,
+        }}>{card.tag}</div>
+        <div style={{ fontFamily: MONO, fontSize: '9px', color: '#333', letterSpacing: '0.1em' }}>
+          {card.team}
         </div>
-      )}
+      </div>
+
+      {/* Main content */}
+      <div>
+        {/* Big stat */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '16px' }}>
+          <span style={{
+            fontFamily: MONO, fontSize: '64px', fontWeight: 700,
+            color: card.tagColor, lineHeight: 1, letterSpacing: '-0.03em',
+          }}>{card.value}</span>
+          {card.delta && (
+            <span style={{
+              fontFamily: MONO, fontSize: '18px', fontWeight: 600,
+              color: card.type === 'cold' ? '#60a5fa' : '#4ade80',
+            }}>{card.delta}</span>
+          )}
+        </div>
+
+        {/* Headline */}
+        <div style={{
+          fontSize: '22px', fontWeight: 700, color: '#e0e0e0',
+          lineHeight: 1.3, marginBottom: '10px', maxWidth: '600px',
+          fontFamily: MONO, letterSpacing: '-0.01em',
+        }}>{card.headline}</div>
+
+        {/* Subline */}
+        <div style={{
+          fontFamily: MONO, fontSize: '11px', color: '#444', lineHeight: 1.6,
+          maxWidth: '500px',
+        }}>{card.subline}</div>
+      </div>
+
+      {/* CTA */}
+      <Link href={card.link} style={{
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        fontFamily: MONO, fontSize: '11px', color: card.tagColor,
+        textDecoration: 'none', letterSpacing: '0.08em',
+        borderBottom: `1px solid ${card.tagColor}40`, paddingBottom: '2px',
+        width: 'fit-content', transition: 'color 0.2s',
+      }}>
+        EXPLORE →
+      </Link>
     </div>
   )
 }
 
-const MODULES = [
-  {
-    href: '/props',
-    label: 'Props Board',
-    tag: 'PrizePicks · Live ETL · 3× Daily',
-    desc: 'Distribution-based player prop predictions with Bayesian shrinkage, positional opponent defense, and injury-adjusted usage boosts.',
-    stat: null, statLabel: 'props today', statKey: 'total',
-    accent: '#4ade80',
-  },
-  {
-    href: '/methodology',
-    label: 'Model Methodology',
-    tag: 'v14 · Normal CDF · Platt Scaling',
-    desc: 'Full technical documentation of the prediction model — formulas, data sources, calibration logic, and known limitations.',
-    stat: '6', statLabel: 'model steps',
-    accent: '#60a5fa',
-  },
-  {
-    href: '/games',
-    label: 'Game Win Curves',
-    tag: 'Random Walk · Per-play',
-    desc: 'Per-play win probability curves for every completed game. Pre-game projections for upcoming matchups.',
-    stat: '1,100+', statLabel: 'games tracked',
-    accent: '#f59e0b',
-  },
-  {
-    href: '/teams',
-    label: 'Team Rankings',
-    tag: 'Net Rating · 5-man Stints',
-    desc: 'All 30 teams ranked by net rating. Best and worst 5-man lineups by net points per 100 possessions.',
-    stat: '30', statLabel: 'teams ranked',
-    accent: '#a78bfa',
-  },
-  {
-    href: '/rapm',
-    label: 'RAPM',
-    tag: 'Ridge Regression · α=2000',
-    desc: 'Regularized Adjusted Plus-Minus — points added per 100 possessions controlling for teammates and opponents.',
-    stat: '534', statLabel: 'players rated',
-    accent: '#fb923c',
-  },
-  {
-    href: '/players',
-    label: 'Player Ratings',
-    tag: 'Net Rating · On/Off',
-    desc: 'On-court net rating for every player with 50+ minutes. Sortable by offense, defense, and net impact.',
-    stat: '410K', statLabel: 'plays analyzed',
-    accent: '#34d399',
-  },
-  {
-    href: '/clutch',
-    label: 'Clutch Performance',
-    tag: 'Last 5 min · ±5 pts',
-    desc: 'Net ratings in clutch situations only — Q4 within 5 points. Separates closers from aggregate noise.',
-    stat: 'Q4', statLabel: 'crunch time only',
-    accent: '#f87171',
-  },
-  {
-    href: '/fatigue',
-    label: 'Fatigue & Travel',
-    tag: 'OLS Regression · R²=0.029',
-    desc: 'Quantified effect of back-to-backs, travel distance, altitude, and timezone changes on scoring margin.',
-    stat: '8', statLabel: 'fatigue factors',
-    accent: '#fbbf24',
-  },
-  {
-    href: '/lineups',
-    label: 'Lineup Explorer',
-    tag: 'Play-by-play · 5-man units',
-    desc: 'Browse every 5-man lineup with net rating, possessions, and minutes. Filter by team.',
-    stat: '23K', statLabel: 'stints tracked',
-    accent: '#818cf8',
-  },
-]
+// ─── Carousel ─────────────────────────────────────────────────────────────────
 
-function timeAgo(date: Date): string {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (secs < 60) return `${secs}s ago`
-  if (secs < 3600) return `${Math.floor(secs/60)}m ago`
-  return `${Math.floor(secs/3600)}h ago`
+function NewsCarousel({ stories }: { stories: StoryCard[] }) {
+  const [idx, setIdx]       = useState(0)
+  const [paused, setPaused] = useState(false)
+  const timer = useRef<ReturnType<typeof setInterval>>()
+
+  const next = useCallback(() => setIdx(i => (i + 1) % stories.length), [stories.length])
+  const prev = () => setIdx(i => (i - 1 + stories.length) % stories.length)
+
+  useEffect(() => {
+    if (paused || stories.length === 0) return
+    timer.current = setInterval(next, 6000)
+    return () => clearInterval(timer.current)
+  }, [paused, next, stories.length])
+
+  if (stories.length === 0) return (
+    <div style={{ height: '320px', background: '#0a0a0a', border: '1px solid #111',
+      borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: MONO, fontSize: '11px', color: '#2a2a2a' }}>
+      Loading stories...
+    </div>
+  )
+
+  const card = stories[idx]
+
+  return (
+    <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      style={{ position: 'relative' }}>
+
+      {/* Main card */}
+      <div style={{
+        position: 'relative', height: '320px',
+        background: '#0a0a0a', border: '1px solid #111',
+        borderRadius: '6px', overflow: 'hidden',
+      }}>
+        {/* Accent gradient */}
+        <div style={{
+          position: 'absolute', top: 0, right: 0, width: '300px', height: '100%',
+          background: `radial-gradient(ellipse at top right, ${card.tagColor}08 0%, transparent 70%)`,
+          pointerEvents: 'none',
+        }} />
+        {/* Vertical accent bar */}
+        <div style={{
+          position: 'absolute', left: 0, top: '20%', bottom: '20%',
+          width: '2px', background: card.tagColor, opacity: 0.6,
+          borderRadius: '1px',
+        }} />
+
+        {stories.map((s, i) => <StoryCardEl key={i} card={s} active={i === idx} />)}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px',
+        marginTop: '16px', padding: '0 4px' }}>
+
+        {/* Prev / Next */}
+        <button onClick={prev} style={{
+          background: 'none', border: '1px solid #1a1a1a', borderRadius: '3px',
+          padding: '4px 10px', cursor: 'pointer', fontFamily: MONO, fontSize: '11px',
+          color: '#333', transition: 'color 0.15s, border-color 0.15s',
+        }}>←</button>
+        <button onClick={next} style={{
+          background: 'none', border: '1px solid #1a1a1a', borderRadius: '3px',
+          padding: '4px 10px', cursor: 'pointer', fontFamily: MONO, fontSize: '11px',
+          color: '#333',
+        }}>→</button>
+
+        {/* Dots */}
+        <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
+          {stories.map((s, i) => (
+            <button key={i} onClick={() => setIdx(i)} style={{
+              width: i === idx ? '24px' : '6px', height: '6px',
+              background: i === idx ? s.tagColor : '#1a1a1a',
+              border: 'none', borderRadius: '3px', cursor: 'pointer',
+              transition: 'width 0.3s ease, background 0.3s ease',
+              padding: 0,
+            }} />
+          ))}
+        </div>
+
+        {/* Story count */}
+        <span style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+          letterSpacing: '0.1em' }}>
+          {String(idx + 1).padStart(2,'0')} / {String(stories.length).padStart(2,'0')}
+        </span>
+
+        {/* Auto-play indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{
+            width: '5px', height: '5px', borderRadius: '50%',
+            background: paused ? '#2a2a2a' : '#4ade80',
+            boxShadow: paused ? 'none' : '0 0 6px #4ade80',
+            transition: 'all 0.3s',
+          }} />
+          <span style={{ fontFamily: MONO, fontSize: '8px', color: '#2a2a2a' }}>
+            {paused ? 'PAUSED' : 'LIVE'}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-export default function Home() {
-  const { stats, lastUpdated } = useLiveStats(60000)
-  const [tick, setTick] = useState(0)
+// ─── Quick nav modules ────────────────────────────────────────────────────────
 
-  // Force re-render every 5s to update "X ago" label
+const MODULES = [
+  { label: 'Props Board',   sub: 'Today\'s picks',   href: '/props',       color: '#4ade80' },
+  { label: 'Insights',      sub: 'Streaks + Breakouts', href: '/insights',  color: '#a78bfa' },
+  { label: 'Playoffs',      sub: 'Simulate the race', href: '/playoffs',   color: '#fbbf24' },
+  { label: 'Player Profiles', sub: '574 players',    href: '/profiles',    color: '#60a5fa' },
+  { label: 'Team Rankings', sub: 'Net rating',        href: '/players',    color: '#f97316' },
+  { label: 'Live Games',    sub: 'Win probability',   href: '/live',       color: '#f87171' },
+]
+
+function QuickNav() {
+  const [hovered, setHovered] = useState<number | null>(null)
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+      {MODULES.map((m, i) => (
+        <Link key={m.href} href={m.href} style={{ textDecoration: 'none' }}>
+          <div
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              padding: '16px 18px',
+              background: hovered === i ? '#0d0d0d' : '#0a0a0a',
+              border: `1px solid ${hovered === i ? m.color + '30' : '#111'}`,
+              borderRadius: '4px', cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}>
+            <div style={{ fontFamily: MONO, fontSize: '12px', fontWeight: 700,
+              color: hovered === i ? m.color : '#888', marginBottom: '4px',
+              transition: 'color 0.15s' }}>
+              {m.label}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+              letterSpacing: '0.06em' }}>{m.sub}</div>
+          </div>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+// ─── Live ticker strip ────────────────────────────────────────────────────────
+
+function LiveStrip({ stats }: { stats: BoardStats | null }) {
+  if (!stats) return null
+  const items = [
+    `${stats.total} props today`,
+    `${stats.strong_overs} strong overs`,
+    `${stats.strong_unders} strong unders`,
+    `${stats.players} players tracked`,
+    `ETL live · 3x daily`,
+    `Model v14 · Bayesian shrinkage`,
+    `2025–26 NBA season`,
+  ]
+  const repeated = [...items, ...items, ...items]
+
+  return (
+    <div style={{
+      overflow: 'hidden', borderTop: '1px solid #0f0f0f',
+      borderBottom: '1px solid #0f0f0f', padding: '8px 0',
+      background: '#080808',
+    }}>
+      <div style={{
+        display: 'flex', gap: '48px', whiteSpace: 'nowrap',
+        animation: 'scroll-left 30s linear infinite',
+      }}>
+        {repeated.map((item, i) => (
+          <span key={i} style={{ fontFamily: MONO, fontSize: '9px',
+            color: '#2a2a2a', letterSpacing: '0.12em', flexShrink: 0 }}>
+            {i % items.length === 0 ? <span style={{ color: '#4ade80', marginRight: '48px' }}>●</span> : null}
+            {item.toUpperCase()}
+          </span>
+        ))}
+      </div>
+      <style>{`
+        @keyframes scroll-left {
+          0%   { transform: translateX(0) }
+          100% { transform: translateX(-33.33%) }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function HomePage() {
+  const [stories,    setStories]    = useState<StoryCard[]>([])
+  const [boardStats, setBoardStats] = useState<BoardStats | null>(null)
+  const [loadingStories, setLoadingStories] = useState(true)
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 5000)
-    return () => clearInterval(id)
+    // Fetch board stats
+    fetch(`${API}/props/board/stats`)
+      .then(r => r.json())
+      .then(setBoardStats)
+      .catch(() => {})
+
+    // Fetch all story data in parallel
+    const fetchAll = async () => {
+      setLoadingStories(true)
+      try {
+        const [streakPts, streakReb, streakAst, breakout, board] = await Promise.allSettled([
+          fetch(`${API}/insights/streaks?stat=pts&min_gp=10&limit=16`).then(r => r.json()),
+          fetch(`${API}/insights/streaks?stat=reb&min_gp=10&limit=8`).then(r => r.json()),
+          fetch(`${API}/insights/streaks?stat=ast&min_gp=10&limit=8`).then(r => r.json()),
+          fetch(`${API}/insights/breakout?limit=5`).then(r => r.json()),
+          fetch(`${API}/props/board`).then(r => r.json()),
+        ])
+
+        const allStories: StoryCard[] = []
+
+        if (streakPts.status === 'fulfilled')
+          allStories.push(...generateStreakStories(streakPts.value))
+        if (streakReb.status === 'fulfilled')
+          allStories.push(...generateStreakStories(streakReb.value).slice(0, 3))
+        if (streakAst.status === 'fulfilled')
+          allStories.push(...generateStreakStories(streakAst.value).slice(0, 3))
+        if (breakout.status === 'fulfilled')
+          allStories.push(...generateBreakoutStories(breakout.value))
+        if (board.status === 'fulfilled')
+          allStories.push(...generatePropStories(board.value))
+
+        // Shuffle so it's not always the same order, dedupe by player+stat
+        const seen = new Set<string>()
+        const deduped = allStories.filter(s => {
+          const key = `${s.player}-${s.stat}-${s.type}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        // Sort: interleave hot, breakout, prop, cold
+        const hot      = deduped.filter(s => s.type === 'hot')
+        const breakouts = deduped.filter(s => s.type === 'breakout')
+        const props    = deduped.filter(s => s.type === 'prop_edge' || s.tag.includes('OVER') || s.tag.includes('UNDER'))
+        const cold     = deduped.filter(s => s.type === 'cold')
+
+        const interleaved: StoryCard[] = []
+        const maxLen = Math.max(hot.length, breakouts.length, cold.length)
+        for (let i = 0; i < maxLen; i++) {
+          if (hot[i])       interleaved.push(hot[i])
+          if (breakouts[i]) interleaved.push(breakouts[i])
+          if (props[i])     interleaved.push(props[i])
+          if (cold[i])      interleaved.push(cold[i])
+        }
+
+        setStories(interleaved.slice(0, 20))
+      } catch {}
+      setLoadingStories(false)
+    }
+
+    fetchAll()
   }, [])
 
   return (
-    <div>
-      <style>{`
-        .module-card { background: #0a0a0a; padding: 28px 32px; transition: background 0.15s; display: block; text-decoration: none; }
-        .module-card:hover { background: #0f0f0f; }
-      `}</style>
+    <div style={{ minHeight: '100vh', background: '#080808', color: '#888' }}>
 
-      {/* Hero */}
-      <div style={{ marginBottom: '40px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-          color: '#333', letterSpacing: '0.12em', marginBottom: '12px' }}>
-          NBA ANALYTICS · 2025–26 SEASON · LIVE
-        </div>
-        <h1 style={{ fontSize: '32px', fontWeight: 300, color: '#f0f0f0',
-          letterSpacing: '-0.02em', marginBottom: '12px', lineHeight: 1.1 }}>
-          Game intelligence.<br />Prop edge. Live data.
-        </h1>
-        <p style={{ color: '#444', fontSize: '14px', maxWidth: '520px', lineHeight: 1.6,
-          marginBottom: '24px' }}>
-          SwingFactr models player prop edges using distribution-based prediction,
-          Bayesian shrinkage, and positional opponent defense — plus lineup chemistry,
-          win probability, and fatigue from every 2025–26 NBA game.
-        </p>
-      </div>
+      {/* Live ticker */}
+      <LiveStrip stats={boardStats} />
 
-      {/* Live stats bar */}
-      <div style={{ marginBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px',
-          marginBottom: '12px' }}>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-            color: '#333', letterSpacing: '0.15em' }}>PROPS BOARD · LIVE</span>
-          {lastUpdated && (
-            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-              color: '#222' }}>updated {timeAgo(lastUpdated)}</span>
-          )}
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%',
-            background: stats?.total ? '#4ade80' : '#333',
-            boxShadow: stats?.total ? '0 0 6px #4ade80' : 'none',
-            display: 'inline-block' }} />
+      {/* Main content */}
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 28px' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: '40px' }}>
+          <div style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+            letterSpacing: '0.18em', marginBottom: '12px' }}>
+            {today.toUpperCase()} · NBA · 2025–26
+          </div>
+          <h1 style={{ fontSize: '36px', fontWeight: 700, color: '#e0e0e0',
+            margin: '0 0 8px', fontFamily: MONO, letterSpacing: '-0.02em',
+            lineHeight: 1.1 }}>
+            What's happening<br />
+            <span style={{ color: '#4ade80' }}>in the NBA right now.</span>
+          </h1>
+          <div style={{ fontFamily: MONO, fontSize: '11px', color: '#333',
+            marginTop: '12px', lineHeight: 1.7 }}>
+            Daily intelligence on player streaks, breakouts, prop edges, and playoff odds.
+          </div>
         </div>
 
-        {stats?.total ? (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Ticker value={stats.total}         label="TOTAL PROPS"    color="#e0e0e0" />
-            <Ticker value={stats.strong_overs}  label="STRONG OVER"   color="#4ade80" />
-            <Ticker value={stats.lean_overs}    label="LEAN OVER"     color="#86efac" />
-            <Ticker value={stats.strong_unders} label="STRONG UNDER"  color="#f87171" />
-            <Ticker value={stats.lean_unders}   label="LEAN UNDER"    color="#fca5a5" />
-            <Ticker value={stats.players}       label="PLAYERS"       color="#888"    />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['TOTAL PROPS','STRONG OVER','LEAN OVER','STRONG UNDER','PLAYERS'].map(l => (
-              <div key={l} style={{ padding: '20px 24px', background: '#0a0a0a',
-                border: '1px solid #111', borderRadius: '4px', minWidth: '100px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '32px', height: '28px', background: '#111',
-                  borderRadius: '3px', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#222', letterSpacing: '0.12em' }}>{l}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Two-column layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px',
+          alignItems: 'start' }}>
 
-        <style>{`@keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:.8 } }`}</style>
-
-        {stats?.total && (
-          <div style={{ marginTop: '12px' }}>
-            <Link href="/props" style={{
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-              color: '#4ade80', textDecoration: 'none', letterSpacing: '0.05em',
-            }}>View full props board →</Link>
-          </div>
-        )}
-        {stats && !stats.total && (
-          <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace',
-            fontSize: '11px', color: '#2a2a2a' }}>
-            No props yet today — check back after 6:30am PST
-          </div>
-        )}
-      </div>
-
-      {/* Module grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px',
-        background: '#111', border: '1px solid #111' }}>
-        {MODULES.map((m) => (
-          <Link key={`${m.href}-${m.label}`} href={m.href} className="module-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between',
-              alignItems: 'flex-start', marginBottom: '16px' }}>
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 500, color: '#e0e0e0',
-                  marginBottom: '4px' }}>{m.label}</div>
-                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#2a2a2a', letterSpacing: '0.08em' }}>{m.tag}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '22px',
-                  fontWeight: 700, color: m.accent ?? '#e8e8e8' }}>
-                  {m.statKey === 'total' && stats?.total != null
-                    ? stats.total
-                    : m.stat ?? '—'}
-                </div>
-                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#2a2a2a' }}>{m.statLabel}</div>
-              </div>
+          {/* Left: carousel */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '14px' }}>
+              <div style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+                letterSpacing: '0.15em' }}>TODAY'S STORIES</div>
+              <Link href="/insights" style={{ fontFamily: MONO, fontSize: '9px',
+                color: '#333', textDecoration: 'none', letterSpacing: '0.1em',
+                borderBottom: '1px solid #1a1a1a', paddingBottom: '1px' }}>
+                VIEW ALL INSIGHTS →
+              </Link>
             </div>
-            <p style={{ color: '#444', fontSize: '12px', lineHeight: 1.7,
-              marginBottom: '16px' }}>{m.desc}</p>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-              color: '#2a2a2a' }}>View →</div>
-          </Link>
-        ))}
-      </div>
+            {loadingStories
+              ? <div style={{ height: '320px', background: '#0a0a0a', border: '1px solid #111',
+                  borderRadius: '6px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontFamily: MONO, fontSize: '10px', color: '#2a2a2a' }}>
+                  Generating stories...
+                </div>
+              : <NewsCarousel stories={stories} />
+            }
+          </div>
 
-      {/* Footer metadata */}
-      <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #111',
-        display: 'flex', flexWrap: 'wrap', gap: '24px',
-        fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#1e1e1e' }}>
-        <span>v14 model</span>
-        <span>Bayesian shrinkage</span>
-        <span>Positional defense profiles</span>
-        <span>RotoWire + ESPN injury engine</span>
-        <span>Platt scaling calibration</span>
-        <span>GitHub Actions ETL · 3× daily</span>
-        <span>Railway · Vercel · PostgreSQL</span>
+          {/* Right: quick nav + stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+            {/* Board stats */}
+            {boardStats && (
+              <div style={{ background: '#0a0a0a', border: '1px solid #111',
+                borderRadius: '4px', padding: '16px 18px' }}>
+                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+                  letterSpacing: '0.15em', marginBottom: '12px' }}>
+                  PROPS BOARD · TODAY
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {[
+                    { label: 'Total Props',    value: boardStats.total,          color: '#e0e0e0' },
+                    { label: 'Strong Overs',   value: boardStats.strong_overs,   color: '#4ade80' },
+                    { label: 'Strong Unders',  value: boardStats.strong_unders,  color: '#f87171' },
+                    { label: 'Players',        value: boardStats.players,        color: '#888'    },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <div style={{ fontFamily: MONO, fontSize: '20px', fontWeight: 700,
+                        color: item.color, lineHeight: 1 }}>{item.value}</div>
+                      <div style={{ fontFamily: MONO, fontSize: '8px', color: '#2a2a2a',
+                        letterSpacing: '0.1em', marginTop: '3px' }}>{item.label.toUpperCase()}</div>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/props" style={{ display: 'block', marginTop: '14px',
+                  fontFamily: MONO, fontSize: '9px', color: '#4ade80',
+                  textDecoration: 'none', letterSpacing: '0.1em',
+                  borderTop: '1px solid #111', paddingTop: '10px' }}>
+                  VIEW FULL PROPS BOARD →
+                </Link>
+              </div>
+            )}
+
+            {/* Quick nav */}
+            <div>
+              <div style={{ fontFamily: MONO, fontSize: '9px', color: '#2a2a2a',
+                letterSpacing: '0.15em', marginBottom: '10px' }}>EXPLORE</div>
+              <QuickNav />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
