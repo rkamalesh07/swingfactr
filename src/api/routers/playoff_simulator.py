@@ -295,7 +295,10 @@ async def run_simulation(n_sims: int = Query(10000, le=1000000)):
         def seed_conf(teams):
             return sorted(
                 [(t, sim_wins.get(t, 0)) for t in teams if t in sim_wins],
-                key=lambda x: (-x[1], -ratings.get(x[0], 0))
+                key=lambda x: (
+                    -x[1] / max(1, x[1] + sim_losses.get(x[0], 0)),
+                    -ratings.get(x[0], 0)
+                )
             )
 
         e_seeds = [t for t, _ in seed_conf(EASTERN)]
@@ -581,7 +584,10 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
         def seed_conf(teams):
             return sorted(
                 [(t, sim_wins.get(t, 0)) for t in teams if t in sim_wins],
-                key=lambda x: (-x[1], -ratings.get(x[0], 0))
+                key=lambda x: (
+                    -x[1] / max(1, x[1] + sim_losses.get(x[0], 0)),
+                    -ratings.get(x[0], 0)
+                )
             )
 
         e_seeds = [t for t, _ in seed_conf(EASTERN)]
