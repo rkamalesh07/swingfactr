@@ -439,7 +439,7 @@ async def get_standings():
                 "streak":  wl.get("streak", ""),
                 "l10":     wl.get("l10", ""),
             })
-        result.sort(key=lambda x: (-x["wins"], x["losses"]))
+        result.sort(key=lambda x: (-x["pct"], -(x["wins"] + x["losses"])))
         # Add seed + playoff status
         for i, r in enumerate(result):
             seed = i + 1
