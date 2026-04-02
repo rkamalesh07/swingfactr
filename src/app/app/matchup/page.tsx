@@ -54,7 +54,7 @@ export default function MatchupPage() {
     setPlayer(ex.player); setOpp(ex.opp); run(ex.player, ex.opp)
   }
 
-  const overallColor = result ? diffColor(result.overall) : '#888'
+  const overallColor = result?.overall ? diffColor(result.overall) : '#888'
 
   return (
     <div style={{ minHeight:'100vh', background:'#080808', color:'#888', fontFamily:MONO }}>
@@ -129,7 +129,7 @@ export default function MatchupPage() {
           </div>
         )}
 
-        {result && (
+        {result && result.stats && result.opponent && (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }}>
 
             {/* Stat breakdown */}

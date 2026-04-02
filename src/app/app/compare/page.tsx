@@ -36,8 +36,8 @@ export default function ComparePage() {
     setLoading(false)
   }
 
-  const p1Name = result?.player1.player_name.split(' ').pop() || ''
-  const p2Name = result?.player2.player_name.split(' ').pop() || ''
+  const p1Name = result?.player1?.player_name?.split(' ').pop() || ''
+  const p2Name = result?.player2?.player_name?.split(' ').pop() || ''
 
   return (
     <div style={{ minHeight:'100vh', background:'#080808', color:'#888', fontFamily:MONO }}>
@@ -95,7 +95,7 @@ export default function ComparePage() {
           </div>
         )}
 
-        {result && (
+        {result && result.player1 && result.player2 && (
           <div>
             {/* Player headers */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 1fr',
