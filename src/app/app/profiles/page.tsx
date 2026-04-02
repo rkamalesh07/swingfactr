@@ -20,6 +20,8 @@ interface Player {
   fg3m:        number | null
   tov:         number | null
   fg_pct:      number | null
+  efg_pct:     number | null
+  fg3_pct_est: number | null
 }
 
 interface GameLog {
@@ -46,6 +48,8 @@ const SORT_OPTIONS = [
   { key: 'tov',    label: 'TOV' },
   { key: 'mpg',    label: 'MIN' },
   { key: 'gp',     label: 'GP'  },
+  { key: 'efg_pct',     label: 'eFG%' },
+  { key: 'fg3_pct_est', label: '3P%*' },
 ]
 
 // ─── Radar ────────────────────────────────────────────────────────────────────
@@ -184,7 +188,7 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
         <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #111' }}>
           {STATS.map(s => {
             const v = player[s.key as keyof Player]
-            const d = s.key === 'fg_pct' && v != null ? `${v}%` : v ?? '—'
+            const d = (s.key === 'fg_pct' || s.key === 'efg_pct' || s.key === 'fg3_pct_est') && v != null ? `${v}%` : v ?? '—'
             return (
               <div key={s.key} style={{ padding: '12px 14px', borderRight: '1px solid #0d0d0d',
                 minWidth: '64px', textAlign: 'center', flex: 1 }}>
@@ -408,7 +412,7 @@ export default function ProfilesPage() {
                     </td>
                     {SORT_OPTIONS.map(s => {
                       const v = p[s.key as keyof Player]
-                      const d = s.key === 'fg_pct' && v != null ? `${v}%` : v ?? '—'
+                      const d = (s.key === 'fg_pct' || s.key === 'efg_pct' || s.key === 'fg3_pct_est') && v != null ? `${v}%` : v ?? '—'
                       return (
                         <td key={s.key} style={{ padding: '10px 12px', textAlign: 'right',
                           fontSize: sortKey === s.key ? '12px' : '11px',

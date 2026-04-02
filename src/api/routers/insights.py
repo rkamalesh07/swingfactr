@@ -490,3 +490,142 @@ async def matchup_difficulty(
         "vs_games":     vs_games[:10],
         "as_of":        date.today().isoformat(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Overall composite hot/cold streak (cross-stat momentum)
+# ---------------------------------------------------------------------------
+
+@router.get("/streaks/overall")
+async def get_overall_streaks(
+    min_gp: int = Query(10),
+    limit:  int = Query(30),
+):
+    """
+    Composite hot/cold streaks across PTS + REB + AST simultaneously.
+    Uses L10 as primary signal, L5 as acceleration.
+    Composite z-score = weighted avg of per-stat z-scores.
+    """
+    TRACKED = ["pts", "reb", "ast", "fg3m"]
+    WEIGHTS  = {"pts": 0.45, "reb": 0.25, "ast": 0.20, "fg3m": 0.10}
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                WITH ranked AS (
+                    SELECT player_name, team_abbr, position,
+                           pts, reb, ast, fg3m, minutes, game_date,
+                           ROW_NUMBER() OVER (PARTITION BY player_name ORDER BY game_date DESC) as rn
+                    FROM player_game_logs
+                    WHERE season_id = %s AND minutes >= 10
+                ),
+                season_stats AS (
+                    SELECT player_name,
+                           MAX(team_abbr) as team,
+                           MAX(position)  as position,
+                           COUNT(*)       as gp,
+                           AVG(pts)  as pts_avg,  STDDEV(pts)  as pts_std,
+                           AVG(reb)  as reb_avg,  STDDEV(reb)  as reb_std,
+                           AVG(ast)  as ast_avg,  STDDEV(ast)  as ast_std,
+                           AVG(fg3m) as fg3m_avg, STDDEV(fg3m) as fg3m_std
+                    FROM ranked
+                    GROUP BY player_name
+                    HAVING COUNT(*) >= %s
+                ),
+                l10 AS (
+                    SELECT player_name,
+                           AVG(pts)  as pts_l10,
+                           AVG(reb)  as reb_l10,
+                           AVG(ast)  as ast_l10,
+                           AVG(fg3m) as fg3m_l10
+                    FROM ranked WHERE rn <= 10
+                    GROUP BY player_name
+                ),
+                l5 AS (
+                    SELECT player_name,
+                           AVG(pts)  as pts_l5,
+                           AVG(reb)  as reb_l5,
+                           AVG(ast)  as ast_l5
+                    FROM ranked WHERE rn <= 5
+                    GROUP BY player_name
+                )
+                SELECT s.player_name, s.team, s.position, s.gp,
+                       ROUND(s.pts_avg::numeric,1), ROUND(l.pts_l10::numeric,1), ROUND(f.pts_l5::numeric,1),
+                       ROUND(s.pts_std::numeric,2),
+                       ROUND(s.reb_avg::numeric,1), ROUND(l.reb_l10::numeric,1),
+                       ROUND(s.reb_std::numeric,2),
+                       ROUND(s.ast_avg::numeric,1), ROUND(l.ast_l10::numeric,1),
+                       ROUND(s.ast_std::numeric,2),
+                       ROUND(s.fg3m_avg::numeric,1), ROUND(l.fg3m_l10::numeric,1),
+                       ROUND(s.fg3m_std::numeric,2)
+                FROM season_stats s
+                JOIN l10 l ON s.player_name = l.player_name
+                JOIN l5  f ON s.player_name = f.player_name
+            """, (SEASON, min_gp))
+            rows = cur.fetchall()
+
+    results = []
+    for row in rows:
+        (pname, team, pos, gp,
+         pts_s, pts_l10, pts_l5, pts_std,
+         reb_s, reb_l10,           reb_std,
+         ast_s, ast_l10,           ast_std,
+         fg3_s, fg3_l10,           fg3_std) = row
+
+        def z(l10, avg, std):
+            if not std or float(std) == 0: return 0.0
+            return float((float(l10 or 0) - float(avg or 0)) / float(std))
+
+        zpts  = z(pts_l10,  pts_s,  pts_std)
+        zreb  = z(reb_l10,  reb_s,  reb_std)
+        zast  = z(ast_l10,  ast_s,  ast_std)
+        zfg3  = z(fg3_l10,  fg3_s,  fg3_std)
+
+        composite_z = (
+            WEIGHTS["pts"]  * zpts +
+            WEIGHTS["reb"]  * zreb +
+            WEIGHTS["ast"]  * zast +
+            WEIGHTS["fg3m"] * zfg3
+        )
+
+        # Biggest single-stat mover
+        stat_zs = {"pts": zpts, "reb": zreb, "ast": zast, "fg3m": zfg3}
+        best_stat = max(stat_zs, key=lambda k: abs(stat_zs[k]))
+
+        # L5 acceleration vs L10
+        accel = float(pts_l5 or 0) - float(pts_l10 or 0) if pts_l5 and pts_l10 else 0
+
+        streak = "hot"    if composite_z >= 1.0  else                  "warm"   if composite_z >= 0.4  else                  "cold"   if composite_z <= -1.0 else                  "cool"   if composite_z <= -0.4 else "neutral"
+
+        # Pct change for pts (most visible)
+        pts_pct = round((float(pts_l10 or 0) - float(pts_s or 0)) / float(pts_s or 1) * 100, 1) if pts_s else 0
+
+        results.append({
+            "player_name":   pname,
+            "team":          team,
+            "position":      pos,
+            "gp":            gp,
+            "composite_z":   round(composite_z, 2),
+            "streak":        streak,
+            "best_stat":     best_stat,
+            "pts_season":    float(pts_s or 0),
+            "pts_l10":       float(pts_l10 or 0),
+            "pts_l5":        float(pts_l5 or 0),
+            "pts_pct":       pts_pct,
+            "accel":         round(accel, 1),
+            "reb_season":    float(reb_s or 0),
+            "reb_l10":       float(reb_l10 or 0),
+            "ast_season":    float(ast_s or 0),
+            "ast_l10":       float(ast_l10 or 0),
+        })
+
+    results.sort(key=lambda x: -x["composite_z"])
+    hot  = [r for r in results if r["streak"] in ("hot","warm")][:limit]
+    cold = sorted([r for r in results if r["streak"] in ("cold","cool")],
+                  key=lambda x: x["composite_z"])[:limit]
+
+    return JSONResponse({
+        "as_of": date.today().isoformat(),
+        "hot":   hot,
+        "cold":  cold,
+    })

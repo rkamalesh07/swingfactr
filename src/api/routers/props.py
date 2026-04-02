@@ -476,7 +476,7 @@ async def players_list():
                 SELECT
                     player_name,
                     team_abbr,
-                    position,
+                    MAX(position) as position,
                     COUNT(*) as gp,
                     ROUND(AVG(minutes)::numeric, 1) as mpg,
                     ROUND(AVG(pts)::numeric, 1) as ppg,
@@ -486,10 +486,24 @@ async def players_list():
                     ROUND(AVG(blk)::numeric, 1) as bpg,
                     ROUND(AVG(fg3m)::numeric, 1) as fg3m,
                     ROUND(AVG(tov)::numeric, 1) as tov,
-                    SUM(fga) as fga_total
+                    SUM(fga) as fga_total,
+                    SUM(fg_made) as fgm_total,
+                    SUM(ft_made) as ftm_total,
+                    -- eFG% = (FGM + 0.5*FG3M) / FGA
+                    CASE WHEN SUM(fga) > 0
+                         THEN ROUND(((SUM(fg_made) + 0.5*SUM(fg3m))::numeric / SUM(fga)) * 100, 1)
+                         ELSE NULL END as efg_pct,
+                    -- FG% = FGM / FGA
+                    CASE WHEN SUM(fga) > 0
+                         THEN ROUND((SUM(fg_made)::numeric / SUM(fga)) * 100, 1)
+                         ELSE NULL END as fg_pct_real,
+                    -- 3P% estimated: fg3m / (fga * 0.38) league avg 3PA rate
+                    CASE WHEN SUM(fg3m) > 0 AND SUM(fga) > 0
+                         THEN ROUND((SUM(fg3m)::numeric / NULLIF(SUM(fga)*0.38, 0)) * 100, 1)
+                         ELSE NULL END as fg3_pct_est
                 FROM player_game_logs
                 WHERE season_id = '2025-26' AND minutes >= 5
-                GROUP BY player_name, team_abbr, position
+                GROUP BY player_name, team_abbr
                 HAVING COUNT(*) >= 5
                 ORDER BY AVG(pts) DESC
             """)
@@ -501,6 +515,11 @@ async def players_list():
     for row in rows:
         r = dict(zip(cols, row))
         r.pop("fga_total", None)
+        r.pop("fgm_total", None)
+        r.pop("ftm_total", None)
+        # Rename fg_pct_real -> fg_pct (override old null column)
+        if "fg_pct_real" in r:
+            r["fg_pct"] = r.pop("fg_pct_real")
         # Convert Decimal to float for JSON serialization
         for k, v in r.items():
             if isinstance(v, Decimal):
