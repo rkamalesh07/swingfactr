@@ -61,34 +61,7 @@ const SORT_OPTIONS = [
 // ─── Basketball court SVG ─────────────────────────────────────────────────────
 // Court is 500×470 units. NBA shot coordinates: x in [-250,250], y in [-50,420]
 
-function CourtSVG() {
-  const stroke = '#333'
-  const sw = 1.5
-  return (
-    <g>
-      {/* Court outline */}
-      <rect x={-250} y={-50} width={500} height={470} fill="none" stroke={stroke} strokeWidth={sw}/>
-      {/* Paint */}
-      <rect x={-80} y={-50} width={160} height={190} fill="none" stroke={stroke} strokeWidth={sw}/>
-      {/* Restricted area */}
-      <path d="M -40 -50 A 40 40 0 0 1 40 -50" fill="none" stroke={stroke} strokeWidth={sw}/>
-      {/* Free throw circle */}
-      <circle cx={0} cy={140} r={60} fill="none" stroke={stroke} strokeWidth={sw}/>
-      {/* Basket */}
-      <circle cx={0} cy={0} r={7.5} fill="none" stroke={stroke} strokeWidth={2}/>
-      <line x1={-30} y1={-7.5} x2={30} y2={-7.5} stroke={stroke} strokeWidth={2}/>
-      {/* 3pt line */}
-      <path
-        d="M -220 -50 L -220 90 A 237.5 237.5 0 0 0 220 90 L 220 -50"
-        fill="none" stroke={stroke} strokeWidth={sw}
-      />
-      {/* Half court */}
-      <line x1={-250} y1={420} x2={250} y2={420} stroke={stroke} strokeWidth={sw}/>
-      <circle cx={0} cy={420} r={60} fill="none" stroke={stroke} strokeWidth={sw}/>
-      <circle cx={0} cy={420} r={6} fill={stroke}/>
-    </g>
-  )
-}
+
 
 // ─── Hexagonal shot chart ─────────────────────────────────────────────────────
 
@@ -129,7 +102,7 @@ function hexPath(r: number): string {
   return `M ${pts.join(' L ')} Z`
 }
 
-function ShotChart({ shots, loading }: { shots: Shot[]; loading: boolean }) {
+: { shots: Shot[]; loading: boolean }) {
   const bins = useMemo(() => shotsToHexBins(shots, 16), [shots])
   const maxCount = useMemo(() =>
     Math.max(1, ...Array.from(bins.values()).map(b => b.shots.length)), [bins])
@@ -185,109 +158,128 @@ function ShotChart({ shots, loading }: { shots: Shot[]; loading: boolean }) {
   )
 }
 
+// ─── Radar chart ─────────────────────────────────────────────────────────────
+
+function RadarChart({ player, allPlayers }: { player: Player; allPlayers: Player[] }) {
+  const AXES = [
+    { key: 'ppg',  label: 'PTS', max: 35 },
+    { key: 'rpg',  label: 'REB', max: 14 },
+    { key: 'apg',  label: 'AST', max: 12 },
+    { key: 'spg',  label: 'STL', max: 3  },
+    { key: 'bpg',  label: 'BLK', max: 3  },
+    { key: 'fg3m', label: '3PM', max: 5  },
+  ]
+  const N = AXES.axes?.length ?? AXES.length
+  const CX = 120, CY = 110, R = 85
+
+  const angleOf = (i: number) => (Math.PI * 2 * i) / N - Math.PI / 2
+
+  const pts = AXES.map((ax, i) => {
+    const val = Math.min(1, (Number(player[ax.key as keyof Player]) || 0) / ax.max)
+    const a = angleOf(i)
+    return { x: CX + R * val * Math.cos(a), y: CY + R * val * Math.sin(a) }
+  })
+
+  const polyPoints = pts.map(p => `${p.x},${p.y}`).join(' ')
+
+  // Grid rings
+  const rings = [0.25, 0.5, 0.75, 1.0]
+
+  return (
+    <svg viewBox={`0 0 240 220`} style={{ width: '100%', maxWidth: '260px' }}>
+      {/* Grid rings */}
+      {rings.map(r => {
+        const ringPts = AXES.map((_, i) => {
+          const a = angleOf(i)
+          return `${CX + R * r * Math.cos(a)},${CY + R * r * Math.sin(a)}`
+        }).join(' ')
+        return <polygon key={r} points={ringPts} fill="none" stroke="#1a1a1a" strokeWidth="0.5" />
+      })}
+
+      {/* Axis lines */}
+      {AXES.map((ax, i) => {
+        const a = angleOf(i)
+        return <line key={ax.key}
+          x1={CX} y1={CY}
+          x2={CX + R * Math.cos(a)} y2={CY + R * Math.sin(a)}
+          stroke="#1a1a1a" strokeWidth="0.5" />
+      })}
+
+      {/* Data polygon */}
+      <polygon points={polyPoints} fill="#4ade8018" stroke="#4ade80" strokeWidth="1.5" />
+
+      {/* Data points */}
+      {pts.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#4ade80" />
+      ))}
+
+      {/* Axis labels */}
+      {AXES.map((ax, i) => {
+        const a = angleOf(i)
+        const lx = CX + (R + 14) * Math.cos(a)
+        const ly = CY + (R + 14) * Math.sin(a)
+        const val = Number(player[ax.key as keyof Player]) || 0
+        return (
+          <g key={ax.key}>
+            <text x={lx} y={ly - 4} textAnchor="middle" fontSize="7"
+              fill="#444" fontFamily="IBM Plex Mono, monospace" letterSpacing="0.05em">
+              {ax.label}
+            </text>
+            <text x={lx} y={ly + 6} textAnchor="middle" fontSize="8"
+              fill="#e0e0e0" fontFamily="IBM Plex Mono, monospace" fontWeight="700">
+              {val}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+
+function Sparkline({ vals, color = '#4ade80', height = 32 }: { vals: number[]; color?: string; height?: number }) {
+  if (vals.length < 2) return null
+  const w = 120
+  const min = Math.min(...vals), max = Math.max(...vals)
+  const range = max - min || 1
+  const pts = vals.map((v, i) =>
+    `${(i / (vals.length - 1)) * w},${height - ((v - min) / range) * (height - 4) - 2}`
+  ).join(' ')
+  return (
+    <svg width={w} height={height} style={{ overflow: 'visible' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
+      <circle
+        cx={(vals.length - 1) / (vals.length - 1) * w}
+        cy={height - ((vals[vals.length - 1] - min) / range) * (height - 4) - 2}
+        r="2.5" fill={color} />
+    </svg>
+  )
+}
+
+// ─── Game log fetch ───────────────────────────────────────────────────────────
+
+interface GameLog {
+  game_date: string; opponent_abbr: string; pts: number; reb: number
+  ast: number; fg3m: number; stl: number; blk: number; minutes: number; is_home: boolean
+}
+
 // ─── Player modal ─────────────────────────────────────────────────────────────
 
-function PlayerModal({ player, onClose }: { player: Player; onClose: () => void }) {
-  const [shotRange, setShotRange] = useState<'season'|'l25'|'l10'>('season')
-  const [shotData,  setShotData]  = useState<ShotData | null>(null)
-  const [shotLoading, setShotLoading] = useState(false)
-  const [shotError,   setShotError]   = useState<string | null>(null)
+function PlayerModal({ player, allPlayers, onClose }: { player: Player; allPlayers: Player[]; onClose: () => void }) {
+  const [gamelog, setGamelog] = useState<GameLog[]>([])
+  const [logLoading, setLogLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'radar'|'gamelog'>('radar')
 
-  const loadShots = useCallback(async (range: 'season'|'l25'|'l10') => {
-    setShotLoading(true)
-    setShotError(null)
-    try {
-      const lastN = range === 'l10' ? 10 : range === 'l25' ? 25 : 0
+  useEffect(() => {
+    setLogLoading(true)
+    fetch(`${API}/props/player/profile?name=${encodeURIComponent(player.player_name)}`)
+      .then(r => r.json())
+      .then(d => setGamelog((d.game_logs || []).slice(0, 20)))
+      .catch(() => {})
+      .finally(() => setLogLoading(false))
+  }, [player.player_name])
 
-      // Step 1: Get NBA player ID from commonallplayers
-      const playersUrl = `https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2025-26`
-      const playersResp = await fetch(playersUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Referer': 'https://www.nba.com/',
-          'Accept': 'application/json',
-          'x-nba-stats-origin': 'stats',
-          'x-nba-stats-token': 'true',
-        },
-      })
-      const playersData = await playersResp.json()
-      const pHeaders = playersData.resultSets[0].headers
-      const pRows    = playersData.resultSets[0].rowSet
-      const nameIdx  = pHeaders.indexOf('DISPLAY_FIRST_LAST')
-      const idIdx    = pHeaders.indexOf('PERSON_ID')
-      const nameLower = player.player_name.toLowerCase()
-      const playerRow = pRows.find((r: any[]) =>
-        r[nameIdx]?.toLowerCase() === nameLower ||
-        r[nameIdx]?.toLowerCase().includes(nameLower)
-      )
-      if (!playerRow) {
-        setShotError(`Player '${player.player_name}' not found in NBA Stats`)
-        setShotLoading(false)
-        return
-      }
-      const playerId = playerRow[idIdx]
-
-      // Step 2: Fetch shot chart
-      const shotUrl = `https://stats.nba.com/stats/shotchartdetail?PlayerID=${playerId}&Season=2025-26&SeasonType=Regular+Season&ContextMeasure=FGA&LeagueID=00&TeamID=0&GameID=&Outcome=&Location=&Month=0&SeasonSegment=&DateFrom=&DateTo=&OpponentTeamID=0&VsConference=&VsDivision=&Position=&RookieYear=&GameSegment=&Period=0&LastNGames=${lastN}&AheadBehind=&PointDiff=&RangeType=0&StartPeriod=0&EndPeriod=0&StartRange=0&EndRange=0`
-      const shotResp = await fetch(shotUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Referer': 'https://www.nba.com/',
-          'Accept': 'application/json',
-          'x-nba-stats-origin': 'stats',
-          'x-nba-stats-token': 'true',
-        },
-      })
-      const shotData = await shotResp.json()
-      const sHeaders = shotData.resultSets[0].headers
-      const sRows    = shotData.resultSets[0].rowSet
-      const shots: Shot[] = sRows.map((r: any[]) => {
-        const d = Object.fromEntries(sHeaders.map((h: string, i: number) => [h, r[i]]))
-        return {
-          x:         d.LOC_X,
-          y:         d.LOC_Y,
-          made:      Boolean(d.SHOT_MADE_FLAG),
-          shot_type: d.SHOT_TYPE || '',
-          zone:      d.SHOT_ZONE_BASIC || '',
-          distance:  d.SHOT_DISTANCE || 0,
-          date:      d.GAME_DATE || '',
-        }
-      })
-      const made = shots.filter(s => s.made).length
-      setShotData({
-        player_name: player.player_name,
-        range,
-        total:  shots.length,
-        made,
-        fg_pct: shots.length > 0 ? Math.round(made / shots.length * 1000) / 10 : 0,
-        shots,
-      })
-    } catch (err: any) {
-      // NBA Stats CORS blocked — fall back to backend proxy
-      try {
-        const r = await fetch(`${API}/props/shotchart?name=${encodeURIComponent(player.player_name)}&range=${range}`)
-        const d = await r.json()
-        if (d.error) {
-          setShotError(`Shot chart unavailable: ${d.error}`)
-        } else {
-          setShotData(d)
-        }
-      } catch {
-        setShotError('Shot chart unavailable — NBA Stats API is rate limited')
-      }
-    }
-    setShotLoading(false)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => { loadShots(shotRange) }, [shotRange])
-
-  // Close on backdrop click
-  const onBackdrop = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose()
-  }
-
-  // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -307,20 +299,22 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
     { key: 'gp',     label: 'GP'  },
   ]
 
-  const shots = shotData?.shots ?? []
+  const ptsVals = gamelog.map(g => g.pts).reverse()
+  const rebVals = gamelog.map(g => g.reb).reverse()
+  const astVals = gamelog.map(g => g.ast).reverse()
 
   return (
-    <div onClick={onBackdrop} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)',
       zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '20px', backdropFilter: 'blur(4px)',
     }}>
       <div style={{
         background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '6px',
-        width: '100%', maxWidth: '860px', maxHeight: '90vh', overflow: 'auto',
+        width: '100%', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto',
         fontFamily: 'IBM Plex Mono, monospace',
       }}>
-        {/* Modal header */}
+        {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #111',
           display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
@@ -331,68 +325,122 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
               margin: 0, letterSpacing: '-0.01em' }}>{player.player_name}</h2>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none',
-            cursor: 'pointer', color: '#333', fontSize: '20px', padding: '4px',
-            lineHeight: 1 }}>×</button>
+            cursor: 'pointer', color: '#444', fontSize: '20px', padding: '4px', lineHeight: 1 }}>×</button>
         </div>
 
         {/* Stat line */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0',
-          borderBottom: '1px solid #111' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #111' }}>
           {STATS.map(s => {
             const val = player[s.key as keyof Player]
-            const display = s.key === 'fg_pct' && val != null
-              ? `${val}%`
-              : val ?? '—'
+            const display = s.key === 'fg_pct' && val != null ? `${val}%` : val ?? '—'
             return (
-              <div key={s.key} style={{ padding: '14px 16px', borderRight: '1px solid #0d0d0d',
-                minWidth: '72px', textAlign: 'center' }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: '#e0e0e0',
-                  marginBottom: '4px' }}>{display}</div>
+              <div key={s.key} style={{ padding: '12px 16px', borderRight: '1px solid #0d0d0d',
+                minWidth: '68px', textAlign: 'center', flex: '1' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#e0e0e0',
+                  marginBottom: '3px' }}>{display}</div>
                 <div style={{ fontSize: '8px', color: '#333', letterSpacing: '0.1em' }}>{s.label}</div>
               </div>
             )
           })}
         </div>
 
-        {/* Shot chart section */}
-        <div style={{ padding: '20px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: '16px' }}>
-            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em' }}>
-              SHOT CHART
-              {shotData && !shotLoading && (
-                <span style={{ color: '#555', marginLeft: '12px' }}>
-                  {shotData.made}/{shotData.total} FGM · {shotData.fg_pct}% FG
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {(['season','l25','l10'] as const).map(r => (
-                <button key={r} onClick={() => setShotRange(r)} style={{
-                  padding: '4px 10px', background: shotRange === r ? '#1a1a1a' : 'none',
-                  border: `1px solid ${shotRange === r ? '#333' : '#111'}`,
-                  borderRadius: '3px', cursor: 'pointer',
-                  fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: shotRange === r ? '#e0e0e0' : '#333',
-                  letterSpacing: '0.08em',
-                }}>
-                  {r === 'season' ? 'SEASON' : r === 'l25' ? 'L25' : 'L10'}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #111' }}>
+          {(['radar', 'gamelog'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 20px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
+              color: activeTab === t ? '#e0e0e0' : '#333',
+              borderBottom: activeTab === t ? '2px solid #4ade80' : '2px solid transparent',
+              letterSpacing: '0.08em',
+            }}>
+              {t === 'radar' ? 'RADAR CHART' : 'GAME LOG'}
+            </button>
+          ))}
+        </div>
 
-          {shotError ? (
-            <div style={{ padding: '40px', textAlign: 'center', fontSize: '11px',
-              color: '#2a2a2a', background: '#080808', borderRadius: '4px' }}>
-              {shotError}
-              <div style={{ marginTop: '8px', fontSize: '10px', color: '#1a1a1a' }}>
-                NBA Stats API may be temporarily unavailable
+        <div style={{ padding: '24px' }}>
+          {/* Radar tab */}
+          {activeTab === 'radar' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '32px', alignItems: 'start' }}>
+              <RadarChart player={player} allPlayers={allPlayers} />
+              <div>
+                <div style={{ fontSize: '9px', color: '#2a2a2a', letterSpacing: '0.15em', marginBottom: '16px' }}>
+                  RECENT TRENDS
+                </div>
+                {[
+                  { label: 'PTS', vals: ptsVals, color: '#60a5fa' },
+                  { label: 'REB', vals: rebVals, color: '#34d399' },
+                  { label: 'AST', vals: astVals, color: '#fbbf24' },
+                ].map(({ label, vals, color }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '16px',
+                    marginBottom: '14px', padding: '10px 0', borderBottom: '1px solid #0d0d0d' }}>
+                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
+                      color: '#333', letterSpacing: '0.1em', width: '28px' }}>{label}</span>
+                    <Sparkline vals={vals} color={color} />
+                    {vals.length > 0 && (
+                      <div style={{ marginLeft: '8px' }}>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px',
+                          fontWeight: 700, color }}>
+                          {vals[vals.length - 1]}
+                        </span>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
+                          color: '#333', marginLeft: '4px' }}>last game</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace',
+                  fontSize: '8px', color: '#1a1a1a', lineHeight: 1.8 }}>
+                  Radar axes normalized to position-adjusted max values<br />
+                  Sparklines show last 20 games (oldest → newest)
+                </div>
               </div>
             </div>
-          ) : (
-            <div style={{ maxWidth: '420px', margin: '0 auto' }}>
-              <ShotChart shots={shots} loading={shotLoading} />
+          )}
+
+          {/* Game log tab */}
+          {activeTab === 'gamelog' && (
+            <div>
+              {logLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', fontSize: '11px', color: '#2a2a2a' }}>Loading...</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <div style={{ display: 'grid',
+                    gridTemplateColumns: '90px 55px 50px 50px 50px 50px 50px 50px 50px',
+                    padding: '6px 0', fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
+                    color: '#2a2a2a', letterSpacing: '0.1em', borderBottom: '1px solid #111',
+                    minWidth: '520px' }}>
+                    <span>DATE</span><span>OPP</span><span>MIN</span>
+                    <span>PTS</span><span>REB</span><span>AST</span>
+                    <span>STL</span><span>BLK</span><span>3PM</span>
+                  </div>
+                  {gamelog.map((g, i) => (
+                    <div key={i} style={{ display: 'grid',
+                      gridTemplateColumns: '90px 55px 50px 50px 50px 50px 50px 50px 50px',
+                      padding: '8px 0', borderBottom: '1px solid #0d0d0d',
+                      minWidth: '520px', alignItems: 'center',
+                      background: i % 2 === 0 ? 'transparent' : '#080808' }}>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>
+                        {String(g.game_date).slice(5)}
+                      </span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444' }}>
+                        {g.is_home ? '' : '@'}{g.opponent_abbr}
+                      </span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>
+                        {Math.round(g.minutes)}
+                      </span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px',
+                        fontWeight: 700, color: '#e0e0e0' }}>{g.pts}</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#888' }}>{g.reb}</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#888' }}>{g.ast}</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{g.stl}</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{g.blk}</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{g.fg3m}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -421,7 +469,7 @@ export default function ProfilesPage() {
   }, [])
 
   const teams = useMemo(() =>
-    ['ALL', ...players.map(p => p.team_abbr).filter((v, i, a) => a.indexOf(v) === i).sort()],
+    ['ALL', ...Array.from(new Set(players.map(p => p.team_abbr))).sort()],
     [players]
   )
 
@@ -449,7 +497,7 @@ export default function ProfilesPage() {
       fontFamily: 'IBM Plex Mono, monospace' }}>
 
       {selected && (
-        <PlayerModal player={selected} onClose={() => setSelected(null)} />
+        <PlayerModal player={selected} allPlayers={players} onClose={() => setSelected(null)} />
       )}
 
       {/* Header */}
