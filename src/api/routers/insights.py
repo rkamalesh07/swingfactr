@@ -378,35 +378,35 @@ async def matchup_difficulty(
     Rate how difficult a specific matchup is for a player
     using defensive profiles + historical performance vs this opponent.
     """
-    ABBR_NORM = {"SA":"SAS","NO":"NOP","GS":"GSW","NY":"NYK","WSH":"WAS","PHO":"PHX"}
+    ABBR_NORM = {"GSW":"GS","SAS":"SA","NOP":"NO","NYK":"NY","UTA":"UTAH","WAS":"WSH","PHO":"PHX","CHA":"CHA"}
     opp = ABBR_NORM.get(opp.upper(), opp.upper())
 
     with get_conn() as conn:
         with conn.cursor() as cur:
             # Player's season averages
             cur.execute("""
-                SELECT player_name, team_abbr, position,
+                SELECT player_name, MAX(team_abbr) as team_abbr, MAX(position) as position,
                        AVG(pts) as pts, AVG(reb) as reb, AVG(ast) as ast,
                        AVG(fg3m) as fg3m, AVG(stl) as stl, AVG(blk) as blk,
                        AVG(minutes) as minutes, COUNT(*) as gp
                 FROM player_game_logs
                 WHERE season_id = %s AND LOWER(player_name) = LOWER(%s)
                   AND minutes >= 8
-                GROUP BY player_name, team_abbr, position
+                GROUP BY player_name
             """, (SEASON, player))
             row = cur.fetchone()
 
             if not row:
                 # fuzzy
                 cur.execute("""
-                    SELECT player_name, team_abbr, position,
+                    SELECT player_name, MAX(team_abbr) as team_abbr, MAX(position) as position,
                            AVG(pts) as pts, AVG(reb) as reb, AVG(ast) as ast,
                            AVG(fg3m) as fg3m, AVG(stl) as stl, AVG(blk) as blk,
                            AVG(minutes) as minutes, COUNT(*) as gp
                     FROM player_game_logs
                     WHERE season_id = %s AND LOWER(player_name) LIKE LOWER(%s)
                       AND minutes >= 8
-                    GROUP BY player_name, team_abbr, position
+                    GROUP BY player_name
                     LIMIT 1
                 """, (SEASON, f"%{player}%"))
                 row = cur.fetchone()
