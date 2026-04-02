@@ -64,8 +64,8 @@ async def get_streaks(
                 ),
                 season_avg AS (
                     SELECT player_name,
-                           AVG({stat})  as season_avg,
-                           STDDEV({stat}) as season_std,
+                           AVG(val)  as season_avg,
+                           STDDEV(val) as season_std,
                            COUNT(*)     as gp,
                            MAX(team_abbr) as team
                     FROM ranked
