@@ -199,10 +199,12 @@ async def get_breakout(limit: int = Query(30)):
                        ROUND(v.min_l5::numeric,1)  as min_l5,
                        ROUND(s.pts_std::numeric,2) as pts_std,
                        ROUND(r.fga_l10::numeric,1) as fga_l10,
-                       ROUND(s.fga_avg::numeric,1) as fga_season
+                       ROUND(s.fga_avg::numeric,1) as fga_season,
+                       COALESCE(pa.age, 99)         as player_age
                 FROM season_stats s
                 JOIN recent_stats r ON s.player_name = r.player_name
                 JOIN very_recent  v ON s.player_name = v.player_name
+                LEFT JOIN player_ages pa ON LOWER(pa.full_name) = LOWER(s.player_name)
             """, (SEASON,))
             cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
@@ -210,6 +212,11 @@ async def get_breakout(limit: int = Query(30)):
     results = []
     for row in rows:
         r = dict(zip(cols, row))
+
+        # Age filter — skip players 27+ (established vets, not breakout candidates)
+        player_age = int(r.get("player_age") or 99)
+        if player_age > 26 and player_age != 99:
+            continue
 
         pts_s   = float(r["pts_season"] or 0)
         pts_l10 = float(r["pts_l10"]    or 0)
