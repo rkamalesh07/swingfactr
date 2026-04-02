@@ -429,7 +429,7 @@ async def matchup_difficulty(
             """, (SEASON, p_data["player_name"], opp))
             vs_rows = cur.fetchall()
             vs_cols = ["pts","reb","ast","fg3m","stl","blk","minutes","game_date"]
-            vs_games = [dict(zip(vs_cols, r)) for r in vs_rows]
+            vs_games = [{k: str(v) if hasattr(v, "isoformat") else v for k,v in dict(zip(vs_cols, r)).items()} for r in vs_rows]
 
             # Defensive profiles for this matchup
             cur.execute("""
