@@ -4,403 +4,334 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const MONO = 'IBM Plex Mono, monospace'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface StoryCard {
-  type:     'hot' | 'cold' | 'breakout' | 'promo' | 'clutch' | 'playoffs' | 'trending'
-  headline: string
-  subline:  string
-  value:    string
-  valueLabel: string
-  delta?:   string
+interface Story {
   tag:      string
-  tagColor: string
+  headline: string
+  context:  string
+  player?:  string
   link:     string
   cta:      string
+  accent:   string
 }
 
-interface BoardStats {
-  total: number; strong_overs: number; strong_unders: number; players: number
-}
+// ─── Story builders ────────────────────────────────────────────────────────────
 
-// ─── Story builders ───────────────────────────────────────────────────────────
+function buildStories(streakData: any, breakoutData: any, standingsData: any): Story[] {
+  const stories: Story[] = []
 
-function buildStreakStories(pts: any, reb: any, ast: any): StoryCard[] {
-  const stories: StoryCard[] = []
-  const STAT_WORD: Record<string,string> = {pts:'scoring',reb:'rebounding',ast:'playmaking',fg3m:'shooting',stl:'steals',blk:'blocks'}
-
-  // Pick the single most surprising HOT streak
-  const hotCandidates: any[] = []
-  for (const [data, stat] of [[pts,'pts'],[reb,'reb'],[ast,'ast']] as [any,string][]) {
-    for (const p of (data?.hot || []).filter((p: any) => p.z_score >= 1.5))
-      hotCandidates.push({...p, stat})
-  }
-  hotCandidates.sort((a,b) => b.z_score - a.z_score)
+  // Hot streak — pick the most surprising one, natural language only
+  const hotCandidates = (streakData?.hot || [])
+    .filter((p: any) => p.composite_z >= 1.2)
+    .slice(0, 3)
 
   if (hotCandidates.length > 0) {
     const p = hotCandidates[0]
-    const word = STAT_WORD[p.stat] || 'game'
-    const headlines = [
-      `${p.player_name} is on a hot streak`,
-      `${p.player_name} is playing some of the best basketball of his season`,
-      `${p.player_name} has been impossible to stop lately`,
-    ]
+    const dimWord: Record<string,string> = {
+      scoring: 'has been scoring at will',
+      playmaking: 'is facilitating at a new level',
+      rebounding: 'is dominating the glass',
+      defense: 'is locking down on defense',
+      efficiency: 'is playing his most efficient basketball',
+      minutes: 'is getting major run and delivering',
+    }
     stories.push({
-      type: 'hot',
-      headline: headlines[Math.floor(Math.random() * headlines.length)],
-      subline:  `His ${word} has been trending sharply upward over the last two weeks. Check the full breakdown on the Insights page.`,
-      value:    '🔥',
-      valueLabel: 'HOT STREAK',
-      tag:      'TRENDING UP',
-      tagColor: '#f97316',
+      tag:      'Hot streak',
+      headline: `${p.player_name} ${dimWord[p.best_stat] || 'is on a tear'}.`,
+      context:  'Production has trended sharply upward over the past two weeks.',
+      player:   p.player_name,
       link:     '/insights',
-      cta:      'SEE FULL BREAKDOWN',
+      cta:      'See all streaks',
+      accent:   '#f97316',
     })
   }
 
-  // Pick the single most surprising COLD streak
-  const coldCandidates: any[] = []
-  for (const [data, stat] of [[pts,'pts'],[reb,'reb'],[ast,'ast']] as [any,string][]) {
-    for (const p of (data?.cold || []).filter((p: any) => p.z_score <= -1.5))
-      coldCandidates.push({...p, stat})
-  }
-  coldCandidates.sort((a,b) => a.z_score - b.z_score)
+  // Cold streak
+  const coldCandidates = (streakData?.cold || [])
+    .filter((p: any) => p.composite_z <= -1.2)
+    .slice(0, 3)
 
   if (coldCandidates.length > 0) {
     const p = coldCandidates[0]
-    const word = STAT_WORD[p.stat] || 'game'
     stories.push({
-      type: 'cold',
-      headline: `${p.player_name} has gone quiet`,
-      subline:  `His ${word} has dipped noticeably over recent games. Whether it's a slump, matchups, or something else — the trend is real. See the data.`,
-      value:    '🧊',
-      valueLabel: 'COLD STREAK',
-      tag:      'TRENDING DOWN',
-      tagColor: '#60a5fa',
+      tag:      'Cold streak',
+      headline: `${p.player_name} has gone quiet.`,
+      context:  'Output has dipped noticeably from his season baseline over recent games.',
+      player:   p.player_name,
       link:     '/insights',
-      cta:      'SEE FULL BREAKDOWN',
+      cta:      'See full breakdown',
+      accent:   '#5b8ef0',
     })
+  }
+
+  // Breakout
+  const topBreakout = breakoutData?.results?.[0]
+  if (topBreakout) {
+    const dimLabel: Record<string,string> = {
+      efficiency: 'overall efficiency',
+      playmaking: 'playmaking',
+      rebounding: 'rebounding',
+      defense: 'defensive impact',
+      scoring: 'scoring efficiency',
+      minutes: 'role expansion',
+    }
+    const dim = dimLabel[topBreakout.lead_dimension] || 'efficiency'
+    stories.push({
+      tag:      'Breakout watch',
+      headline: `${topBreakout.player_name} is trending in the right direction.`,
+      context:  `Our model flags a meaningful jump in ${dim} over the past 10 games. Age ${topBreakout.age || '—'}.`,
+      player:   topBreakout.player_name,
+      link:     '/insights',
+      cta:      'See breakout players',
+      accent:   '#c8f135',
+    })
+  }
+
+  // Playoffs promo
+  stories.push({
+    tag:      'Playoffs',
+    headline: 'The race for the Larry O\'Brien is wide open.',
+    context:  'Simulate the full postseason from current standings. Lock completed series. Run up to 1 million scenarios.',
+    link:     '/playoffs',
+    cta:      'Open simulator',
+    accent:   '#c8f135',
+  })
+
+  // Trending team
+  if (standingsData) {
+    const all = [...(standingsData.east || []), ...(standingsData.west || [])]
+    const surprising = all
+      .filter((t: any) => t.seed >= 5 && t.net_rtg > 3)
+      .sort((a: any, b: any) => b.net_rtg - a.net_rtg)
+    if (surprising.length > 0) {
+      const t = surprising[0]
+      stories.push({
+        tag:      'Playoff picture',
+        headline: `${t.team} are playing better than their seed suggests.`,
+        context:  'Efficiency metrics point to a team that could be dangerous in the postseason.',
+        link:     '/playoffs',
+        cta:      'See standings',
+        accent:   '#f97316',
+      })
+    }
   }
 
   return stories
 }
 
-function buildBreakoutStories(data: any): StoryCard[] {
-  if (!data?.results?.length) return []
-  const p = data.results[0]
-  const headlines = [
-    `${p.player_name} might be on the verge of something`,
-    `Keep an eye on ${p.player_name}`,
-    `${p.player_name} is earning a bigger role`,
-  ]
-  return [{
-    type: 'breakout',
-    headline: headlines[0],
-    subline:  `More minutes, more touches, and the production is following. Our model flags this as one of the stronger breakout signals right now.`,
-    value:    '⚡',
-    valueLabel: 'BREAKOUT',
-    tag:      'BREAKOUT WATCH',
-    tagColor: '#a78bfa',
-    link:     '/insights',
-    cta:      'SEE BREAKOUT PLAYERS',
-  }]
-}
+// ─── Editorial feed card ───────────────────────────────────────────────────────
 
-function buildClutchStory(data: any): StoryCard[] {
-  if (!data?.results?.length) return []
-  // Top clutch team by net rating
-  const best = data.results.slice(0,3)
-  if (!best.length) return []
-  const t = best[0]
-  return [{
-    type: 'clutch',
-    headline: `${t.team_name || t.team} are the best team when it matters most`,
-    subline:  `Top clutch net rating in the NBA — the final 5 minutes of close games, where championships are decided.`,
-    value:    t.net_rtg !== undefined ? `${t.net_rtg > 0 ? '+' : ''}${parseFloat(t.net_rtg).toFixed(1)}` : '—',
-    valueLabel: 'CLUTCH NET RTG',
-    tag:      'CLUTCH',
-    tagColor: '#fbbf24',
-    link:     '/clutch',
-    cta:      'SEE CLUTCH RANKINGS',
-  }]
-}
-
-function buildPlayoffsStory(): StoryCard[] {
-  return [{
-    type: 'playoffs',
-    headline: `Who takes home the Larry O'Brien? Run the numbers yourself`,
-    subline:  `Our Monte Carlo simulator runs up to 1 million seasons from the current standings. Lock in completed series, simulate what's left — from any point in the season.`,
-    value:    '1M',
-    valueLabel: 'SIMULATIONS',
-    tag:      'PLAYOFF SIMULATOR',
-    tagColor: '#4ade80',
-    link:     '/playoffs',
-    cta:      'OPEN SIMULATOR',
-  }]
-}
-
-function buildTrendingStory(standings: any): StoryCard[] {
-  if (!standings?.east?.length) return []
-  // Find team with biggest positive net_rtg relative to their seed (overperforming)
-  const all = [...(standings.east||[]), ...(standings.west||[])]
-  const surprising = all
-    .filter((t: any) => t.seed >= 4 && t.net_rtg > 3)
-    .sort((a: any, b: any) => b.net_rtg - a.net_rtg)
-  if (!surprising.length) return []
-  const t = surprising[0]
-  return [{
-    type: 'trending',
-    headline: `${t.team} are playing better than their record suggests`,
-    subline:  `Their record doesn't tell the full story. By efficiency metrics, they're playing at a level that should make any playoff opponent nervous.`,
-    value:    '📈',
-    valueLabel: 'TRENDING',
-    tag:      'TRENDING UP',
-    tagColor: '#34d399',
-    link:     '/playoffs',
-    cta:      'SEE STANDINGS',
-  }]
-}
-
-function buildPromoStory(): StoryCard[] {
-  return [{
-    type: 'promo',
-    headline: `Curious what our model says about tonight's player performances?`,
-    subline:  `We run distribution-based predictions using Bayesian shrinkage, positional opponent defense, and injury-adjusted usage boosts — updated 3x daily before tip-off.`,
-    value:    'v14',
-    valueLabel: 'MODEL VERSION',
-    tag:      'PROPS MODEL',
-    tagColor: '#4ade80',
-    link:     '/props',
-    cta:      'SEE THE PROPS BOARD',
-  }]
-}
-
-// ─── Carousel ─────────────────────────────────────────────────────────────────
-
-function Card({ card, visible }: { card: StoryCard; visible: boolean }) {
+function StoryCard({ story, active }: { story: Story; active: boolean }) {
   return (
     <div style={{
       position: 'absolute', inset: 0,
-      opacity: visible ? 1 : 0,
-      transform: visible ? 'translateY(0)' : 'translateY(10px)',
-      transition: 'opacity 0.6s ease, transform 0.6s ease',
-      pointerEvents: visible ? 'auto' : 'none',
-      padding: '32px 40px',
+      opacity: active ? 1 : 0,
+      transform: active ? 'translateY(0)' : 'translateY(12px)',
+      transition: 'opacity 0.55s ease, transform 0.55s ease',
+      pointerEvents: active ? 'auto' : 'none',
+      padding: '36px 40px',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
     }}>
-      {/* Tag row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* Tag */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center',
+        fontFamily: 'DM Mono, monospace', fontSize: '10px',
+        letterSpacing: '0.15em', color: story.accent,
+        textTransform: 'uppercase' as const,
+      }}>
         <span style={{
-          fontFamily: MONO, fontSize: '9px', letterSpacing: '0.18em',
-          color: card.tagColor, padding: '4px 10px',
-          border: `1px solid ${card.tagColor}50`,
-          borderRadius: '2px', background: `${card.tagColor}12`,
-        }}>{card.tag}</span>
+          display: 'inline-block', width: '6px', height: '6px',
+          borderRadius: '50%', background: story.accent, marginRight: '8px',
+        }} />
+        {story.tag}
       </div>
 
-      {/* Middle */}
+      {/* Content */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', marginBottom: '16px' }}>
-          <span style={{
-            fontSize: card.value.length <= 2 ? '48px' : '60px',
-            fontFamily: card.value.length <= 2 ? 'sans-serif' : MONO,
-            fontWeight: 700,
-            color: card.tagColor, lineHeight: 1, letterSpacing: '-0.03em',
-          }}>{card.value}</span>
-          <div>
-            {card.delta && (
-              <div style={{ fontFamily: MONO, fontSize: '14px', fontWeight: 600,
-                color: card.type === 'cold' ? '#93c5fd' : '#4ade80', marginBottom: '2px' }}>
-                {card.delta}
-              </div>
-            )}
-            <div style={{ fontFamily: MONO, fontSize: '8px', color: '#2a2a2a',
-              letterSpacing: '0.12em' }}>{card.valueLabel}</div>
-          </div>
-        </div>
-        <div style={{ fontFamily: MONO, fontSize: '20px', fontWeight: 700, color: '#e0e0e0',
-          lineHeight: 1.3, marginBottom: '10px', maxWidth: '580px', letterSpacing: '-0.01em' }}>
-          {card.headline}
-        </div>
-        <div style={{ fontFamily: MONO, fontSize: '11px', color: '#3a3a3a',
-          lineHeight: 1.7, maxWidth: '520px' }}>
-          {card.subline}
-        </div>
+        <h2 style={{
+          fontFamily: 'Inter, sans-serif',
+          fontSize: '26px', fontWeight: 600,
+          color: '#f2f0eb', lineHeight: 1.25,
+          marginBottom: '12px', letterSpacing: '-0.02em',
+          maxWidth: '520px',
+        }}>
+          {story.headline}
+        </h2>
+        <p style={{
+          fontFamily: 'Inter, sans-serif',
+          fontSize: '14px', color: '#6b6a6f',
+          lineHeight: 1.65, maxWidth: '440px',
+        }}>
+          {story.context}
+        </p>
       </div>
 
       {/* CTA */}
-      <Link href={card.link} style={{
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
-        fontFamily: MONO, fontSize: '10px', color: card.tagColor,
-        textDecoration: 'none', letterSpacing: '0.12em',
-        borderBottom: `1px solid ${card.tagColor}40`, paddingBottom: '2px',
-        width: 'fit-content',
+      <Link href={story.link} style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        fontFamily: 'DM Mono, monospace', fontSize: '11px',
+        color: story.accent, letterSpacing: '0.1em',
+        textTransform: 'uppercase' as const,
+        transition: 'opacity 0.15s',
       }}>
-        {card.cta} →
+        {story.cta}
+        <span style={{ fontSize: '14px' }}>→</span>
       </Link>
     </div>
   )
 }
 
-function Carousel({ stories }: { stories: StoryCard[] }) {
-  const [idx, setIdx] = useState(0)
-  const [paused, setPaused] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pausedRef = useRef(false)
+// ─── Carousel ─────────────────────────────────────────────────────────────────
 
-  // Keep pausedRef in sync
+function FeedCarousel({ stories }: { stories: Story[] }) {
+  const [idx, setIdx]       = useState(0)
+  const [paused, setPaused] = useState(false)
+  const pausedRef = useRef(false)
   useEffect(() => { pausedRef.current = paused }, [paused])
 
-  // Auto-advance — simple stable interval
   useEffect(() => {
     if (stories.length < 2) return
-    intervalRef.current = setInterval(() => {
-      if (!pausedRef.current) {
-        setIdx(i => (i + 1) % stories.length)
-      }
+    const id = setInterval(() => {
+      if (!pausedRef.current) setIdx(i => (i + 1) % stories.length)
     }, 7000)
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [stories.length]) // only re-run if story count changes
+    return () => clearInterval(id)
+  }, [stories.length])
 
   if (!stories.length) return (
-    <div style={{ height: '300px', background: '#0a0a0a', border: '1px solid #111',
-      borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: MONO, fontSize: '10px', color: '#1a1a1a' }}>
-      Generating stories...
+    <div style={{ height: '280px', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', color: '#333' }}>
+      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px' }}>Loading...</span>
     </div>
   )
 
-  const card = stories[idx]
-
   return (
     <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      {/* Card */}
-      <div style={{ position: 'relative', height: '300px', background: '#0a0a0a',
-        border: '1px solid #111', borderRadius: '6px', overflow: 'hidden' }}>
-        {/* Glow */}
+      {/* Card area */}
+      <div style={{
+        position: 'relative', height: '280px',
+        background: '#141418',
+        border: '1px solid #222228',
+        borderRadius: '8px', overflow: 'hidden',
+      }}>
+        {/* Accent line */}
         <div style={{
-          position: 'absolute', top: 0, right: 0, width: '260px', height: '100%',
-          background: `radial-gradient(ellipse at top right, ${card.tagColor}0a 0%, transparent 65%)`,
-          pointerEvents: 'none', transition: 'background 0.6s',
+          position: 'absolute', left: 0, top: '28px', bottom: '28px',
+          width: '2px', background: stories[idx]?.accent || '#c8f135',
+          opacity: 0.7, transition: 'background 0.5s',
         }} />
-        {/* Left accent */}
-        <div style={{
-          position: 'absolute', left: 0, top: '24px', bottom: '24px', width: '2px',
-          background: card.tagColor, opacity: 0.5, borderRadius: '1px',
-          transition: 'background 0.6s',
-        }} />
-        {stories.map((s, i) => <Card key={i} card={s} visible={i === idx} />)}
+        {stories.map((s, i) => (
+          <StoryCard key={i} story={s} active={i === idx} />
+        ))}
       </div>
 
       {/* Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px', padding: '0 2px' }}>
-        <button onClick={() => setIdx(i => (i - 1 + stories.length) % stories.length)}
-          style={{ background:'none', border:'1px solid #111', borderRadius:'3px',
-            padding:'4px 10px', cursor:'pointer', fontFamily:MONO, fontSize:'11px', color:'#333' }}>
-          ←
-        </button>
-        <button onClick={() => setIdx(i => (i + 1) % stories.length)}
-          style={{ background:'none', border:'1px solid #111', borderRadius:'3px',
-            padding:'4px 10px', cursor:'pointer', fontFamily:MONO, fontSize:'11px', color:'#333' }}>
-          →
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px',
+        marginTop: '14px', padding: '0 2px' }}>
+        {['←','→'].map((arrow, di) => (
+          <button key={arrow} onClick={() => setIdx(i =>
+            di === 0 ? (i - 1 + stories.length) % stories.length : (i + 1) % stories.length
+          )} style={{
+            background: 'none', border: '1px solid #222228', borderRadius: '4px',
+            padding: '4px 10px', cursor: 'pointer',
+            fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#444',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#f2f0eb'; e.currentTarget.style.borderColor = '#444' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = '#222228' }}>
+            {arrow}
+          </button>
+        ))}
 
-        {/* Progress dots */}
-        <div style={{ display:'flex', gap:'5px', flex:1 }}>
+        {/* Dots */}
+        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
           {stories.map((s, i) => (
             <button key={i} onClick={() => setIdx(i)} style={{
-              height: '5px', width: i === idx ? '20px' : '5px',
-              background: i === idx ? s.tagColor : '#1a1a1a',
-              border: 'none', borderRadius: '3px', cursor: 'pointer', padding: 0,
-              transition: 'width 0.35s ease, background 0.35s ease',
+              height: '4px', width: i === idx ? '18px' : '4px',
+              background: i === idx ? s.accent : '#2e2e36',
+              border: 'none', borderRadius: '2px', cursor: 'pointer', padding: 0,
+              transition: 'width 0.3s ease, background 0.3s ease',
             }} />
           ))}
         </div>
 
-        <span style={{ fontFamily:MONO, fontSize:'9px', color:'#1a1a1a' }}>
-          {String(idx+1).padStart(2,'0')} / {String(stories.length).padStart(2,'0')}
+        <span style={{
+          fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#333',
+          letterSpacing: '0.08em',
+        }}>
+          {String(idx+1).padStart(2,'0')}/{String(stories.length).padStart(2,'0')}
         </span>
 
-        {/* Live dot */}
-        <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{
-            width:'5px', height:'5px', borderRadius:'50%',
-            background: paused ? '#222' : '#4ade80',
-            boxShadow: paused ? 'none' : '0 0 5px #4ade80',
-            transition: 'all 0.3s',
+            width: '5px', height: '5px', borderRadius: '50%',
+            background: paused ? '#2e2e36' : '#c8f135',
+            transition: 'background 0.3s',
           }} />
-          <span style={{ fontFamily:MONO, fontSize:'8px', color:'#1a1a1a' }}>
-            {paused ? 'PAUSED' : 'AUTO'}
-          </span>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Live ticker ──────────────────────────────────────────────────────────────
+// ─── Quick nav grid ────────────────────────────────────────────────────────────
 
-function Ticker({ stats }: { stats: BoardStats | null }) {
-  const items = [
-    stats ? `${stats.total} props today` : 'Props updated 3x daily',
-    '2025–26 NBA season',
-    'Model v14 · Bayesian shrinkage',
-    stats ? `${stats.players} players tracked` : 'All 30 teams',
-    'Playoff simulator · up to 1M sims',
-    'Hot/cold streaks · breakout detection',
-    'Positional opponent defense profiles',
-  ]
-  const rep = [...items,...items,...items]
+const NAV_ITEMS = [
+  { label: 'Props Board',   sub: 'Model predictions · Daily',    href: '/props',    },
+  { label: 'Insights',      sub: 'Streaks · Breakouts · Trends', href: '/insights', },
+  { label: 'Playoffs',      sub: 'Simulate the postseason',      href: '/playoffs', },
+  { label: 'Head-to-Head',  sub: 'Any two players',              href: '/compare',  },
+  { label: 'Matchups',      sub: 'Difficulty ratings',           href: '/matchup',  },
+  { label: 'Profiles',      sub: '500+ players',                 href: '/profiles', },
+]
+
+function QuickNav() {
   return (
-    <div style={{ overflow:'hidden', borderTop:'1px solid #0f0f0f',
-      borderBottom:'1px solid #0f0f0f', padding:'8px 0', background:'#080808' }}>
-      <div style={{ display:'flex', gap:'48px', whiteSpace:'nowrap',
-        animation:'ticker-scroll 28s linear infinite' }}>
-        {rep.map((item,i) => (
-          <span key={i} style={{ fontFamily:MONO, fontSize:'9px', color:'#222',
-            letterSpacing:'0.12em', flexShrink:0 }}>
-            {i % items.length === 0 && <span style={{ color:'#4ade80', marginRight:'16px' }}>●</span>}
-            {item.toUpperCase()}
-          </span>
-        ))}
-      </div>
-      <style>{`@keyframes ticker-scroll{0%{transform:translateX(0)}100%{transform:translateX(-33.33%)}}`}</style>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px',
+      background: '#222228', border: '1px solid #222228', borderRadius: '8px',
+      overflow: 'hidden' }}>
+      {NAV_ITEMS.map(item => (
+        <Link key={item.href} href={item.href} style={{
+          display: 'block', padding: '16px 18px',
+          background: '#141418',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#1a1a20')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#141418')}>
+          <div style={{
+            fontFamily: 'Inter, sans-serif', fontSize: '13px',
+            fontWeight: 500, color: '#f2f0eb', marginBottom: '3px',
+          }}>{item.label}</div>
+          <div style={{
+            fontFamily: 'DM Mono, monospace', fontSize: '10px',
+            color: '#444', letterSpacing: '0.04em',
+          }}>{item.sub}</div>
+        </Link>
+      ))}
     </div>
   )
 }
 
-// ─── Quick nav ────────────────────────────────────────────────────────────────
+// ─── Date strip ───────────────────────────────────────────────────────────────
 
-const NAV = [
-  { label:'Props Board',    sub:'Model predictions',  href:'/props',     color:'#4ade80' },
-  { label:'Insights',       sub:'Streaks · Breakouts', href:'/insights',  color:'#a78bfa' },
-  { label:'Playoffs',       sub:'Simulate the race',  href:'/playoffs',  color:'#fbbf24' },
-  { label:'Head-to-Head',   sub:'Player comparisons', href:'/compare',   color:'#60a5fa' },
-  { label:'Matchups',       sub:'Difficulty ratings', href:'/matchup',   color:'#f97316' },
-  { label:'Player Profiles',sub:'574 players',        href:'/profiles',  color:'#888'    },
-]
-
-function QuickNav() {
-  const [hov, setHov] = useState<number|null>(null)
+function DateStrip() {
+  const now = new Date()
+  const day = now.toLocaleDateString('en-US', { weekday: 'long' })
+  const date = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px' }}>
-      {NAV.map((m,i) => (
-        <Link key={m.href} href={m.href} style={{ textDecoration:'none' }}>
-          <div onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}
-            style={{ padding:'13px 16px',
-              background: hov===i?'#0d0d0d':'#0a0a0a',
-              border:`1px solid ${hov===i?m.color+'25':'#111'}`,
-              borderRadius:'4px', cursor:'pointer', transition:'all 0.15s' }}>
-            <div style={{ fontFamily:MONO, fontSize:'11px', fontWeight:700,
-              color: hov===i?m.color:'#666', marginBottom:'3px', transition:'color 0.15s' }}>
-              {m.label}
-            </div>
-            <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a' }}>{m.sub}</div>
-          </div>
-        </Link>
-      ))}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px',
+      marginBottom: '36px' }}>
+      <span style={{
+        fontFamily: 'DM Mono, monospace', fontSize: '11px',
+        color: '#444', letterSpacing: '0.12em',
+        textTransform: 'uppercase' as const,
+      }}>
+        {day}, {date}
+      </span>
+      <span style={{ flex: 1, height: '1px', background: '#1a1a20' }} />
+      <span style={{
+        fontFamily: 'DM Mono, monospace', fontSize: '10px',
+        color: '#2e2e36', letterSpacing: '0.08em',
+      }}>2025–26 NBA</span>
     </div>
   )
 }
@@ -408,132 +339,122 @@ function QuickNav() {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const [stories,    setStories]    = useState<StoryCard[]>([])
-  const [boardStats, setBoardStats] = useState<BoardStats|null>(null)
-  const today = new Date().toLocaleDateString('en-US',
-    {weekday:'long', month:'long', day:'numeric'})
+  const [stories, setStories] = useState<Story[]>([])
 
   useEffect(() => {
-    fetch(`${API}/props/board/stats`).then(r=>r.json()).then(setBoardStats).catch(()=>{})
-
     const load = async () => {
-      const [ptsDat, rebDat, astDat, breakoutDat, clutchDat, standingsDat] =
-        await Promise.allSettled([
-          fetch(`${API}/insights/streaks?stat=pts&min_gp=10&limit=16`).then(r=>r.json()),
-          fetch(`${API}/insights/streaks?stat=reb&min_gp=10&limit=8`).then(r=>r.json()),
-          fetch(`${API}/insights/streaks?stat=ast&min_gp=10&limit=8`).then(r=>r.json()),
-          fetch(`${API}/insights/breakout?limit=5`).then(r=>r.json()),
-          fetch(`${API}/clutch`).then(r=>r.json()),
-          fetch(`${API}/playoffs/standings`).then(r=>r.json()),
-        ])
-
-      const pts      = ptsDat.status      === 'fulfilled' ? ptsDat.value      : null
-      const reb      = rebDat.status      === 'fulfilled' ? rebDat.value      : null
-      const ast      = astDat.status      === 'fulfilled' ? astDat.value      : null
-      const breakout = breakoutDat.status === 'fulfilled' ? breakoutDat.value : null
-      const clutch   = clutchDat.status   === 'fulfilled' ? clutchDat.value   : null
-      const standings= standingsDat.status=== 'fulfilled' ? standingsDat.value: null
-
-      const built: StoryCard[] = [
-        // 1. Surprising hot streak
-        ...buildStreakStories(pts, reb, ast).filter(s => s.type === 'hot').slice(0,1),
-        // 2. Surprising cold streak
-        ...buildStreakStories(pts, reb, ast).filter(s => s.type === 'cold').slice(0,1),
-        // 3. Breakout
-        ...buildBreakoutStories(breakout),
-        // 4. Playoffs promo
-        ...buildPlayoffsStory(),
-        // 5. Clutch teams
-        ...buildClutchStory(clutch),
-        // 6. Trending team
-        ...buildTrendingStory(standings),
-        // 7. Props promo — always last
-        ...buildPromoStory(),
-      ]
-
-      setStories(built)
+      const [overallRes, breakoutRes, standingsRes] = await Promise.allSettled([
+        fetch(`${API}/insights/streaks/overall?min_gp=10&limit=10`).then(r => r.json()),
+        fetch(`${API}/insights/breakout?limit=5`).then(r => r.json()),
+        fetch(`${API}/playoffs/standings`).then(r => r.json()),
+      ])
+      const overall   = overallRes.status   === 'fulfilled' ? overallRes.value   : null
+      const breakout  = breakoutRes.status  === 'fulfilled' ? breakoutRes.value  : null
+      const standings = standingsRes.status === 'fulfilled' ? standingsRes.value : null
+      setStories(buildStories(overall, breakout, standings))
     }
-
     load()
   }, [])
 
   return (
-    <div style={{ minHeight:'100vh', background:'#080808', color:'#888' }}>
-      <Ticker stats={boardStats} />
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 28px' }}>
+      <DateStrip />
 
-      <div style={{ maxWidth:'1100px', margin:'0 auto', padding:'40px 28px' }}>
-        {/* Header */}
-        <div style={{ marginBottom:'36px' }}>
-          <div style={{ fontFamily:MONO, fontSize:'9px', color:'#222',
-            letterSpacing:'0.18em', marginBottom:'12px' }}>
-            {today.toUpperCase()} · NBA · 2025–26
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '32px',
+        alignItems: 'start' }}>
+
+        {/* Left — feed */}
+        <div>
+          {/* Eyebrow */}
+          <div style={{ display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', marginBottom: '14px' }}>
+            <span style={{
+              fontFamily: 'DM Mono, monospace', fontSize: '10px',
+              color: '#444', letterSpacing: '0.15em',
+              textTransform: 'uppercase' as const,
+            }}>
+              Today's intelligence
+            </span>
+            <Link href="/insights" style={{
+              fontFamily: 'DM Mono, monospace', fontSize: '10px',
+              color: '#444', letterSpacing: '0.1em',
+              textTransform: 'uppercase' as const,
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#c8f135')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
+              All insights →
+            </Link>
           </div>
-          <h1 style={{ fontSize:'34px', fontWeight:700, color:'#e0e0e0',
-            margin:'0 0 8px', fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.15 }}>
-            What's happening<br />
-            <span style={{ color:'#4ade80' }}>in the NBA right now.</span>
-          </h1>
-          <div style={{ fontFamily:MONO, fontSize:'11px', color:'#333', marginTop:'10px' }}>
-            Daily intelligence on streaks, breakouts, matchups, and playoff odds.
+
+          <FeedCarousel stories={stories} />
+
+          {/* Tagline below */}
+          <div style={{ marginTop: '32px', paddingTop: '28px',
+            borderTop: '1px solid #1a1a20' }}>
+            <h1 style={{
+              fontFamily: 'Inter, sans-serif',
+              fontSize: '28px', fontWeight: 300,
+              color: '#f2f0eb', lineHeight: 1.3,
+              letterSpacing: '-0.02em',
+            }}>
+              NBA intelligence,<br />
+              <span style={{ color: '#c8f135' }}>updated daily.</span>
+            </h1>
+            <p style={{
+              marginTop: '12px', fontFamily: 'Inter, sans-serif',
+              fontSize: '14px', color: '#6b6a6f', lineHeight: 1.7,
+              maxWidth: '420px',
+            }}>
+              Streaks, breakouts, playoff odds, player matchups — built on
+              play-by-play data and updated three times a day.
+            </p>
           </div>
         </div>
 
-        {/* Two columns */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:'24px', alignItems:'start' }}>
-
-          {/* Left: carousel */}
+        {/* Right — quick nav */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-              marginBottom:'12px' }}>
-              <span style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a', letterSpacing:'0.15em' }}>
-                TODAY'S STORIES
-              </span>
-              <Link href="/insights" style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a',
-                textDecoration:'none', letterSpacing:'0.1em',
-                borderBottom:'1px solid #1a1a1a', paddingBottom:'1px' }}>
-                ALL INSIGHTS →
-              </Link>
+            <div style={{
+              fontFamily: 'DM Mono, monospace', fontSize: '10px',
+              color: '#444', letterSpacing: '0.15em',
+              textTransform: 'uppercase' as const,
+              marginBottom: '10px',
+            }}>
+              Explore
             </div>
-            <Carousel stories={stories} />
+            <QuickNav />
           </div>
 
-          {/* Right column */}
-          <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
-            {/* Board stats */}
-            {boardStats && (
-              <div style={{ background:'#0a0a0a', border:'1px solid #111',
-                borderRadius:'4px', padding:'16px 18px' }}>
-                <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a',
-                  letterSpacing:'0.15em', marginBottom:'14px' }}>PROPS · TODAY</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-                  {[
-                    {label:'Total Props',   val:boardStats.total,         color:'#e0e0e0'},
-                    {label:'Strong Overs',  val:boardStats.strong_overs,  color:'#4ade80'},
-                    {label:'Strong Unders', val:boardStats.strong_unders, color:'#f87171'},
-                    {label:'Players',       val:boardStats.players,       color:'#555'},
-                  ].map(x => (
-                    <div key={x.label}>
-                      <div style={{ fontFamily:MONO, fontSize:'22px', fontWeight:700,
-                        color:x.color, lineHeight:1 }}>{x.val}</div>
-                      <div style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
-                        letterSpacing:'0.1em', marginTop:'3px' }}>{x.label.toUpperCase()}</div>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/props" style={{ display:'block', marginTop:'14px',
-                  fontFamily:MONO, fontSize:'9px', color:'#4ade80', textDecoration:'none',
-                  letterSpacing:'0.1em', borderTop:'1px solid #111', paddingTop:'10px' }}>
-                  VIEW PROPS BOARD →
-                </Link>
+          {/* Small stat strip */}
+          <div style={{
+            border: '1px solid #222228', borderRadius: '8px',
+            padding: '16px 18px', background: '#141418',
+          }}>
+            <div style={{
+              fontFamily: 'DM Mono, monospace', fontSize: '10px',
+              color: '#444', letterSpacing: '0.12em',
+              textTransform: 'uppercase' as const,
+              marginBottom: '12px',
+            }}>Platform</div>
+            {[
+              { v: '3×',  l: 'Daily ETL updates' },
+              { v: '574', l: 'Players tracked' },
+              { v: 'v14', l: 'Model version' },
+              { v: '1M',  l: 'Playoff simulations' },
+            ].map(item => (
+              <div key={item.l} style={{ display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', padding: '6px 0',
+                borderBottom: '1px solid #1a1a20' }}>
+                <span style={{
+                  fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#6b6a6f',
+                }}>{item.l}</span>
+                <span style={{
+                  fontFamily: 'DM Mono, monospace', fontSize: '12px',
+                  fontWeight: 500, color: '#f2f0eb',
+                }}>{item.v}</span>
               </div>
-            )}
-
-            {/* Quick nav */}
-            <div>
-              <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a',
-                letterSpacing:'0.15em', marginBottom:'10px' }}>EXPLORE</div>
-              <QuickNav />
-            </div>
+            ))}
           </div>
         </div>
       </div>
