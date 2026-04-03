@@ -48,16 +48,16 @@ function OverallStreaks() {
     const accelColor = p.accel > 2 ? '#4ade80' : p.accel < -2 ? '#f87171' : '#555'
     return (
       <div style={{ display:'grid', gridTemplateColumns:'1fr 40px 65px 65px 65px 70px 60px 60px',
-        padding:'9px 14px', borderBottom:'1px solid #0d0d0d', alignItems:'center' }}>
+        padding:'9px 14px', borderBottom:'1px solid #1f1f24', alignItems:'center' }}>
         <div>
           <div style={{ fontFamily:MONO, fontSize:'12px', fontWeight:600, color:'#e0e0e0' }}>{p.player_name}</div>
-          <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{p.team} · {p.gp}G</div>
+          <div style={{ fontFamily:MONO, fontSize:'9px', color:'#787672' }}>{p.team} · {p.gp}G</div>
         </div>
-        <span style={{ fontFamily:MONO, fontSize:'10px', color:'#444' }}>{p.gp}</span>
+        <span style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>{p.gp}</span>
         {/* PTS */}
         <div>
           <span style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700, color }}>{p.pts_l10}</span>
-          <span style={{ fontFamily:MONO, fontSize:'9px', color:'#333', marginLeft:'4px' }}>L10</span>
+          <span style={{ fontFamily:MONO, fontSize:'9px', color:'#787672', marginLeft:'4px' }}>L10</span>
         </div>
         <span style={{ fontFamily:MONO, fontSize:'11px', color:pc(p.pts_pct) }}>
           {p.pts_pct>0?'+':''}{p.pts_pct}%
@@ -65,7 +65,7 @@ function OverallStreaks() {
         {/* L5 accel */}
         <div>
           <span style={{ fontFamily:MONO, fontSize:'12px', fontWeight:600, color:accelColor }}>{p.pts_l5}</span>
-          <span style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a', marginLeft:'3px' }}>L5</span>
+          <span style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f', marginLeft:'3px' }}>L5</span>
         </div>
         <span style={{ fontFamily:MONO, fontSize:'10px', color:accelColor }}>
           {p.accel > 0 ? '+' : ''}{p.accel}↑↓
@@ -83,7 +83,7 @@ function OverallStreaks() {
 
   const Header = () => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 40px 65px 65px 65px 70px 60px 60px',
-      padding:'6px 14px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+      padding:'6px 14px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
       letterSpacing:'0.1em', borderBottom:'1px solid #111' }}>
       <span>PLAYER</span><span>GP</span><span>PTS L10</span><span>CHNG</span>
       <span>PTS L5</span><span>ACCEL</span><span>Z-SCORE</span><span>STREAK</span>
@@ -97,14 +97,14 @@ function OverallStreaks() {
           letterSpacing:'0.12em', marginBottom:'8px' }}>
           OVERALL HOT — composite z-score across PTS/REB/AST/3PM
         </div>
-        <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+        <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
           <Header />
           {loading
-            ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#2a2a2a' }}>Loading...</div>
+            ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#55534f' }}>Loading...</div>
             : data?.hot.map(p => <Row key={p.player_name} p={p} side="hot" />)
           }
         </div>
-        <div style={{ fontFamily:MONO, fontSize:'8px', color:'#1a1a1a', marginTop:'8px' }}>
+        <div style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f', marginTop:'8px' }}>
           L10 = last 10 games vs season avg · L5 = acceleration signal · Z = composite standard deviations
         </div>
       </div>
@@ -113,10 +113,10 @@ function OverallStreaks() {
           letterSpacing:'0.12em', marginBottom:'8px' }}>
           OVERALL COLD — composite z-score across PTS/REB/AST/3PM
         </div>
-        <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+        <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
           <Header />
           {loading
-            ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#2a2a2a' }}>Loading...</div>
+            ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#55534f' }}>Loading...</div>
             : data?.cold.map(p => <Row key={p.player_name} p={p} side="cold" />)
           }
         </div>
@@ -142,12 +142,12 @@ function StatStreaks({ stat }: { stat: string }) {
 
   const Row = ({ p }: { p: StreakPlayer }) => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 55px 65px 65px 70px 70px',
-      padding:'9px 14px', borderBottom:'1px solid #0d0d0d', alignItems:'center' }}>
+      padding:'9px 14px', borderBottom:'1px solid #1f1f24', alignItems:'center' }}>
       <div>
         <div style={{ fontFamily:MONO, fontSize:'12px', fontWeight:600, color:'#e0e0e0' }}>{p.player_name}</div>
-        <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{p.team} · {p.gp}G</div>
+        <div style={{ fontFamily:MONO, fontSize:'9px', color:'#787672' }}>{p.team} · {p.gp}G</div>
       </div>
-      <span style={{ fontFamily:MONO, fontSize:'11px', color:'#555' }}>{p.season_avg}</span>
+      <span style={{ fontFamily:MONO, fontSize:'11px', color:'#909090' }}>{p.season_avg}</span>
       <span style={{ fontFamily:MONO, fontSize:'14px', fontWeight:700, color:sc(p.streak) }}>{p.l5_avg}</span>
       <span style={{ fontFamily:MONO, fontSize:'11px', color:pc(p.pct_change) }}>
         {p.pct_change>0?'+':''}{p.pct_change}%
@@ -155,7 +155,7 @@ function StatStreaks({ stat }: { stat: string }) {
       <span style={{ fontFamily:MONO, fontSize:'9px', color:sc(p.streak), letterSpacing:'0.08em' }}>
         {p.streak.toUpperCase()}
       </span>
-      <span style={{ fontFamily:MONO, fontSize:'10px', color:'#333' }}>
+      <span style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
         {p.z_score>0?'+':''}{p.z_score}σ
       </span>
     </div>
@@ -163,7 +163,7 @@ function StatStreaks({ stat }: { stat: string }) {
 
   const Hdr = () => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 55px 65px 65px 70px 70px',
-      padding:'6px 14px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+      padding:'6px 14px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
       letterSpacing:'0.1em', borderBottom:'1px solid #111' }}>
       <span>PLAYER</span><span>SEASON</span><span>L5</span>
       <span>CHANGE</span><span>STREAK</span><span>Z</span>
@@ -178,10 +178,10 @@ function StatStreaks({ stat }: { stat: string }) {
           <div style={{ fontFamily:MONO, fontSize:'9px', color, letterSpacing:'0.12em', marginBottom:'8px' }}>
             {label} {STAT_LABEL[stat]} — {list.length} players
           </div>
-          <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+          <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
             <Hdr />
             {loading
-              ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#2a2a2a' }}>Loading...</div>
+              ? <div style={{ padding:'20px', fontFamily:MONO, fontSize:'11px', color:'#55534f' }}>Loading...</div>
               : list.map(p => <Row key={p.player_name} p={p} />)
             }
           </div>
@@ -208,17 +208,17 @@ function Breakout() {
     <div>
       <h2 style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700, color:'#e0e0e0',
         letterSpacing:'0.12em', margin:'0 0 4px' }}>BREAKOUT PROBABILITY</h2>
-      <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333', marginBottom:'4px' }}>
+      <div style={{ fontFamily:MONO, fontSize:'10px', color:'#787672', marginBottom:'4px' }}>
         Multi-dimensional efficiency analysis for players ≤26 years old · PER-proxy + playmaking + defense + usage
       </div>
-      <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a', marginBottom:'20px' }}>
+      <div style={{ fontFamily:MONO, fontSize:'9px', color:'#55534f', marginBottom:'20px' }}>
         Score = weighted composite of: PER improvement (30%) · minutes expansion (20%) · scoring efficiency (15%) · playmaking (15%) · rebounding (10%) · defense (10%)
       </div>
-      {loading && <div style={{ fontFamily:MONO, fontSize:'11px', color:'#2a2a2a', padding:'20px' }}>Loading...</div>}
+      {loading && <div style={{ fontFamily:MONO, fontSize:'11px', color:'#55534f', padding:'20px' }}>Loading...</div>}
       {!loading && (
-        <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflowX:'auto' }}>
+        <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflowX:'auto' }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 35px 40px 100px 100px 90px 90px 75px 80px',
-            padding:'6px 16px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+            padding:'6px 16px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
             letterSpacing:'0.1em', borderBottom:'1px solid #111', minWidth:'800px' }}>
             <span>PLAYER</span><span>GP</span><span>AGE</span><span>SCORE</span>
             <span>LEAD DIM</span><span>PTS L10</span><span>PER TREND</span>
@@ -227,13 +227,13 @@ function Breakout() {
           {data.map((p,i) => (
             <div key={p.player_name} style={{ display:'grid',
               gridTemplateColumns:'1fr 35px 40px 100px 100px 90px 90px 75px 80px',
-              padding:'10px 16px', borderBottom:'1px solid #0d0d0d', alignItems:'center',
+              padding:'10px 16px', borderBottom:'1px solid #1f1f24', alignItems:'center',
               minWidth:'800px', background:i%2===0?'transparent':'#080808' }}>
               <div>
                 <div style={{ fontFamily:MONO, fontSize:'12px', fontWeight:600, color:'#e0e0e0' }}>{p.player_name}</div>
-                <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{p.team} · {p.position}</div>
+                <div style={{ fontFamily:MONO, fontSize:'9px', color:'#787672' }}>{p.team} · {p.position}</div>
               </div>
-              <span style={{ fontFamily:MONO, fontSize:'10px', color:'#444' }}>{p.gp}</span>
+              <span style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>{p.gp}</span>
               <span style={{ fontFamily:MONO, fontSize:'10px', color:(p as any).age <= 22 ? '#4ade80' : '#555' }}>
                 {(p as any).age || '—'}
               </span>
@@ -277,13 +277,13 @@ export default function InsightsPage() {
   const [streakTab, setStreakTab] = useState<StreakTab>('overall')
 
   return (
-    <div style={{ minHeight:'100vh', background:'#080808', color:'#888', fontFamily:MONO }}>
+    <div style={{ minHeight:'100vh', background:'#0e0e12', color:'#888', fontFamily:MONO }}>
       <div style={{ borderBottom:'1px solid #0f0f0f', padding:'16px 28px' }}>
-        <div style={{ fontSize:'9px', color:'#2a2a2a', letterSpacing:'0.15em', marginBottom:'6px' }}>
+        <div style={{ fontSize:'9px', color:'#55534f', letterSpacing:'0.15em', marginBottom:'6px' }}>
           DAILY INTELLIGENCE · 2025–26
         </div>
         <h1 style={{ fontSize:'22px', fontWeight:700, color:'#e0e0e0', margin:'0 0 4px' }}>Insights</h1>
-        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333' }}>
+        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
           Who's trending, who's cooling off, and who's about to break out
         </div>
       </div>
@@ -295,7 +295,7 @@ export default function InsightsPage() {
           <div style={{ display:'flex', alignItems:'baseline', gap:'16px', marginBottom:'20px' }}>
             <h2 style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700, color:'#e0e0e0',
               letterSpacing:'0.12em', margin:0 }}>HOT / COLD STREAK DETECTOR</h2>
-            <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333' }}>
+            <div style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
               L10 primary signal · L5 acceleration · Z-score vs season mean
             </div>
           </div>

@@ -1,38 +1,124 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0a;
-  --surface: #111111;
-  --surface2: #1a1a1a;
-  --border: #222222;
-  --border2: #2a2a2a;
-  --text: #f0f0f0;
-  --text2: #888888;
-  --text3: #555555;
-  --green: #16a34a;
-  --green-light: #4ade80;
-  --red: #dc2626;
-  --red-light: #f87171;
-  --accent: #e8e8e8;
+  /* Brand */
+  --bg:       #0c0c0e;
+  --bg-1:     #141418;
+  --bg-2:     #1a1a20;
+  --border:   #2a2a32;
+  --border-2: #38383f;
+  --accent:   #c8f135;
+
+  /* Text — all legible on dark bg */
+  --text:     #f2f0eb;   /* primary — headings, values */
+  --text-2:   #b0aea8;   /* secondary — labels, subtitles */
+  --text-3:   #787672;   /* tertiary — meta, hints */
+  --text-dim: #55534f;   /* very dim — decorative only */
+
+  /* Status */
+  --green:    #4ade80;
+  --red:      #f87171;
+  --orange:   #f97316;
+  --blue:     #5b8ef0;
+  --purple:   #a78bfa;
+
+  /* Legacy compat aliases */
+  --surface:  var(--bg-1);
+  --surface2: var(--bg-2);
+  --text2:    var(--text-2);
+  --text3:    var(--text-3);
+  --green-light: var(--green);
+  --red-light:   var(--red);
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'Inter', 'IBM Plex Sans', -apple-system, sans-serif;
   font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-.mono { font-family: 'IBM Plex Mono', monospace; }
+.mono { font-family: 'DM Mono', 'IBM Plex Mono', monospace; }
+
+/* ── Global text contrast fixes ─────────────────────────────────────────────
+   These override inline styles that use near-invisible dark colors.
+   Specificity kept low intentionally so inline important overrides still work.
+*/
+
+/* Any span/div/td/th with a very dark color — lift to readable */
+[style*="color: #2a2a2a"],
+[style*="color:#2a2a2a"] { color: var(--text-dim) !important; }
+
+[style*="color: #222"],
+[style*="color:#222"],
+[style*="color: #1a1a1a"],
+[style*="color:#1a1a1a"],
+[style*="color: #1a1a2"],
+[style*="color: #0d0d0d"],
+[style*="color:#0d0d0d"] { color: var(--text-dim) !important; }
+
+[style*="color: #333"],
+[style*="color:#333"] { color: var(--text-3) !important; }
+
+[style*="color: #444"],
+[style*="color:#444"] { color: var(--text-3) !important; }
+
+[style*="color: #555"],
+[style*="color:#555"] { color: var(--text-3) !important; }
+
+[style*="color: #2a2a32"],
+[style*="color: #38383f"] { color: var(--text-3) !important; }
+
+/* Backgrounds that were near-invisible */
+[style*="background: #0d0d0d"],
+[style*="background:#0d0d0d"],
+[style*="background-color: #0d0d0d"] { background-color: var(--bg-1) !important; }
+
+/* Borders */
+[style*="border-color: #0d0d0d"],
+[style*="border: 1px solid #0d0d0d"] { border-color: var(--border) !important; }
+
+/* Table alternating rows */
+tr:nth-child(even) > td { background-color: rgba(255,255,255,0.02); }
+
+/* ── Component defaults ───────────────────────────────────────────────────── */
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Inputs */
+input, select, textarea {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  border-radius: 4px;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--border-2);
+}
+
+/* Buttons */
+button { font-family: inherit; }
+
+/* Links */
+a { color: inherit; text-decoration: none; }
+
+/* Tables */
+table { border-collapse: collapse; width: 100%; }
+th { font-weight: 500; }
+
+/* ── Nav overrides ───────────────────────────────────────────────────────── */
+.nav-link { color: #b0aea8 !important; }
+.nav-link:hover { color: #f2f0eb !important; }

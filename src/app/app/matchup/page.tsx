@@ -57,13 +57,13 @@ export default function MatchupPage() {
   const overallColor = result?.overall ? diffColor(result.overall) : '#888'
 
   return (
-    <div style={{ minHeight:'100vh', background:'#080808', color:'#888', fontFamily:MONO }}>
+    <div style={{ minHeight:'100vh', background:'#0e0e12', color:'#888', fontFamily:MONO }}>
       <div style={{ borderBottom:'1px solid #0f0f0f', padding:'16px 28px' }}>
-        <div style={{ fontSize:'9px', color:'#2a2a2a', letterSpacing:'0.15em', marginBottom:'6px' }}>
+        <div style={{ fontSize:'9px', color:'#55534f', letterSpacing:'0.15em', marginBottom:'6px' }}>
           MATCHUP ANALYSIS · 2025–26
         </div>
         <h1 style={{ fontSize:'22px', fontWeight:700, color:'#e0e0e0', margin:'0 0 4px' }}>Matchup Difficulty</h1>
-        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333' }}>
+        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
           How tough is tonight's matchup? Defensive profiles + historical head-to-head data
         </div>
       </div>
@@ -75,14 +75,14 @@ export default function MatchupPage() {
           <input value={player} onChange={e=>setPlayer(e.target.value)}
             placeholder="Player name — e.g. LeBron James"
             onKeyDown={e=>e.key==='Enter'&&run()}
-            style={{ padding:'10px 14px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            style={{ padding:'10px 14px', background:'#141418', border:'1px solid #1a1a1a',
               borderRadius:'4px', fontFamily:MONO, fontSize:'12px', color:'#e0e0e0',
               outline:'none', width:'260px' }} />
-          <span style={{ fontFamily:MONO, fontSize:'11px', color:'#333' }}>vs</span>
+          <span style={{ fontFamily:MONO, fontSize:'11px', color:'#787672' }}>vs</span>
           <input value={opp} onChange={e=>setOpp(e.target.value.toUpperCase())}
             placeholder="Team (e.g. BOS)"
             onKeyDown={e=>e.key==='Enter'&&run()}
-            style={{ padding:'10px 14px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            style={{ padding:'10px 14px', background:'#141418', border:'1px solid #1a1a1a',
               borderRadius:'4px', fontFamily:MONO, fontSize:'12px', color:'#e0e0e0',
               outline:'none', width:'130px' }} />
           <button onClick={() => run()} disabled={loading} style={{
@@ -96,12 +96,12 @@ export default function MatchupPage() {
 
         {/* Example pills */}
         <div style={{ display:'flex', gap:'6px', marginBottom:'28px', flexWrap:'wrap', alignItems:'center' }}>
-          <span style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a' }}>TRY:</span>
+          <span style={{ fontFamily:MONO, fontSize:'9px', color:'#55534f' }}>TRY:</span>
           {EXAMPLES.map(ex => (
             <button key={ex.player+ex.opp} onClick={()=>useExample(ex)} style={{
-              padding:'4px 10px', background:'none', border:'1px solid #111',
+              padding:'4px 10px', background:'none', border:'1px solid #222228',
               borderRadius:'3px', cursor:'pointer', fontFamily:MONO, fontSize:'9px',
-              color:'#333', letterSpacing:'0.04em',
+              color:'#787672', letterSpacing:'0.04em',
               transition:'color 0.15s, border-color 0.15s',
             }}
             onMouseEnter={e=>{e.currentTarget.style.color='#e0e0e0';e.currentTarget.style.borderColor='#333'}}
@@ -113,17 +113,17 @@ export default function MatchupPage() {
 
         {error && (
           <div style={{ fontFamily:MONO, fontSize:'11px', color:'#f87171',
-            padding:'12px 16px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            padding:'12px 16px', background:'#141418', border:'1px solid #1a1a1a',
             borderRadius:'4px', marginBottom:'20px' }}>{error}</div>
         )}
 
         {!result && !loading && !error && (
           <div style={{ padding:'60px', textAlign:'center', border:'1px solid #0f0f0f',
             borderRadius:'6px' }}>
-            <div style={{ fontFamily:MONO, fontSize:'12px', color:'#2a2a2a', marginBottom:'8px' }}>
+            <div style={{ fontFamily:MONO, fontSize:'12px', color:'#55534f', marginBottom:'8px' }}>
               Enter a player and opponent team to see matchup difficulty
             </div>
-            <div style={{ fontFamily:MONO, fontSize:'10px', color:'#1a1a1a' }}>
+            <div style={{ fontFamily:MONO, fontSize:'10px', color:'#55534f' }}>
               Uses positional defensive profiles + this season's head-to-head game logs
             </div>
           </div>
@@ -133,7 +133,7 @@ export default function MatchupPage() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }}>
 
             {/* Stat breakdown */}
-            <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+            <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
               {/* Header */}
               <div style={{ padding:'16px 20px', borderBottom:'1px solid #111',
                 display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -141,18 +141,18 @@ export default function MatchupPage() {
                   <div style={{ fontFamily:MONO, fontSize:'15px', fontWeight:700, color:'#e0e0e0' }}>
                     {result.player_name}
                   </div>
-                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333', marginTop:'3px' }}>
+                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#787672', marginTop:'3px' }}>
                     {result.team} · {result.position} · vs {result.opponent}
                   </div>
                 </div>
                 <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a',
+                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#55534f',
                     letterSpacing:'0.1em', marginBottom:'4px' }}>OVERALL</div>
                   <div style={{ fontFamily:MONO, fontSize:'16px', fontWeight:700,
                     color:overallColor, letterSpacing:'0.08em' }}>
                     {result.overall.toUpperCase()}
                   </div>
-                  <div style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a', marginTop:'2px' }}>
+                  <div style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f', marginTop:'2px' }}>
                     ratio: {result.avg_def_ratio.toFixed(3)}x
                   </div>
                 </div>
@@ -160,7 +160,7 @@ export default function MatchupPage() {
 
               {/* Column headers */}
               <div style={{ display:'grid', gridTemplateColumns:'60px 65px 75px 65px 90px',
-                padding:'6px 20px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+                padding:'6px 20px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
                 letterSpacing:'0.1em', borderBottom:'1px solid #0f0f0f' }}>
                 <span>STAT</span><span>AVG</span><span>PROJECTED</span>
                 <span>RATIO</span><span>DIFFICULTY</span>
@@ -173,8 +173,8 @@ export default function MatchupPage() {
                 const better = sr.adj_expected > sr.player_avg
                 return (
                   <div key={s} style={{ display:'grid', gridTemplateColumns:'60px 65px 75px 65px 90px',
-                    padding:'11px 20px', borderBottom:'1px solid #0d0d0d', alignItems:'center' }}>
-                    <span style={{ fontFamily:MONO, fontSize:'10px', color:'#444',
+                    padding:'11px 20px', borderBottom:'1px solid #1f1f24', alignItems:'center' }}>
+                    <span style={{ fontFamily:MONO, fontSize:'10px', color:'#787672',
                       letterSpacing:'0.08em' }}>{STAT_LABEL[s]}</span>
                     <span style={{ fontFamily:MONO, fontSize:'13px', color:'#666' }}>{sr.player_avg}</span>
                     <div>
@@ -186,7 +186,7 @@ export default function MatchupPage() {
                         {better?'↑':'↓'}
                       </span>
                     </div>
-                    <span style={{ fontFamily:MONO, fontSize:'10px', color:'#444' }}>
+                    <span style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
                       {sr.def_ratio.toFixed(2)}x
                     </span>
                     <span style={{ fontFamily:MONO, fontSize:'10px', color:dc,
@@ -195,42 +195,42 @@ export default function MatchupPage() {
                 )
               })}
 
-              <div style={{ padding:'10px 20px', fontFamily:MONO, fontSize:'8px', color:'#1a1a1a',
+              <div style={{ padding:'10px 20px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
                 borderTop:'1px solid #0f0f0f' }}>
                 ratio {'>'} 1.10 = easy · {'<'} 0.92 = tough · projected = avg × def_ratio
               </div>
             </div>
 
             {/* Historical vs opponent */}
-            <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+            <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
               <div style={{ padding:'16px 20px', borderBottom:'1px solid #111',
-                fontFamily:MONO, fontSize:'10px', color:'#444', letterSpacing:'0.1em' }}>
+                fontFamily:MONO, fontSize:'10px', color:'#787672', letterSpacing:'0.1em' }}>
                 {result.player_name.split(' ')[0].toUpperCase()} vs {result.opponent} THIS SEASON · {result.vs_games.length} GAMES
               </div>
 
               {result.vs_games.length === 0 ? (
-                <div style={{ padding:'32px 20px', fontFamily:MONO, fontSize:'11px', color:'#2a2a2a',
+                <div style={{ padding:'32px 20px', fontFamily:MONO, fontSize:'11px', color:'#55534f',
                   textAlign:'center' }}>
                   No games vs {result.opponent} this season
                 </div>
               ) : (
                 <>
                   <div style={{ display:'grid', gridTemplateColumns:'80px 55px 55px 55px 55px',
-                    padding:'6px 20px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+                    padding:'6px 20px', fontFamily:MONO, fontSize:'8px', color:'#55534f',
                     letterSpacing:'0.1em', borderBottom:'1px solid #0f0f0f' }}>
                     <span>DATE</span><span>PTS</span><span>REB</span><span>AST</span><span>MIN</span>
                   </div>
                   {result.vs_games.map((g,i) => (
                     <div key={i} style={{ display:'grid', gridTemplateColumns:'80px 55px 55px 55px 55px',
-                      padding:'9px 20px', borderBottom:'1px solid #0d0d0d',
+                      padding:'9px 20px', borderBottom:'1px solid #1f1f24',
                       background:i%2===0?'transparent':'#080808' }}>
-                      <span style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>
+                      <span style={{ fontFamily:MONO, fontSize:'9px', color:'#787672' }}>
                         {String(g.game_date).slice(5)}
                       </span>
                       <span style={{ fontFamily:MONO, fontSize:'13px', fontWeight:600, color:'#e0e0e0' }}>{g.pts}</span>
                       <span style={{ fontFamily:MONO, fontSize:'12px', color:'#888' }}>{g.reb}</span>
                       <span style={{ fontFamily:MONO, fontSize:'12px', color:'#888' }}>{g.ast}</span>
-                      <span style={{ fontFamily:MONO, fontSize:'11px', color:'#555' }}>{Math.round(g.minutes)}</span>
+                      <span style={{ fontFamily:MONO, fontSize:'11px', color:'#909090' }}>{Math.round(g.minutes)}</span>
                     </div>
                   ))}
                   {/* Season avg row */}
@@ -240,13 +240,13 @@ export default function MatchupPage() {
                       (result.vs_games.reduce((s,g) => s+(Number(g[k])||0), 0)/n).toFixed(1)
                     return (
                       <div style={{ display:'grid', gridTemplateColumns:'80px 55px 55px 55px 55px',
-                        padding:'9px 20px', borderTop:'1px solid #1a1a1a', background:'#0d0d0d' }}>
-                        <span style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
+                        padding:'9px 20px', borderTop:'1px solid #1a1a1a', background:'#141418' }}>
+                        <span style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f',
                           letterSpacing:'0.08em' }}>AVG</span>
                         <span style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700, color:'#4ade80' }}>{avg('pts')}</span>
                         <span style={{ fontFamily:MONO, fontSize:'12px', color:'#4ade80' }}>{avg('reb')}</span>
                         <span style={{ fontFamily:MONO, fontSize:'12px', color:'#4ade80' }}>{avg('ast')}</span>
-                        <span style={{ fontFamily:MONO, fontSize:'11px', color:'#555' }}>{avg('minutes')}</span>
+                        <span style={{ fontFamily:MONO, fontSize:'11px', color:'#909090' }}>{avg('minutes')}</span>
                       </div>
                     )
                   })()}

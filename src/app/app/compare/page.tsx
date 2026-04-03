@@ -40,13 +40,13 @@ export default function ComparePage() {
   const p2Name = result?.player2?.player_name?.split(' ').pop() || ''
 
   return (
-    <div style={{ minHeight:'100vh', background:'#080808', color:'#888', fontFamily:MONO }}>
+    <div style={{ minHeight:'100vh', background:'#0e0e12', color:'#888', fontFamily:MONO }}>
       <div style={{ borderBottom:'1px solid #0f0f0f', padding:'16px 28px' }}>
-        <div style={{ fontSize:'9px', color:'#2a2a2a', letterSpacing:'0.15em', marginBottom:'6px' }}>
+        <div style={{ fontSize:'9px', color:'#55534f', letterSpacing:'0.15em', marginBottom:'6px' }}>
           HEAD-TO-HEAD · 2025–26
         </div>
         <h1 style={{ fontSize:'22px', fontWeight:700, color:'#e0e0e0', margin:'0 0 4px' }}>Player vs Player</h1>
-        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333' }}>
+        <div style={{ fontFamily:MONO, fontSize:'10px', color:'#787672' }}>
           Compare any two players — season averages, L10 splits, consistency, and per-stat edges
         </div>
       </div>
@@ -58,14 +58,14 @@ export default function ComparePage() {
           <input value={p1} onChange={e=>setP1(e.target.value)}
             placeholder="Player 1 — e.g. LeBron James"
             onKeyDown={e=>e.key==='Enter'&&run()}
-            style={{ padding:'10px 14px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            style={{ padding:'10px 14px', background:'#141418', border:'1px solid #1a1a1a',
               borderRadius:'4px', fontFamily:MONO, fontSize:'12px', color:'#e0e0e0',
               outline:'none', width:'240px' }} />
-          <span style={{ fontFamily:MONO, fontSize:'13px', color:'#222', fontWeight:700 }}>VS</span>
+          <span style={{ fontFamily:MONO, fontSize:'13px', color:'#55534f', fontWeight:700 }}>VS</span>
           <input value={p2} onChange={e=>setP2(e.target.value)}
             placeholder="Player 2 — e.g. Kevin Durant"
             onKeyDown={e=>e.key==='Enter'&&run()}
-            style={{ padding:'10px 14px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            style={{ padding:'10px 14px', background:'#141418', border:'1px solid #1a1a1a',
               borderRadius:'4px', fontFamily:MONO, fontSize:'12px', color:'#e0e0e0',
               outline:'none', width:'240px' }} />
           <button onClick={run} disabled={loading} style={{
@@ -79,17 +79,17 @@ export default function ComparePage() {
 
         {error && (
           <div style={{ fontFamily:MONO, fontSize:'11px', color:'#f87171',
-            padding:'12px 16px', background:'#0a0a0a', border:'1px solid #1a1a1a',
+            padding:'12px 16px', background:'#141418', border:'1px solid #1a1a1a',
             borderRadius:'4px', marginBottom:'20px' }}>{error}</div>
         )}
 
         {!result && !loading && !error && (
           <div style={{ padding:'60px', textAlign:'center', border:'1px solid #0f0f0f',
             borderRadius:'6px', fontFamily:MONO }}>
-            <div style={{ fontSize:'12px', color:'#2a2a2a', marginBottom:'8px' }}>
+            <div style={{ fontSize:'12px', color:'#55534f', marginBottom:'8px' }}>
               Enter two player names above
             </div>
-            <div style={{ fontSize:'10px', color:'#1a1a1a' }}>
+            <div style={{ fontSize:'10px', color:'#55534f' }}>
               Try: Stephen Curry vs Klay Thompson · or · LeBron James vs Kevin Durant
             </div>
           </div>
@@ -104,28 +104,28 @@ export default function ComparePage() {
                 <div key={p.player_name} style={{
                   gridColumn: i===0?1:3,
                   padding:'20px 24px',
-                  background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px',
+                  background:'#141418', border:'1px solid #222228', borderRadius:'4px',
                   textAlign: i===0?'right':'left',
                 }}>
                   <div style={{ fontFamily:MONO, fontSize:'18px', fontWeight:700, color:'#e0e0e0' }}>
                     {p.player_name}
                   </div>
-                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333', marginTop:'4px' }}>
+                  <div style={{ fontFamily:MONO, fontSize:'9px', color:'#787672', marginTop:'4px' }}>
                     {p.team} · {p.position || '—'} · {p.gp} games
                   </div>
                 </div>
               ))}
               <div style={{ gridColumn:2, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ fontFamily:MONO, fontSize:'11px', color:'#2a2a2a' }}>vs</span>
+                <span style={{ fontFamily:MONO, fontSize:'11px', color:'#55534f' }}>vs</span>
               </div>
             </div>
 
             {/* Stat rows */}
-            <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflow:'hidden' }}>
+            <div style={{ background:'#141418', border:'1px solid #222228', borderRadius:'4px', overflow:'hidden' }}>
               {/* Header */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 100px 120px 100px 1fr',
                 padding:'8px 20px', borderBottom:'1px solid #1a1a1a',
-                fontFamily:MONO, fontSize:'8px', color:'#2a2a2a', letterSpacing:'0.1em' }}>
+                fontFamily:MONO, fontSize:'8px', color:'#55534f', letterSpacing:'0.1em' }}>
                 <span style={{ textAlign:'right' }}>{p1Name.toUpperCase()}</span>
                 <span style={{ textAlign:'right' }}>L10</span>
                 <span style={{ textAlign:'center' }}>STAT</span>
@@ -144,12 +144,12 @@ export default function ComparePage() {
 
                 return (
                   <div key={s} style={{ display:'grid', gridTemplateColumns:'1fr 100px 120px 100px 1fr',
-                    padding:'14px 20px', borderBottom:'1px solid #0d0d0d', alignItems:'center' }}>
+                    padding:'14px 20px', borderBottom:'1px solid #1f1f24', alignItems:'center' }}>
                     {/* P1 season */}
                     <div style={{ textAlign:'right' }}>
                       <span style={{ fontFamily:MONO, fontSize:'22px', fontWeight:700,
                         color:p1wins?'#4ade80':'#555' }}>{v1?.avg??'—'}</span>
-                      {v1 && <div style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a', marginTop:'2px' }}>
+                      {v1 && <div style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f', marginTop:'2px' }}>
                         cv: {v1.cv}%
                       </div>}
                     </div>
@@ -160,7 +160,7 @@ export default function ComparePage() {
                     </div>
                     {/* Stat label + advantage */}
                     <div style={{ textAlign:'center' }}>
-                      <div style={{ fontFamily:MONO, fontSize:'11px', color:'#444',
+                      <div style={{ fontFamily:MONO, fontSize:'11px', color:'#787672',
                         letterSpacing:'0.1em', marginBottom:'4px' }}>{STAT_LABEL[s]}</div>
                       <div style={{ fontFamily:MONO, fontSize:'8px', letterSpacing:'0.06em',
                         color: p1wins?'#60a5fa':p2wins?'#f97316':'#222' }}>
@@ -176,7 +176,7 @@ export default function ComparePage() {
                     <div>
                       <span style={{ fontFamily:MONO, fontSize:'22px', fontWeight:700,
                         color:p2wins?'#4ade80':'#555' }}>{v2?.avg??'—'}</span>
-                      {v2 && <div style={{ fontFamily:MONO, fontSize:'8px', color:'#2a2a2a', marginTop:'2px' }}>
+                      {v2 && <div style={{ fontFamily:MONO, fontSize:'8px', color:'#55534f', marginTop:'2px' }}>
                         cv: {v2.cv}%
                       </div>}
                     </div>
@@ -186,16 +186,16 @@ export default function ComparePage() {
             </div>
 
             {/* Edge summary */}
-            <div style={{ marginTop:'16px', padding:'14px 20px', background:'#0a0a0a',
-              border:'1px solid #111', borderRadius:'4px', display:'flex', gap:'12px',
+            <div style={{ marginTop:'16px', padding:'14px 20px', background:'#141418',
+              border:'1px solid #222228', borderRadius:'4px', display:'flex', gap:'12px',
               flexWrap:'wrap', alignItems:'center' }}>
-              <span style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a', letterSpacing:'0.12em' }}>EDGES</span>
+              <span style={{ fontFamily:MONO, fontSize:'9px', color:'#55534f', letterSpacing:'0.12em' }}>EDGES</span>
               {Object.entries(result.advantages).map(([s, winner]) => {
                 const isP1 = winner === result.player1.player_name
                 const isP2 = winner === result.player2.player_name
                 return (
                   <div key={s} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                    <span style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{STAT_FULL[s]}:</span>
+                    <span style={{ fontFamily:MONO, fontSize:'9px', color:'#787672' }}>{STAT_FULL[s]}:</span>
                     <span style={{ fontFamily:MONO, fontSize:'9px', fontWeight:600,
                       color:isP1?'#60a5fa':isP2?'#f97316':'#333',
                       padding:'2px 6px', background:'#111', borderRadius:'2px' }}>
@@ -206,7 +206,7 @@ export default function ComparePage() {
               })}
             </div>
 
-            <div style={{ marginTop:'10px', fontFamily:MONO, fontSize:'9px', color:'#1a1a1a' }}>
+            <div style={{ marginTop:'10px', fontFamily:MONO, fontSize:'9px', color:'#55534f' }}>
               Season avg · cv = coefficient of variation (lower = more consistent) · L10 = last 10 games
             </div>
           </div>
