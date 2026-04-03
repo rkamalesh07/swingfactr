@@ -387,7 +387,7 @@ export default function ProfilesPage() {
                     <th key={s.key} onClick={() => toggleSort(s.key)} style={{
                       padding: '10px 12px', fontSize: '9px', fontWeight: 400,
                       textAlign: 'right', cursor: 'pointer', userSelect: 'none',
-                      color: sortKey === s.key ? '#4ade80' : '#2a2a2a', whiteSpace: 'nowrap',
+                      color: sortKey === s.key ? '#c8f135' : '#787672', whiteSpace: 'nowrap',
                     }}>
                       {s.label}{sortKey === s.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                     </th>
@@ -417,7 +417,7 @@ export default function ProfilesPage() {
                         <td key={s.key} style={{ padding: '10px 12px', textAlign: 'right',
                           fontSize: sortKey === s.key ? '12px' : '11px',
                           fontWeight: sortKey === s.key ? 700 : 400,
-                          color: sortKey === s.key ? '#e0e0e0' : '#444' }}>
+                          color: sortKey === s.key ? '#f2f0eb' : '#b0aea8' }}>
                           {String(d)}
                         </td>
                       )
