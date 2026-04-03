@@ -66,9 +66,9 @@ function StatusDot({ status }: { status: string }) {
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div style={{ border: '1px solid #1a1a1a', padding: '16px 20px' }}>
-      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.1em', marginBottom: '6px' }}>{label}</div>
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.1em', marginBottom: '6px' }}>{label}</div>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '22px', fontWeight: 700, color: '#e0e0e0' }}>{value}</div>
-      {sub && <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', marginTop: '4px' }}>{sub}</div>}
+      {sub && <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', marginTop: '4px' }}>{sub}</div>}
     </div>
   )
 }
@@ -100,10 +100,10 @@ function RunRow({ run }: { run: HealthData['etl_runs'][0] }) {
     <div style={{
       display: 'grid',
       gridTemplateColumns: '140px 80px 80px 80px 80px 80px 1fr',
-      padding: '9px 16px', borderBottom: '1px solid #0d0d0d',
+      padding: '9px 16px', borderBottom: '1px solid #1f1f24',
       alignItems: 'center',
     }}>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{dt}</span>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{dt}</span>
       <span style={{
         fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
         color: isSuccess ? '#4ade80' : '#f87171',
@@ -113,19 +113,19 @@ function RunRow({ run }: { run: HealthData['etl_runs'][0] }) {
       }}>
         {run.status}
       </span>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>
         {run.games_processed ?? 0}G
       </span>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>
         {(run.plays_processed ?? 0).toLocaleString()}P
       </span>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>
         {(run.stints_processed ?? 0).toLocaleString()}S
       </span>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: run.errors > 0 ? '#f87171' : '#333' }}>
         {run.errors ?? 0} err
       </span>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>
         {run.duration_seconds ? `${run.duration_seconds.toFixed(1)}s` : '—'}
       </span>
     </div>
@@ -153,7 +153,7 @@ export default function HealthPage() {
   }, [])
 
   if (loading && !data) return (
-    <div style={{ padding: '48px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>
+    <div style={{ padding: '48px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>
       Loading pipeline health...
     </div>
   )
@@ -174,7 +174,7 @@ export default function HealthPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
             PIPELINE OBSERVABILITY · 2025–26 NBA
           </div>
           <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Data Health</h1>
@@ -182,10 +182,10 @@ export default function HealthPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <StatusDot status={freshness.status} />
           <button onClick={fetchHealth} style={{
-            background: 'transparent', border: '1px solid #222', color: '#555',
+            background: 'transparent', border: '1px solid #222', color: '#b0aea8',
             padding: '5px 12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', cursor: 'pointer',
           }}>↺ Refresh</button>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090' }}>
             {lastRefresh.toLocaleTimeString()}
           </span>
         </div>
@@ -194,17 +194,17 @@ export default function HealthPage() {
       {/* Season progress */}
       <div style={{ border: '1px solid #1a1a1a', padding: '16px 20px', marginBottom: '1px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em' }}>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em' }}>
             2025–26 SEASON PROGRESS
           </span>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#888' }}>
             {volume.games_completed} / 1,230 games · {seasonPct}%
           </span>
         </div>
-        <div style={{ height: '8px', background: '#0a0a0a', overflow: 'hidden' }}>
+        <div style={{ height: '8px', background: '#141418', overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${seasonPct}%`, background: '#4ade80', transition: 'width 0.6s ease' }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090' }}>
           <span>Oct 22</span>
           <span>Latest game: {freshness.latest_game_date || '—'}</span>
           <span>Apr 14 (reg. season end)</span>
@@ -221,7 +221,7 @@ export default function HealthPage() {
 
       {/* Coverage */}
       <div style={{ border: '1px solid #1a1a1a', padding: '20px', marginBottom: '1px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em', marginBottom: '16px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em', marginBottom: '16px' }}>
           DATA COVERAGE
         </div>
         <CoverageBar
@@ -247,22 +247,22 @@ export default function HealthPage() {
 
       {/* Freshness */}
       <div style={{ border: '1px solid #1a1a1a', padding: '20px', marginBottom: '1px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em', marginBottom: '12px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em', marginBottom: '12px' }}>
           DATA FRESHNESS
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
           <div>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', marginBottom: '4px' }}>LATEST GAME INGESTED</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', marginBottom: '4px' }}>LATEST GAME INGESTED</div>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', color: '#e0e0e0' }}>{freshness.latest_game_date || '—'}</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', marginBottom: '4px' }}>DAYS SINCE UPDATE</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', marginBottom: '4px' }}>DAYS SINCE UPDATE</div>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', color: freshness.days_since_update <= 1 ? '#4ade80' : freshness.days_since_update <= 2 ? '#fbbf24' : '#f87171' }}>
               {freshness.days_since_update ?? '—'}d
             </div>
           </div>
           <div>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', marginBottom: '4px' }}>ETL SCHEDULE</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', marginBottom: '4px' }}>ETL SCHEDULE</div>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', color: '#888' }}>Daily · 8AM UTC</div>
           </div>
         </div>
@@ -270,19 +270,19 @@ export default function HealthPage() {
 
       {/* ETL run log */}
       <div style={{ border: '1px solid #1a1a1a', marginBottom: '1px' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #1a1a1a', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #222228', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em' }}>
           ETL RUN HISTORY
         </div>
         {etl_runs.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+          <div style={{ padding: '32px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>
             No ETL runs logged yet. Runs will appear here after the next daily ETL.
           </div>
         ) : (
           <>
             <div style={{
               display: 'grid', gridTemplateColumns: '140px 80px 80px 80px 80px 80px 1fr',
-              padding: '8px 16px', borderBottom: '1px solid #1a1a1a',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333', letterSpacing: '0.06em',
+              padding: '8px 16px', borderBottom: '1px solid #222228',
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.06em',
             }}>
               <span>STARTED</span><span>STATUS</span><span>GAMES</span>
               <span>PLAYS</span><span>STINTS</span><span>ERRORS</span><span>DURATION</span>
@@ -294,7 +294,7 @@ export default function HealthPage() {
 
       {/* Per-team coverage */}
       <div style={{ border: '1px solid #1a1a1a' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #1a1a1a', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #222228', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em' }}>
           PER-TEAM GAME COVERAGE
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', background: '#111' }}>
@@ -302,7 +302,7 @@ export default function HealthPage() {
             const pct = t.total > 0 ? t.completed / t.total : 0
             const color = pct > 0.95 ? '#4ade80' : pct > 0.8 ? '#fbbf24' : '#f87171'
             return (
-              <div key={t.team} style={{ background: '#0a0a0a', padding: '10px 14px' }}>
+              <div key={t.team} style={{ background: '#141418', padding: '10px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>{t.team}</span>
                   <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color }}>{t.completed}/{t.total}</span>
@@ -316,7 +316,7 @@ export default function HealthPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#2a2a2a', lineHeight: 1.8 }}>
+      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#787672', lineHeight: 1.8 }}>
         <div>ETL runs daily at 8AM UTC via GitHub Actions · data sourced from ESPN play-by-play API</div>
         <div>Auto-refreshes every 60 seconds · last refreshed {lastRefresh.toLocaleTimeString()}</div>
       </div>

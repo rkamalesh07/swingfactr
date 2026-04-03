@@ -63,11 +63,11 @@ export default function ClutchPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           LAST 5 MIN · MARGIN ≤5 · PER 100 POSS
         </div>
         <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Clutch Performance</h1>
-        <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '560px' }}>
+        <p style={{ color: '#b0aea8', fontSize: '13px', lineHeight: 1.6, maxWidth: '560px' }}>
           Net rating in clutch situations only: final 5 minutes with score within 5 points.
         </p>
       </div>
@@ -124,8 +124,8 @@ export default function ClutchPage() {
         <div style={{ border: '1px solid #1a1a1a' }}>
           <div style={{
             display: 'grid', gridTemplateColumns: '40px 80px 1fr 100px 100px 100px 70px',
-            padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+            padding: '10px 20px', borderBottom: '1px solid #222228',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
           }}>
             <span>#</span><span>TEAM</span><span>NET RTG CHART</span>
             <span style={{ textAlign: 'right' }}>NET RTG</span>
@@ -134,7 +134,7 @@ export default function ClutchPage() {
             <span style={{ textAlign: 'right' }}>GAMES</span>
           </div>
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
           ) : sortedTeams.map((r, i) => {
             const isPos = r.clutch_net_rating >= 0
             const barPct = Math.abs(r.clutch_net_rating) / maxTeamNet * 45
@@ -143,7 +143,7 @@ export default function ClutchPage() {
                 display: 'grid', gridTemplateColumns: '40px 80px 1fr 100px 100px 100px 70px',
                 padding: '13px 20px', borderBottom: i < sortedTeams.length - 1 ? '1px solid #111' : 'none', alignItems: 'center',
               }}>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{r.displayRank}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{r.displayRank}</span>
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: '#e0e0e0' }}>{r.team}</span>
                 <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
                   <div style={{ flex: 1, height: '4px', background: '#111', position: 'relative' }}>
@@ -156,7 +156,7 @@ export default function ClutchPage() {
                 </span>
                 <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#666' }}>{r.clutch_off_rating.toFixed(1)}</span>
                 <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#666' }}>{r.clutch_def_rating.toFixed(1)}</span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>{r.games}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{r.games}</span>
               </div>
             )
           })}
@@ -168,8 +168,8 @@ export default function ClutchPage() {
         <div style={{ border: '1px solid #1a1a1a' }}>
           <div style={{
             display: 'grid', gridTemplateColumns: '40px 180px 60px 1fr 70px 80px 100px',
-            padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+            padding: '10px 20px', borderBottom: '1px solid #222228',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
           }}>
             <span>#</span><span>PLAYER</span><span>TEAM</span><span>CLUTCH NET RTG CHART</span>
             <span style={{ textAlign: 'right' }}>GAMES</span>
@@ -177,9 +177,9 @@ export default function ClutchPage() {
             <span style={{ textAlign: 'right' }}>NET RTG</span>
           </div>
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
           ) : sortedPlayers.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No clutch data found.</div>
+            <div style={{ padding: '48px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>No clutch data found.</div>
           ) : sortedPlayers.map((p, i) => {
             const isPos = p.clutch_net_rtg >= 0
             const barPct = Math.abs(p.clutch_net_rtg) / maxPlayerNet * 45
@@ -188,17 +188,17 @@ export default function ClutchPage() {
                 display: 'grid', gridTemplateColumns: '40px 180px 60px 1fr 70px 80px 100px',
                 padding: '13px 20px', borderBottom: i < sortedPlayers.length - 1 ? '1px solid #111' : 'none', alignItems: 'center',
               }}>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{p.displayRank}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{p.displayRank}</span>
                 <span style={{ fontSize: '13px', color: '#e0e0e0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player}</span>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.team}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.team}</span>
                 <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
                   <div style={{ flex: 1, height: '4px', background: '#111', position: 'relative' }}>
                     <div style={{ position: 'absolute', [isPos ? 'left' : 'right']: '50%', width: `${barPct}%`, height: '100%', background: isPos ? '#16a34a' : '#dc2626' }} />
                     <div style={{ position: 'absolute', left: '50%', top: '-2px', width: '1px', height: '8px', background: '#2a2a2a' }} />
                   </div>
                 </div>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.games}</span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.clutch_minutes.toFixed(0)}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.games}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.clutch_minutes.toFixed(0)}</span>
                 <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: p.clutch_net_rtg > 0 ? '#4ade80' : '#f87171' }}>
                   {p.clutch_net_rtg > 0 ? '+' : ''}{p.clutch_net_rtg.toFixed(1)}
                 </span>
@@ -208,7 +208,7 @@ export default function ClutchPage() {
         </div>
       )}
 
-      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
         {view === 'teams' ? `${sortedTeams.length} teams` : `${sortedPlayers.length} players`} · clutch = last 5 min, margin ≤5 · per 100 possessions
       </div>
     </div>

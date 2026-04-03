@@ -75,10 +75,10 @@ function SeriesCard({ series }: { series: Series }) {
   const done = series.status === 'complete'
   const winner = series.winner
   return (
-    <div style={{ padding: '10px 14px', background: '#0a0a0a',
+    <div style={{ padding: '10px 14px', background: '#141418',
       border: `1px solid ${done ? '#1a1a1a' : '#222'}`, borderRadius: '4px',
       minWidth: '160px' }}>
-      <div style={{ fontSize: '8px', color: '#2a2a2a', letterSpacing: '0.12em',
+      <div style={{ fontSize: '8px', color: '#787672', letterSpacing: '0.12em',
         marginBottom: '8px', fontFamily: 'IBM Plex Mono, monospace' }}>
         {done ? 'FINAL' : 'IN PROGRESS'}
       </div>
@@ -113,7 +113,7 @@ function BracketRound({ title, series }: { title: string; series: Series[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-        color: '#2a2a2a', letterSpacing: '0.15em', marginBottom: '4px',
+        color: '#787672', letterSpacing: '0.15em', marginBottom: '4px',
         textAlign: 'center' }}>{title}</div>
       {series.map((s, i) => <SeriesCard key={i} series={s} />)}
     </div>
@@ -136,7 +136,7 @@ function StandingsTable({ teams, title, color }: {
         <thead>
           <tr>
             {['#','TEAM','W','L','PCT','NET RTG',''].map(h => (
-              <th key={h} style={{ padding: '4px 8px', fontSize: '8px', color: '#2a2a2a',
+              <th key={h} style={{ padding: '4px 8px', fontSize: '8px', color: '#787672',
                 letterSpacing: '0.1em', fontWeight: 400,
                 textAlign: h === 'TEAM' ? 'left' : 'center',
                 fontFamily: 'IBM Plex Mono, monospace' }}>{h}</th>
@@ -149,13 +149,13 @@ function StandingsTable({ teams, title, color }: {
             const isPlayIn = t.status === 'playin'
             return (
               <tr key={t.team} style={{
-                borderBottom: '1px solid #0d0d0d',
+                borderBottom: '1px solid #1f1f24',
                 borderTop: isPlayIn && t.seed === 7 ? '2px dashed #333' : 'none',
                 background: i % 2 === 0 ? 'transparent' : '#080808',
               }}>
                 <td style={{ padding: '7px 8px', textAlign: 'center',
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
-                  color: '#333' }}>{t.seed}</td>
+                  color: '#909090' }}>{t.seed}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <div style={{ width: '6px', height: '6px', borderRadius: '50%',
@@ -172,10 +172,10 @@ function StandingsTable({ teams, title, color }: {
                   color: '#888' }}>{t.wins}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'center',
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-                  color: '#555' }}>{t.losses}</td>
+                  color: '#b0aea8' }}>{t.losses}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'center',
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
-                  color: '#444' }}>{(t.pct * 100).toFixed(1)}</td>
+                  color: '#909090' }}>{(t.pct * 100).toFixed(1)}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'center',
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
                   color: t.net_rtg > 0 ? '#4ade80' : t.net_rtg < 0 ? '#f87171' : '#555' }}>
@@ -183,7 +183,7 @@ function StandingsTable({ teams, title, color }: {
                 </td>
                 <td style={{ padding: '7px 8px', textAlign: 'right',
                   fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px',
-                  color: '#222' }}>
+                  color: '#787672' }}>
                   {t.status === 'playin' ? 'play-in' : ''}
                 </td>
               </tr>
@@ -192,7 +192,7 @@ function StandingsTable({ teams, title, color }: {
         </tbody>
       </table>
       <div style={{ marginTop: '8px', display: 'flex', gap: '12px',
-        fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#2a2a2a' }}>
+        fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#787672' }}>
         <span><span style={{ color: STATUS_COLORS.playoff }}>●</span> Playoff (1–6)</span>
         <span><span style={{ color: STATUS_COLORS.playin }}>●</span> Play-in (7–10)</span>
         <span style={{ borderTop: '1px dashed #333', paddingTop: '2px' }}>- - - Play-in line</span>
@@ -218,7 +218,7 @@ function SimTable({ results, title, color }: {
         <thead>
           <tr>
             {['TEAM','NET RTG','PLAYOFF','CONF F','FINALS','CHAMP'].map(h => (
-              <th key={h} style={{ padding: '4px 8px', fontSize: '8px', color: '#2a2a2a',
+              <th key={h} style={{ padding: '4px 8px', fontSize: '8px', color: '#787672',
                 letterSpacing: '0.1em', fontWeight: 400, fontFamily: 'IBM Plex Mono, monospace',
                 textAlign: h === 'TEAM' ? 'left' : 'right' }}>{h}</th>
             ))}
@@ -227,7 +227,7 @@ function SimTable({ results, title, color }: {
         <tbody>
           {results.map((r, i) => (
             <tr key={r.team} style={{
-              borderBottom: '1px solid #0d0d0d',
+              borderBottom: '1px solid #1f1f24',
               background: i % 2 === 0 ? 'transparent' : '#080808',
             }}>
               <td style={{ padding: '7px 8px', fontFamily: 'IBM Plex Mono, monospace',
@@ -267,13 +267,13 @@ function ChampBar({ results }: { results: SimResult[] }) {
   const top = results.filter(r => r.champion_pct >= 0.5).slice(0, 12)
   const max = Math.max(...top.map(r => r.champion_pct), 1)
   return (
-    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#0a0a0a', borderRadius: '4px' }}>
+    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#141418', borderRadius: '4px' }}>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#fbbf24', letterSpacing: '0.08em', marginBottom: '16px' }}>
         CHAMPIONSHIP PROBABILITY
       </div>
       {top.map((r, i) => (
         <div key={r.team} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', width: '14px', textAlign: 'right' }}>{i + 1}</span>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', width: '14px', textAlign: 'right' }}>{i + 1}</span>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0', width: '34px' }}>{r.team}</span>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: r.conference === 'East' ? '#60a5fa' : '#f87171', width: '26px' }}>{r.conference[0]}</span>
           <div style={{ flex: 1, height: '8px', background: '#111', overflow: 'hidden', borderRadius: '1px' }}>
@@ -300,8 +300,8 @@ function BubbleChart({ results }: { results: SimResult[] }) {
   const toY = (p: number) => pad.t + ((100 - p) / 100) * (h - pad.t - pad.b)
   const toSize = (c: number) => Math.max(3, Math.sqrt(c + 0.1) * 3.2)
   return (
-    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#0a0a0a', borderRadius: '4px' }}>
-      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>
+    <div style={{ border: '1px solid #1a1a1a', padding: '20px', background: '#141418', borderRadius: '4px' }}>
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em', marginBottom: '8px' }}>
         NET RATING vs PLAYOFF ODDS · bubble size = championship %
       </div>
       <svg width="100%" viewBox={`0 0 ${w} ${h}`}>
@@ -388,19 +388,19 @@ export default function PlayoffsPage() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: '#888',
+    <div style={{ minHeight: '100vh', background: '#0e0e12', color: '#888',
       fontFamily: 'IBM Plex Mono, monospace' }}>
 
       {/* Page header */}
-      <div style={{ borderBottom: '1px solid #0f0f0f', padding: '16px 28px' }}>
-        <div style={{ fontSize: '9px', color: '#2a2a2a', letterSpacing: '0.15em',
+      <div style={{ borderBottom: '1px solid #1f1f24', padding: '16px 28px' }}>
+        <div style={{ fontSize: '9px', color: '#787672', letterSpacing: '0.15em',
           marginBottom: '6px' }}>2025–26 NBA PLAYOFFS</div>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#e0e0e0', margin: 0,
           letterSpacing: '-0.01em' }}>Playoff Central</h1>
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: '1px solid #0f0f0f', padding: '0 28px',
+      <div style={{ borderBottom: '1px solid #1f1f24', padding: '0 28px',
         display: 'flex', gap: '0' }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -421,13 +421,13 @@ export default function PlayoffsPage() {
           <div>
             {loadingStandings && (
               <div style={{ padding: '60px', textAlign: 'center', fontSize: '11px',
-                color: '#2a2a2a' }}>Loading standings...</div>
+                color: '#787672' }}>Loading standings...</div>
             )}
             {standings && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between',
                   alignItems: 'center', marginBottom: '24px' }}>
-                  <div style={{ fontSize: '9px', color: '#2a2a2a' }}>
+                  <div style={{ fontSize: '9px', color: '#787672' }}>
                     AS OF {standings.as_of}
                   </div>
                 </div>
@@ -447,21 +447,21 @@ export default function PlayoffsPage() {
           <div>
             {loadingBracket && (
               <div style={{ padding: '60px', textAlign: 'center', fontSize: '11px',
-                color: '#2a2a2a' }}>Loading bracket...</div>
+                color: '#787672' }}>Loading bracket...</div>
             )}
             {bracket && bracket.stage === 'regular_season' && (
               <div style={{ padding: '60px', textAlign: 'center' }}>
-                <div style={{ fontSize: '14px', color: '#333', marginBottom: '8px' }}>
+                <div style={{ fontSize: '14px', color: '#909090', marginBottom: '8px' }}>
                   Playoffs haven't started yet
                 </div>
-                <div style={{ fontSize: '11px', color: '#222' }}>
+                <div style={{ fontSize: '11px', color: '#787672' }}>
                   Current stage: Regular Season · Check back when playoffs begin
                 </div>
               </div>
             )}
             {bracket && bracket.stage !== 'regular_season' && (
               <div>
-                <div style={{ fontSize: '9px', color: '#2a2a2a', marginBottom: '20px',
+                <div style={{ fontSize: '9px', color: '#787672', marginBottom: '20px',
                   letterSpacing: '0.12em' }}>
                   CURRENT STAGE: {stageLabel(bracket.stage).toUpperCase()}
                 </div>
@@ -522,7 +522,7 @@ export default function PlayoffsPage() {
             {/* Controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px',
               marginBottom: '28px', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '11px', color: '#333' }}>Simulations:</div>
+              <div style={{ fontSize: '11px', color: '#909090' }}>Simulations:</div>
               {[
                 { label: '1K',   value: 1000 },
                 { label: '10K',  value: 10000 },
@@ -547,7 +547,7 @@ export default function PlayoffsPage() {
                 {simLoading ? 'Simulating...' : 'Run Simulation →'}
               </button>
               {simResult && (
-                <div style={{ fontSize: '10px', color: '#2a2a2a' }}>
+                <div style={{ fontSize: '10px', color: '#787672' }}>
                   {simResult.n_sims.toLocaleString()} sims ·{' '}
                   {stageLabel(simResult.stage)} ·{' '}
                   as of {simResult.as_of}
@@ -556,12 +556,12 @@ export default function PlayoffsPage() {
             </div>
 
             {!simResult && !simLoading && (
-              <div style={{ padding: '60px', textAlign: 'center', border: '1px solid #0f0f0f',
+              <div style={{ padding: '60px', textAlign: 'center', border: '1px solid #222228',
                 borderRadius: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#2a2a2a', marginBottom: '8px' }}>
+                <div style={{ fontSize: '13px', color: '#787672', marginBottom: '8px' }}>
                   Simulate the playoff race from current standings
                 </div>
-                <div style={{ fontSize: '11px', color: '#1a1a1a', lineHeight: 1.7 }}>
+                <div style={{ fontSize: '11px', color: '#787672', lineHeight: 1.7 }}>
                   Locks in completed series results · Simulates in-progress series from current scores
                   <br />Works from any point: pre-playoffs, mid-series, conference finals, or Finals
                 </div>
@@ -570,7 +570,7 @@ export default function PlayoffsPage() {
 
             {simLoading && (
               <div style={{ padding: '60px', textAlign: 'center', fontSize: '11px',
-                color: '#2a2a2a' }}>
+                color: '#787672' }}>
                 Running {nSims.toLocaleString()} simulations...
               </div>
             )}
@@ -581,7 +581,7 @@ export default function PlayoffsPage() {
                 {simResult.top_champions.length > 0 && (
                   <div style={{ marginBottom: '28px', display: 'flex', gap: '8px',
                     flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{ fontSize: '9px', color: '#2a2a2a',
+                    <span style={{ fontSize: '9px', color: '#787672',
                       letterSpacing: '0.12em' }}>TOP FAVORITES</span>
                     {simResult.top_champions.map((c: any, i: number) => (
                       <div key={c.team} style={{ padding: '6px 14px',

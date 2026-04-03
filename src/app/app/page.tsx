@@ -93,7 +93,7 @@ function Carousel({ stories }: { stories: Story[] }) {
     <div style={{ height: '260px', display: 'flex', alignItems: 'center',
       justifyContent: 'center', background: '#141418', borderRadius: '8px',
       border: '1px solid #222228' }}>
-      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#555' }}>
+      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>
         Loading...
       </span>
     </div>
@@ -146,7 +146,7 @@ function Carousel({ stories }: { stories: Story[] }) {
         {['←','→'].map((a, di) => (
           <button key={a} onClick={() => setIdx(i => di===0?(i-1+stories.length)%stories.length:(i+1)%stories.length)}
             style={{ background:'none', border:'1px solid #2e2e36', borderRadius:'4px',
-              padding:'4px 10px', cursor:'pointer', color:'#555', fontSize:'12px',
+              padding:'4px 10px', cursor:'pointer', color:'#b0aea8', fontSize:'12px',
               fontFamily:'DM Mono, monospace', transition:'all 0.15s' }}
             onMouseEnter={e=>{e.currentTarget.style.color='#f2f0eb';e.currentTarget.style.borderColor='#555'}}
             onMouseLeave={e=>{e.currentTarget.style.color='#555';e.currentTarget.style.borderColor='#2e2e36'}}>
@@ -162,7 +162,7 @@ function Carousel({ stories }: { stories: Story[] }) {
               transition:'width 0.3s, background 0.3s' }} />
           ))}
         </div>
-        <span style={{ fontFamily:'DM Mono, monospace', fontSize:'10px', color:'#444' }}>
+        <span style={{ fontFamily:'DM Mono, monospace', fontSize:'10px', color:'#909090' }}>
           {String(idx+1).padStart(2,'0')}/{String(stories.length).padStart(2,'0')}
         </span>
       </div>
@@ -256,11 +256,11 @@ function HeroSection({ stories }: { stories: Story[] }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               marginBottom: '12px' }}>
               <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
-                color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+                color: '#b0aea8', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
                 Today's intelligence
               </span>
               <Link href="/insights" style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
-                color: '#555', letterSpacing: '0.1em', transition: 'color 0.15s',
+                color: '#b0aea8', letterSpacing: '0.1em', transition: 'color 0.15s',
                 textTransform: 'uppercase' as const }}
                 onMouseEnter={e=>(e.currentTarget.style.color='#c8f135')}
                 onMouseLeave={e=>(e.currentTarget.style.color='#555')}>
@@ -310,10 +310,10 @@ function HeroSection({ stories }: { stories: Story[] }) {
 
 function FeaturesSection() {
   return (
-    <section style={{ padding: '60px 0', borderTop: '1px solid #1a1a20' }}>
+    <section style={{ padding: '60px 0', borderTop: '1px solid #222228' }}>
       <div style={{ marginBottom: '40px' }}>
         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
-          color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+          color: '#b0aea8', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
           What's inside
         </span>
         <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '30px', fontWeight: 400,
@@ -342,7 +342,7 @@ function FeaturesSection() {
                 lineHeight: 1.65, marginBottom: '20px' }}>{m.desc}</p>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
-                  color: '#444', letterSpacing: '0.06em' }}>{m.stat}</span>
+                  color: '#909090', letterSpacing: '0.06em' }}>{m.stat}</span>
                 <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px',
                   color: m.accent }}>→</span>
               </div>
@@ -365,11 +365,11 @@ function ModelSection() {
   ]
 
   return (
-    <section style={{ padding: '60px 0', borderTop: '1px solid #1a1a20' }}>
+    <section style={{ padding: '60px 0', borderTop: '1px solid #222228' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'start' }}>
         <div>
           <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
-            color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+            color: '#b0aea8', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
             How it works
           </span>
           <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '28px', fontWeight: 400,
@@ -410,11 +410,11 @@ function ModelSection() {
 
 function FooterSection() {
   return (
-    <section style={{ padding: '40px 0', borderTop: '1px solid #1a1a20' }}>
+    <section style={{ padding: '40px 0', borderTop: '1px solid #222228' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px',
           color: '#c8f135', fontWeight: 500, letterSpacing: '0.12em' }}>SWINGFACTR</span>
-        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#444',
+        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#909090',
           letterSpacing: '0.08em' }}>2025–26 NBA · Updated 3× daily</span>
       </div>
     </section>

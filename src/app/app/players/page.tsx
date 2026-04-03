@@ -49,11 +49,11 @@ export default function PlayersPage() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           STINT-BASED · NET RATING PER 100 POSSESSIONS
         </div>
         <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Player Ratings</h1>
-        <p style={{ color: '#555', fontSize: '13px', maxWidth: '560px', lineHeight: 1.6 }}>
+        <p style={{ color: '#b0aea8', fontSize: '13px', maxWidth: '560px', lineHeight: 1.6 }}>
           Net rating when each player is on the court, computed from 5-man lineup stints. Minimum minutes filter removes small samples.
         </p>
       </div>
@@ -98,8 +98,8 @@ export default function PlayersPage() {
       <div style={{ border: '1px solid #1a1a1a' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '40px 180px 60px 1fr 70px 80px 90px',
-          padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+          padding: '10px 20px', borderBottom: '1px solid #222228',
+          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
         }}>
           <span>#</span>
           <span>PLAYER</span>
@@ -111,9 +111,9 @@ export default function PlayersPage() {
         </div>
 
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
         ) : sorted.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No players found.</div>
+          <div style={{ padding: '48px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>No players found.</div>
         ) : sorted.map((p, i) => {
           const isPos = p.net_rtg >= 0
           const barPct = Math.abs(p.net_rtg) / maxAbs * 45
@@ -123,9 +123,9 @@ export default function PlayersPage() {
               padding: '13px 20px', borderBottom: i < sorted.length - 1 ? '1px solid #111' : 'none',
               alignItems: 'center',
             }}>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{(p as any).displayRank}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{(p as any).displayRank}</span>
               <span style={{ fontSize: '13px', color: '#e0e0e0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player}</span>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.team}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.team}</span>
               <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
                 <div style={{ flex: 1, height: '4px', background: '#111', position: 'relative' }}>
                   <div style={{ position: 'absolute', left: '50%', top: '-2px', width: '1px', height: '8px', background: '#222' }} />
@@ -138,8 +138,8 @@ export default function PlayersPage() {
                   }} />
                 </div>
               </div>
-              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.games}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.minutes}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.games}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.minutes}</span>
               <span style={{
                 textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600,
                 color: p.net_rtg > 0 ? '#4ade80' : p.net_rtg < 0 ? '#f87171' : '#555',
@@ -152,7 +152,7 @@ export default function PlayersPage() {
       </div>
 
       {sorted.length > 0 && (
-        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
           {sorted.length} players · min {minMinutes} minutes · net rating per 100 possessions
         </div>
       )}

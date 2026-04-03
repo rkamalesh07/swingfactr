@@ -91,9 +91,9 @@ export default function LivePage() {
       </span>
     )
     if (state === 'pre') return (
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{desc}</span>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>{desc}</span>
     )
-    return <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>FINAL</span>
+    return <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>FINAL</span>
   }
 
   return (
@@ -101,12 +101,12 @@ export default function LivePage() {
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
               LIVE · TODAY'S GAMES
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Live Win Probability</h1>
           </div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
             {lastUpdated && `updated ${lastUpdated}`}
             {liveGames.length > 0 && <span style={{ color: '#ef4444', marginLeft: '8px' }}>● auto-refresh 30s</span>}
           </div>
@@ -114,9 +114,9 @@ export default function LivePage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+        <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
       ) : games.length === 0 ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No games today.</div>
+        <div style={{ padding: '48px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>No games today.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 1.4fr' : '1fr', gap: '1px', alignItems: 'start' }}>
           {/* Games list */}
@@ -137,7 +137,7 @@ export default function LivePage() {
             {/* Upcoming */}
             {upcomingGames.length > 0 && (
               <>
-                <div style={{ padding: '8px 16px', background: '#0f0f0f', borderTop: liveGames.length > 0 ? '1px solid #1a1a1a' : 'none', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em' }}>
+                <div style={{ padding: '8px 16px', background: '#0f0f0f', borderTop: liveGames.length > 0 ? '1px solid #1a1a1a' : 'none', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em' }}>
                   UPCOMING
                 </div>
                 {upcomingGames.map(g => (
@@ -150,7 +150,7 @@ export default function LivePage() {
             {/* Completed */}
             {completedGames.length > 0 && (
               <>
-                <div style={{ padding: '8px 16px', background: '#0f0f0f', borderTop: '1px solid #1a1a1a', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', letterSpacing: '0.1em' }}>
+                <div style={{ padding: '8px 16px', background: '#0f0f0f', borderTop: '1px solid #222228', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em' }}>
                   FINAL
                 </div>
                 {completedGames.map(g => (
@@ -165,14 +165,14 @@ export default function LivePage() {
           {selected && (
             <div style={{ border: '1px solid #1a1a1a', padding: '24px' }}>
               {detailLoading && !detail ? (
-                <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+                <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
               ) : detail ? (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 700, color: '#e0e0e0' }}>{detail.away_team}</span>
                       {detail.state !== 'pre' && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '24px', color: '#888' }}>{detail.away_score}</span>}
-                      <span style={{ color: '#333' }}>@</span>
+                      <span style={{ color: '#909090' }}>@</span>
                       {detail.state !== 'pre' && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '24px', color: '#888' }}>{detail.home_score}</span>}
                       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 700, color: '#e0e0e0' }}>{detail.home_team}</span>
                     </div>
@@ -190,14 +190,14 @@ export default function LivePage() {
                   )}
 
                   {detail.state === 'pre' && (
-                    <div style={{ padding: '12px 0', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>
+                    <div style={{ padding: '12px 0', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>
                       Game hasn't started — click below for projected win probability based on team ratings.
                     </div>
                   )}
 
                   {detail.series.length > 1 && detail.state !== 'pre' && (
                     <>
-                      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em', marginBottom: '12px' }}>
                         WIN PROBABILITY CURVE
                       </div>
                       <ResponsiveContainer width="100%" height={200}>
@@ -224,7 +224,7 @@ export default function LivePage() {
                   )}
 
                   <div style={{ marginTop: '16px' }}>
-                    <Link href={`/games/${detail.game_id}`} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444', textDecoration: 'none' }}>
+                    <Link href={`/games/${detail.game_id}`} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090', textDecoration: 'none' }}>
                       View full game page →
                     </Link>
                   </div>
@@ -241,7 +241,7 @@ export default function LivePage() {
 function GameRow({ game, selected, onClick }: { game: LiveGame; selected: boolean; onClick: () => void }) {
   return (
     <div onClick={onClick} style={{
-      padding: '14px 16px', borderBottom: '1px solid #111', cursor: 'pointer',
+      padding: '14px 16px', borderBottom: '1px solid #222228', cursor: 'pointer',
       background: selected ? '#111' : 'transparent',
     }}
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = '#0d0d0d' }}
@@ -251,7 +251,7 @@ function GameRow({ game, selected, onClick }: { game: LiveGame; selected: boolea
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: '#e0e0e0' }}>{game.away_team}</span>
           {game.state !== 'pre' && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', color: '#888' }}>{game.away_score}</span>}
-          <span style={{ color: '#222', fontSize: '10px' }}>@</span>
+          <span style={{ color: '#787672', fontSize: '10px' }}>@</span>
           {game.state !== 'pre' && <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', color: '#888' }}>{game.home_score}</span>}
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: '#e0e0e0' }}>{game.home_team}</span>
         </div>
@@ -261,9 +261,9 @@ function GameRow({ game, selected, onClick }: { game: LiveGame; selected: boolea
               Q{game.period} {game.clock}
             </span>
           ) : game.state === 'pre' ? (
-            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444' }}>{game.game_time}</span>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>{game.game_time}</span>
           ) : (
-            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>FINAL</span>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>FINAL</span>
           )}
         </div>
       </div>

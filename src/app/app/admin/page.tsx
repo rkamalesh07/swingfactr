@@ -52,8 +52,8 @@ function pct(n: number, d: number) {
 
 function StatRow({ label, val, color = '#888' }: { label: string; val: string | number; color?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0d0d0d' }}>
-      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1f1f24' }}>
+      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{label}</span>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color }}>{val}</span>
     </div>
   )
@@ -62,7 +62,7 @@ function StatRow({ label, val, color = '#888' }: { label: string; val: string | 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ border: '1px solid #1a1a1a', padding: '16px', marginBottom: '12px' }}>
-      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.1em', marginBottom: '12px' }}>{title}</div>
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.1em', marginBottom: '12px' }}>{title}</div>
       {children}
     </div>
   )
@@ -143,7 +143,7 @@ export default function AdminPage() {
   if (!authed) {
     return (
       <div style={{ maxWidth: '360px', margin: '80px auto', padding: '32px', border: '1px solid #1a1a1a' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.1em', marginBottom: '20px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.1em', marginBottom: '20px' }}>
           ADMIN ACCESS · OUTCOMES TRACKER
         </div>
         <input
@@ -171,7 +171,7 @@ export default function AdminPage() {
   return (
     <div>
       <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           ADMIN · OUTCOMES TRACKER · INTERNAL ONLY
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -211,11 +211,11 @@ export default function AdminPage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading results...</div>
+        <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading results...</div>
       ) : withOutcome.length === 0 ? (
         <div style={{ border: '1px solid #1a1a1a', padding: '48px', textAlign: 'center' }}>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444', marginBottom: '6px' }}>No outcome data yet</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090', marginBottom: '6px' }}>No outcome data yet</div>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
             Outcome checker runs nightly at 10pm PST. First results available tomorrow.
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function AdminPage() {
               ['VS PP IMPLIED', `${((totalCorrect / withOutcome.length - PP_IMPLIED / 100) * 100).toFixed(1)}%`, totalCorrect / withOutcome.length > PP_IMPLIED / 100 ? '#4ade80' : '#f87171'],
             ] as [string, string | number, string][]).map(([label, val, color]) => (
               <div key={label} style={{ border: '1px solid #1a1a1a', padding: '12px 16px' }}>
-                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
+                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 700, color }}>{val}</div>
               </div>
             ))}
@@ -243,10 +243,10 @@ export default function AdminPage() {
               {buckets.map(b => (
                 <div key={b.label} style={{ marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{b.label}</span>
+                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>{b.label}</span>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
                       color: b.total > 0 && b.correct / b.total > PP_IMPLIED / 100 ? '#4ade80' : b.total > 0 ? '#f87171' : '#333' }}>
-                      {pct(b.correct, b.total)} <span style={{ color: '#333' }}>({b.total})</span>
+                      {pct(b.correct, b.total)} <span style={{ color: '#909090' }}>({b.total})</span>
                     </span>
                   </div>
                   {b.total > 0 && (
@@ -300,13 +300,13 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#333', marginTop: '4px', textAlign: 'center' }}>{c.label}</div>
-                    {c.total > 0 && <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#222' }}>n={c.total}</div>}
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#909090', marginTop: '4px', textAlign: 'center' }}>{c.label}</div>
+                    {c.total > 0 && <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '7px', color: '#787672' }}>n={c.total}</div>}
                   </div>
                 )
               })}
             </div>
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333', marginTop: '8px' }}>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', marginTop: '8px' }}>
               Ideal: bars should increase left to right. Green = above {PP_IMPLIED.toFixed(1)}% break-even.
             </div>
           </Card>
@@ -314,8 +314,8 @@ export default function AdminPage() {
           {/* Recent results table */}
           <Card title={`RECENT PICKS (last ${recent.length})`}>
             <div style={{ display: 'grid', gridTemplateColumns: '80px 140px 50px 50px 50px 55px 55px 40px 50px', gap: '0',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em',
-              padding: '4px 0', borderBottom: '1px solid #1a1a1a', marginBottom: '4px' }}>
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.06em',
+              padding: '4px 0', borderBottom: '1px solid #222228', marginBottom: '4px' }}>
               <span>DATE</span><span>PLAYER</span><span>STAT</span><span>TIER</span>
               <span>LINE</span><span>ACTUAL</span><span>SCORE</span><span>PICK</span><span>RESULT</span>
             </div>
@@ -323,9 +323,9 @@ export default function AdminPage() {
               <div key={i} style={{ display: 'grid',
                 gridTemplateColumns: '80px 140px 50px 50px 50px 55px 55px 40px 50px',
                 padding: '5px 0', borderBottom: '1px solid #0a0a0a', alignItems: 'center' }}>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444' }}>{r.game_date}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>{r.game_date}</span>
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player_name}</span>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>{STAT_LABEL[r.stat] || r.stat}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>{STAT_LABEL[r.stat] || r.stat}</span>
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
                   color: r.odds_type === 'goblin' ? '#4ade80' : r.odds_type === 'demon' ? '#f87171' : '#444' }}>
                   {r.odds_type}

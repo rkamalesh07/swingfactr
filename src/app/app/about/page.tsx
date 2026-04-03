@@ -20,9 +20,9 @@ function Section({ id, title, children }: { id: string; title: string; children:
 function Formula({ label, expr }: { label: string; expr: string }) {
   return (
     <div style={{ margin: '16px 0', padding: '14px 18px',
-      background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '4px',
+      background: '#141418', border: '1px solid #1a1a1a', borderRadius: '4px',
       borderLeft: `3px solid ${ACCENT}` }}>
-      <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.12em',
+      <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.12em',
         marginBottom: '8px', fontFamily: 'IBM Plex Mono, monospace' }}>{label}</div>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px',
         color: '#c8e6c9', letterSpacing: '0.02em', lineHeight: 1.6 }}>{expr}</div>
@@ -44,7 +44,7 @@ function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span style={{ display: 'inline-block', padding: '2px 8px',
       background: '#111', border: '1px solid #222', borderRadius: '3px',
-      fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555',
+      fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8',
       margin: '2px' }}>{children}</span>
   )
 }
@@ -62,17 +62,17 @@ const TOC = [
 
 export default function AboutPage() {
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: '#888' }}>
+    <div style={{ minHeight: '100vh', background: '#0e0e12', color: '#888' }}>
 
       {/* Nav */}
-      <div style={{ borderBottom: '1px solid #0f0f0f', padding: '12px 24px',
+      <div style={{ borderBottom: '1px solid #1f1f24', padding: '12px 24px',
         display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <Link href="/props" style={{ color: '#333', textDecoration: 'none',
+        <Link href="/props" style={{ color: '#909090', textDecoration: 'none',
           fontSize: '11px', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.05em' }}>
           ← PROPS
         </Link>
-        <span style={{ color: '#1a1a1a' }}>·</span>
-        <span style={{ color: '#333', fontSize: '11px',
+        <span style={{ color: '#787672' }}>·</span>
+        <span style={{ color: '#909090', fontSize: '11px',
           fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.1em' }}>METHODOLOGY</span>
       </div>
 
@@ -81,13 +81,13 @@ export default function AboutPage() {
 
         {/* Sidebar TOC */}
         <div style={{ position: 'sticky', top: '32px' }}>
-          <div style={{ fontSize: '9px', color: '#2a2a2a', letterSpacing: '0.15em',
+          <div style={{ fontSize: '9px', color: '#787672', letterSpacing: '0.15em',
             fontFamily: 'IBM Plex Mono, monospace', marginBottom: '16px' }}>CONTENTS</div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {TOC.map(t => (
               <a key={t.id} href={`#${t.id}`} style={{
                 fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-                color: '#2a2a2a', textDecoration: 'none', padding: '5px 0',
+                color: '#787672', textDecoration: 'none', padding: '5px 0',
                 borderLeft: '2px solid transparent', paddingLeft: '12px',
                 transition: 'color 0.15s, border-color 0.15s',
               }}
@@ -110,7 +110,7 @@ export default function AboutPage() {
         {/* Main content */}
         <div>
           <div style={{ marginBottom: '56px' }}>
-            <div style={{ fontSize: '11px', color: '#2a2a2a', letterSpacing: '0.15em',
+            <div style={{ fontSize: '11px', color: '#787672', letterSpacing: '0.15em',
               fontFamily: 'IBM Plex Mono, monospace', marginBottom: '12px' }}>
               SWINGFACTR · MODEL DOCUMENTATION
             </div>
@@ -119,7 +119,7 @@ export default function AboutPage() {
               How the Model Works
             </h1>
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px',
-              lineHeight: 1.8, color: '#444', margin: 0 }}>
+              lineHeight: 1.8, color: '#909090', margin: 0 }}>
               SwingFactr is a statistical NBA player prop prediction system. This document
               explains every step from raw data to the edge scores shown on the props board.
             </p>
@@ -132,7 +132,7 @@ export default function AboutPage() {
               PrizePicks break-even rate. Picks with sufficient edge are surfaced on the board.
             </Callout>
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444' }}>
+              lineHeight: 1.9, color: '#909090' }}>
               The system runs an automated ETL pipeline 3× daily (6:30am, 12pm, 3:30pm PST)
               that fetches live PrizePicks props, checks injury reports, computes distribution-based
               predictions for every player, and writes results to the board. All computation
@@ -146,7 +146,7 @@ export default function AboutPage() {
 
           <Section id="data" title="Data Pipeline">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               Every ETL run executes these steps in order:
             </p>
             {[
@@ -157,18 +157,18 @@ export default function AboutPage() {
               ['5. Prop Computation', 'For each player-stat-tier combination, run the distribution model and write results to the prop_board table with full ON CONFLICT logic to preserve opening lines.'],
             ].map(([title, body]) => (
               <div key={title as string} style={{ marginBottom: '20px', paddingLeft: '16px',
-                borderLeft: '1px solid #111' }}>
+                borderLeft: '1px solid #222228' }}>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
                   color: ACCENT, marginBottom: '6px', letterSpacing: '0.05em' }}>{title}</div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-                  color: '#444', lineHeight: 1.8 }}>{body}</div>
+                  color: '#909090', lineHeight: 1.8 }}>{body}</div>
               </div>
             ))}
           </Section>
 
           <Section id="model" title="Prediction Model (v14)">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               The core model computes a player-specific normal distribution for each stat
               and evaluates P(Y {'>'} line) using a continuity-corrected normal CDF.
             </p>
@@ -201,14 +201,14 @@ export default function AboutPage() {
 
           <Section id="injury" title="Injury Engine">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               Two-source injury detection with RotoWire as primary truth and ESPN as fallback.
             </p>
 
             <div style={{ marginBottom: '20px', padding: '14px 18px',
-              background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '4px' }}>
+              background: '#141418', border: '1px solid #1a1a1a', borderRadius: '4px' }}>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-                color: '#555', lineHeight: 1.9 }}>
+                color: '#b0aea8', lineHeight: 1.9 }}>
                 <div style={{ color: ACCENT, marginBottom: '8px', fontSize: '10px',
                   letterSpacing: '0.1em' }}>WHY ROTOWIRE OVER ESPN</div>
                 ESPN's injury_since date reflects the last status change, not the first game
@@ -225,7 +225,7 @@ export default function AboutPage() {
 
           <Section id="defense" title="Positional Opponent Defense">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               Instead of a generic team defensive rating, the model uses position-specific
               opponent defense ratios computed from this season's game logs.
             </p>
@@ -243,7 +243,7 @@ export default function AboutPage() {
 
           <Section id="edge" title="Edge Framework">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               Edge is computed as model probability minus the PrizePicks break-even probability.
               Break-even is computed dynamically based on the power play payout.
             </p>
@@ -255,11 +255,11 @@ export default function AboutPage() {
               expr={`raw_edge_vs_pp = model_prob - pp_break_even_prob\n\n// Example: model says 68% P(over), break-even 57.7%\n// edge = 68 - 57.7 = +10.3 → "Strong Over"`} />
 
             <div style={{ marginBottom: '20px', padding: '14px 18px',
-              background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '4px' }}>
+              background: '#141418', border: '1px solid #1a1a1a', borderRadius: '4px' }}>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
-                color: '#333', letterSpacing: '0.1em', marginBottom: '12px' }}>TOSS-UP FILTERS (ASYMMETRIC)</div>
+                color: '#909090', letterSpacing: '0.1em', marginBottom: '12px' }}>TOSS-UP FILTERS (ASYMMETRIC)</div>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-                color: '#444', lineHeight: 1.9 }}>
+                color: '#909090', lineHeight: 1.9 }}>
                 Overs filtered if |edge| ≤ 5.5 (standard picks only)
                 <br />
                 Unders filtered if |edge| ≤ 8.0 — stricter because NBA stats are
@@ -271,7 +271,7 @@ export default function AboutPage() {
 
           <Section id="calibration" title="Calibration">
             <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-              lineHeight: 1.9, color: '#444', marginBottom: '20px' }}>
+              lineHeight: 1.9, color: '#909090', marginBottom: '20px' }}>
               Platt scaling (logistic calibration) is fit per stat using historical prop
               outcomes stored in the prop_outcomes table. Runs nightly via GitHub Actions.
             </p>
@@ -301,16 +301,16 @@ export default function AboutPage() {
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
                   color: '#f87171', marginBottom: '6px', letterSpacing: '0.05em' }}>{title}</div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px',
-                  color: '#444', lineHeight: 1.8 }}>{body}</div>
+                  color: '#909090', lineHeight: 1.8 }}>{body}</div>
               </div>
             ))}
           </Section>
 
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '32px',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#787672' }}>
             SwingFactr is not financial advice. Props are for analytical purposes only.
             <span style={{ marginLeft: '16px' }}>
-              <Link href="/props" style={{ color: '#333', textDecoration: 'none' }}>
+              <Link href="/props" style={{ color: '#909090', textDecoration: 'none' }}>
                 View Props Board →
               </Link>
             </span>

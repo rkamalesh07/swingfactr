@@ -99,25 +99,25 @@ export default function FatiguePage() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           OLS REGRESSION · SCORE MARGIN
         </div>
         <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Fatigue & Travel Effects</h1>
-        <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '560px' }}>
+        <p style={{ color: '#b0aea8', fontSize: '13px', lineHeight: 1.6, maxWidth: '560px' }}>
           How back-to-backs, travel, altitude, and rest affect game outcomes — applied to today's slate.
         </p>
       </div>
 
       {/* TODAY'S GAMES */}
       <div style={{ marginBottom: '48px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '16px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '16px' }}>
           TODAY'S GAMES · FATIGUE CONTEXT
         </div>
 
         {gamesLoading ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
+          <div style={{ padding: '32px', textAlign: 'center', color: '#909090', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
         ) : games.length === 0 ? (
-          <div style={{ padding: '32px', border: '1px solid #1a1a1a', color: '#444', fontSize: '13px', textAlign: 'center' }}>No games today.</div>
+          <div style={{ padding: '32px', border: '1px solid #1a1a1a', color: '#909090', fontSize: '13px', textAlign: 'center' }}>No games today.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: '#1a1a1a' }}>
             {games.map(g => {
@@ -127,19 +127,19 @@ export default function FatiguePage() {
               const blurb = getAdvantageBlurb(g)
 
               return (
-                <div key={g.game_id} style={{ background: '#0a0a0a', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={g.game_id} style={{ background: '#141418', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   {/* Left: matchup + status */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                       <span style={{ fontSize: '15px', fontWeight: 500, color: g.fatigue.advantaged_team === 'away' ? '#e0e0e0' : '#666' }}>
                         {g.away_team}
                       </span>
-                      <span style={{ color: '#333', fontSize: '12px' }}>@</span>
+                      <span style={{ color: '#909090', fontSize: '12px' }}>@</span>
                       <span style={{ fontSize: '15px', fontWeight: 500, color: g.fatigue.advantaged_team === 'home' ? '#e0e0e0' : '#666' }}>
                         {g.home_team}
                       </span>
                       {g.completed && g.home_score !== null ? (
-                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555', marginLeft: '8px' }}>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#b0aea8', marginLeft: '8px' }}>
                           {g.away_score} – {g.home_score} Final
                         </span>
                       ) : (
@@ -151,7 +151,7 @@ export default function FatiguePage() {
                     {/* Flags */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {g.fatigue.flags.length === 0 ? (
-                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#2a2a2a' }}>No fatigue factors</span>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#787672' }}>No fatigue factors</span>
                       ) : g.fatigue.flags.map((f, i) => (
                         <span key={i} style={{
                           fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px',
@@ -171,7 +171,7 @@ export default function FatiguePage() {
                     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '20px', fontWeight: 600, color: effectColor }}>
                       {effect > 0 ? '+' : ''}{effect} pts
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', marginBottom: '4px' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', marginBottom: '4px' }}>
                       home margin effect
                     </div>
                     <div style={{ fontSize: '11px', color: '#666', maxWidth: '200px', lineHeight: 1.4 }}>
@@ -186,8 +186,8 @@ export default function FatiguePage() {
       </div>
 
       {/* ADVANCED SECTION */}
-      <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '40px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', letterSpacing: '0.12em', marginBottom: '24px' }}>
+      <div style={{ borderTop: '1px solid #222228', paddingTop: '40px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '24px' }}>
           ADVANCED · MODEL COEFFICIENTS
         </div>
 
@@ -200,9 +200,9 @@ export default function FatiguePage() {
               { label: 'Significant', value: effects.filter(e => e.significant).length },
               { label: 'Season', value: '2024–25' },
             ].map(({ label, value }) => (
-              <div key={label} style={{ background: '#0a0a0a', padding: '16px 24px', flex: 1 }}>
+              <div key={label} style={{ background: '#141418', padding: '16px 24px', flex: 1 }}>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '18px', fontWeight: 600, color: '#e8e8e8', marginBottom: '4px' }}>{value}</div>
-                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em' }}>{label.toUpperCase()}</div>
+                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em' }}>{label.toUpperCase()}</div>
               </div>
             ))}
           </div>
@@ -211,7 +211,7 @@ export default function FatiguePage() {
         {effects.length > 0 && (
           <>
             <div style={{ background: '#111', border: '1px solid #1a1a1a', padding: '28px', marginBottom: '24px' }}>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em', marginBottom: '20px' }}>
                 COEFFICIENT ESTIMATES (POINTS EFFECT ON HOME MARGIN)
               </div>
               <ResponsiveContainer width="100%" height={260}>
@@ -229,7 +229,7 @@ export default function FatiguePage() {
                           <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: d.coefficient > 0 ? '#4ade80' : '#f87171' }}>
                             {d.coefficient > 0 ? '+' : ''}{d.coefficient.toFixed(3)} pts
                           </div>
-                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#444', fontSize: '11px' }}>p = {d.p_value.toFixed(4)}</div>
+                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#909090', fontSize: '11px' }}>p = {d.p_value.toFixed(4)}</div>
                           {d.significant && <div style={{ color: '#e8e8e8', fontSize: '10px', marginTop: '4px' }}>SIGNIFICANT</div>}
                         </div>
                       )
@@ -249,8 +249,8 @@ export default function FatiguePage() {
             <div style={{ border: '1px solid #1a1a1a' }}>
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 90px 90px 140px 80px',
-                padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-                fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+                padding: '10px 20px', borderBottom: '1px solid #222228',
+                fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
               }}>
                 <span>FACTOR</span><span style={{ textAlign: 'right' }}>COEF</span>
                 <span style={{ textAlign: 'right' }}>P-VALUE</span>
@@ -266,15 +266,15 @@ export default function FatiguePage() {
                   <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: e.coefficient > 0 ? '#4ade80' : '#f87171' }}>
                     {e.coefficient > 0 ? '+' : ''}{e.coefficient.toFixed(3)}
                   </span>
-                  <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555' }}>{e.p_value.toFixed(4)}</span>
-                  <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>[{e.ci_low.toFixed(2)}, {e.ci_high.toFixed(2)}]</span>
+                  <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#b0aea8' }}>{e.p_value.toFixed(4)}</span>
+                  <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>[{e.ci_low.toFixed(2)}, {e.ci_high.toFixed(2)}]</span>
                   <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', letterSpacing: '0.08em' }}>
-                    {e.significant ? <span style={{ color: '#e8e8e8' }}>YES</span> : <span style={{ color: '#333' }}>—</span>}
+                    {e.significant ? <span style={{ color: '#e8e8e8' }}>YES</span> : <span style={{ color: '#909090' }}>—</span>}
                   </span>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', lineHeight: 1.8 }}>
+            <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', lineHeight: 1.8 }}>
               Significant = p &lt; 0.05 · Coefficient unit = points on home score margin · Gray bars = not significant
             </div>
           </>

@@ -71,7 +71,7 @@ export default function LineupsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
             RAPM · RIDGE REGRESSION · α=2000
           </div>
           <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0' }}>Lineup Rankings</h1>
@@ -87,7 +87,7 @@ export default function LineupsPage() {
         </div>
       </div>
 
-      <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px', marginBottom: '28px' }}>
+      <p style={{ color: '#b0aea8', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px', marginBottom: '28px' }}>
         RAPM isolates lineup impact by controlling for opponent quality via ridge regression.
         Confidence intervals from 50 bootstrap samples. Minimum 3 minutes played.
       </p>
@@ -95,8 +95,8 @@ export default function LineupsPage() {
       <div style={{ border: '1px solid #1a1a1a' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '32px 1fr 70px 80px 80px 80px 120px',
-          padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+          padding: '10px 20px', borderBottom: '1px solid #222228',
+          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
         }}>
           <span>#</span><span>LINEUP</span>
           <span style={{ textAlign: 'right' }}>MIN</span>
@@ -107,9 +107,9 @@ export default function LineupsPage() {
         </div>
 
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
         ) : lineups.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
+          <div style={{ padding: '48px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>
             No lineup data for this team. Try another team.
           </div>
         ) : lineups.map((l, i) => (
@@ -119,9 +119,9 @@ export default function LineupsPage() {
             borderBottom: i < lineups.length - 1 ? '1px solid #111' : 'none',
             alignItems: 'center',
           }}>
-            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{i + 1}</span>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{i + 1}</span>
             <span style={{ fontSize: '13px', color: '#ccc' }}>{l.lineup_display || l.lineup_id}</span>
-            <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555' }}>
+            <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#b0aea8' }}>
               {l.total_minutes ? Math.round(l.total_minutes) : '—'}
             </span>
             <span style={{
@@ -144,7 +144,7 @@ export default function LineupsPage() {
                 {fmt(l.rapm_estimate)}
               </span>
               {l.rapm_ci_low != null && l.rapm_ci_high != null && (
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', marginLeft: '6px' }}>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', marginLeft: '6px' }}>
                   [{l.rapm_ci_low.toFixed(1)}, {l.rapm_ci_high.toFixed(1)}]
                 </span>
               )}
@@ -154,7 +154,7 @@ export default function LineupsPage() {
       </div>
 
       {lineups.length > 0 && (
-        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
           {lineups.length} lineups · sorted by RAPM desc · all values per 100 possessions
         </div>
       )}

@@ -90,11 +90,11 @@ export default function TeamsPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           EXPONENTIAL DECAY WEIGHTING · λ=0.015 · HALF-LIFE 46 DAYS
         </div>
         <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>Team Rankings</h1>
-        <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px' }}>
+        <p style={{ color: '#b0aea8', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px' }}>
           Rankings use exponential decay weighting — recent games count more than old ones.
           The <strong style={{ color: '#888' }}>Form</strong> tab shows which teams are trending up or down relative to their season average.
         </p>
@@ -146,8 +146,8 @@ export default function TeamsPage() {
         <div style={{ border: '1px solid #1a1a1a' }}>
           <div style={{
             display: 'grid', gridTemplateColumns: '40px 70px 70px 1fr 110px 110px 70px',
-            padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+            padding: '10px 20px', borderBottom: '1px solid #222228',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
           }}>
             <span>#</span><span>TEAM</span><span>W-L</span>
             <span>WEIGHTED RATING</span>
@@ -156,7 +156,7 @@ export default function TeamsPage() {
             <span style={{ textAlign: 'right' }}>GAMES</span>
           </div>
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
           ) : sortedTeams.map((t, i) => {
             const isPos = t.net_rtg >= 0
             const barPct = Math.abs(t.net_rtg) / maxTeamNet * 45
@@ -167,9 +167,9 @@ export default function TeamsPage() {
                 padding: '13px 20px', borderBottom: i < sortedTeams.length - 1 ? '1px solid #111' : 'none',
                 alignItems: 'center',
               }}>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{t.displayRank}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{t.displayRank}</span>
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', fontWeight: 700, color: '#e0e0e0' }}>{t.team}</span>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{t.wins}-{t.losses}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{t.wins}-{t.losses}</span>
                 <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
                   <div style={{ flex: 1, height: '4px', background: '#111', position: 'relative' }}>
                     <div style={{ position: 'absolute', left: '50%', top: '-2px', width: '1px', height: '8px', background: '#222' }} />
@@ -190,10 +190,10 @@ export default function TeamsPage() {
                     </span>
                   )}
                 </div>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>
                   {t.full_season_margin > 0 ? '+' : ''}{t.full_season_margin}
                 </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{t.games}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{t.games}</span>
               </div>
             )
           })}
@@ -203,13 +203,13 @@ export default function TeamsPage() {
       {/* Form table */}
       {view === 'form' && (
         <div style={{ border: '1px solid #1a1a1a' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid #1a1a1a', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', lineHeight: 1.8 }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #222228', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', lineHeight: 1.8 }}>
             TREND = weighted recent margin minus full season margin. Positive = team is playing better than their season avg. Sorted by trend.
           </div>
           <div style={{
             display: 'grid', gridTemplateColumns: '70px 1fr 80px 80px 80px 80px 80px',
-            padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+            padding: '10px 20px', borderBottom: '1px solid #222228',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
           }}>
             <span>TEAM</span><span>TREND CHART</span>
             <span style={{ textAlign: 'right' }}>TREND</span>
@@ -219,7 +219,7 @@ export default function TeamsPage() {
             <span style={{ textAlign: 'right' }}>L10</span>
           </div>
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
           ) : sortedForm.map((f, i) => {
             const isUp = f.trend > 0
             const barPct = Math.abs(f.trend) / maxTrend * 45
@@ -250,11 +250,11 @@ export default function TeamsPage() {
                 <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: f.weighted_margin > 0 ? '#4ade80' : '#f87171' }}>
                   {f.weighted_margin > 0 ? '+' : ''}{f.weighted_margin}
                 </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#555' }}>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#b0aea8' }}>
                   {f.full_season_margin > 0 ? '+' : ''}{f.full_season_margin}
                 </span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{f.l5}</span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{f.l10}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{f.l5}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{f.l10}</span>
               </div>
             )
           })}
@@ -266,8 +266,8 @@ export default function TeamsPage() {
         <div style={{ border: '1px solid #1a1a1a' }}>
           <div style={{
             display: 'grid', gridTemplateColumns: '40px 60px 1fr 1fr 70px 80px 90px',
-            padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+            padding: '10px 20px', borderBottom: '1px solid #222228',
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
           }}>
             <span>#</span><span>TEAM</span><span>LINEUP</span>
             <span>NET RTG</span>
@@ -276,7 +276,7 @@ export default function TeamsPage() {
             <span style={{ textAlign: 'right' }}>NET RTG</span>
           </div>
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>Loading...</div>
+            <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>Loading...</div>
           ) : sortedLineups.map((l, i) => {
             const isPos = l.net_rtg >= 0
             const barPct = Math.abs(l.net_rtg) / maxLineupNet * 45
@@ -287,7 +287,7 @@ export default function TeamsPage() {
                 padding: '13px 20px', borderBottom: i < sortedLineups.length - 1 ? '1px solid #111' : 'none',
                 alignItems: 'center',
               }}>
-                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{l.displayRank}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{l.displayRank}</span>
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 700, color: '#e0e0e0' }}>{l.team}</span>
                 <span style={{ fontSize: '12px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '12px' }} title={l.players.join(', ')}>
                   {playerStr}
@@ -301,8 +301,8 @@ export default function TeamsPage() {
                     }} />
                   </div>
                 </div>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{l.possessions}</span>
-                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{l.minutes}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{l.possessions}</span>
+                <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{l.minutes}</span>
                 <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600, color: l.net_rtg > 0 ? '#4ade80' : '#f87171' }}>
                   {l.net_rtg > 0 ? '+' : ''}{l.net_rtg}
                 </span>
@@ -312,7 +312,7 @@ export default function TeamsPage() {
         </div>
       )}
 
-      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+      <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
         {view === 'teams' && `${sortedTeams.length} teams · exponential decay weighted · λ=0.015 · half-life 46 days`}
         {view === 'form' && `${sortedForm.length} teams · trend = recent weighted margin minus full season avg`}
         {view === 'lineups' && `${sortedLineups.length} lineups · net rating per 100 possessions`}

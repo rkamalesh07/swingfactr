@@ -224,16 +224,16 @@ export default function ParlayBuilderPage() {
   return (
     <div>
       <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '4px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '4px' }}>
           PARLAY BUILDER · PRIZEPICKS · POISSON-BINOMIAL EV · NOT BETTING ADVICE
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', margin: 0 }}>Flex Parlay Builder</h1>
-          <Link href="/props" style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555', textDecoration: 'none' }}>
+          <Link href="/props" style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8', textDecoration: 'none' }}>
             ← Back to Props
           </Link>
         </div>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333', marginTop: '4px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', marginTop: '4px' }}>
           EV uses Poisson-binomial DP with correlation penalties. Probabilities are calibrated model estimates.
         </div>
       </div>
@@ -260,15 +260,15 @@ export default function ParlayBuilderPage() {
 
           <div style={{ border: '1px solid #1a1a1a', maxHeight: '620px', overflowY: 'auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '160px 46px 56px 68px 68px 70px 32px',
-              padding: '7px 12px', borderBottom: '1px solid #1a1a1a',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.06em',
-              position: 'sticky', top: 0, background: '#0a0a0a' }}>
+              padding: '7px 12px', borderBottom: '1px solid #222228',
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.06em',
+              position: 'sticky', top: 0, background: '#141418' }}>
               <span>PLAYER</span><span>STAT</span><span>LINE</span>
               <span>L10 AVG</span><span>L10 HIT%</span><span>CAL PROB</span><span>ADD</span>
             </div>
 
             {loading ? (
-              <div style={{ padding: '32px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>Loading...</div>
+              <div style={{ padding: '32px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>Loading...</div>
             ) : filtered.map((p, i) => {
               const isOver = p.pick_side === 'over'
               const prob   = (p.composite_score).toFixed(1)
@@ -282,7 +282,7 @@ export default function ParlayBuilderPage() {
                     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 600, color: '#e0e0e0' }}>
                       {p.player_name}
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#444', marginTop: '1px' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '8px', color: '#909090', marginTop: '1px' }}>
                       {p.is_home ? 'vs' : '@'} {p.opponent}
                       {p.odds_type !== 'standard' && (
                         <span style={{ color: '#4ade80', marginLeft: '4px' }}>{p.odds_type}</span>
@@ -335,7 +335,7 @@ export default function ParlayBuilderPage() {
         <div style={{ position: 'sticky', top: '16px' }}>
           <div style={{ border: '1px solid #1a1a1a', padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.1em' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.1em' }}>
                 PARLAY SLIP — {n}/6 PICKS
               </div>
               {n >= 2 && (
@@ -353,7 +353,7 @@ export default function ParlayBuilderPage() {
             </div>
 
             {n === 0 ? (
-              <div style={{ padding: '28px 0', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>
+              <div style={{ padding: '28px 0', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>
                 Add 2–6 props to build a parlay
               </div>
             ) : (
@@ -363,13 +363,13 @@ export default function ParlayBuilderPage() {
                   const canFlip  = leg.prop.odds_type === 'standard'
                   const aboveBreakeven = leg.prob * 100 > breakeven
                   return (
-                    <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid #0d0d0d' }}>
+                    <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid #1f1f24' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', fontWeight: 700, color: '#e0e0e0' }}>
                             {leg.prop.player_name}
                           </div>
-                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555', marginTop: '2px' }}>
+                          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8', marginTop: '2px' }}>
                             {STAT_LABEL[leg.prop.stat]} {leg.prop.line}
                             {' · '}
                             <span style={{ color: isOver ? '#4ade80' : '#f87171', fontWeight: 700 }}>
@@ -387,7 +387,7 @@ export default function ParlayBuilderPage() {
                           {canFlip && (
                             <button onClick={() => toggleSide(i)}
                               style={{ background: 'transparent', border: '1px solid #2a2a2a',
-                                color: '#555', padding: '3px 6px', fontFamily: 'IBM Plex Mono, monospace',
+                                color: '#b0aea8', padding: '3px 6px', fontFamily: 'IBM Plex Mono, monospace',
                                 fontSize: '9px', cursor: 'pointer' }}>⇅</button>
                           )}
                           <button onClick={() => removeFromParlay(i)}
@@ -412,7 +412,7 @@ export default function ParlayBuilderPage() {
 
                 {/* Entry amount */}
                 <div style={{ margin: '10px 0', display: 'flex', gap: '3px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444' }}>ENTRY $</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090' }}>ENTRY $</span>
                   {[5, 10, 25, 50, 100].map(amt => (
                     <button key={amt} onClick={() => setEntry(amt)} style={{
                       background: entry === amt ? '#0f1f0f' : 'transparent',
@@ -435,27 +435,27 @@ export default function ParlayBuilderPage() {
                       padding: '10px', marginBottom: '10px' }}>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>Expected Value</span>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>Expected Value</span>
                         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '15px', fontWeight: 700, color: evColor(activeEV.ev) }}>
                           {activeEV.ev >= 0 ? '+' : ''}${activeEV.ev.toFixed(2)}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>ROI</span>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>ROI</span>
                         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', fontWeight: 600, color: evColor(activeEV.ev) }}>
                           {activeEV.evPct >= 0 ? '+' : ''}{activeEV.evPct.toFixed(1)}%
                         </span>
                       </div>
                       {'winProb' in activeEV && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>Win prob (w/ corr)</span>
+                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>Win prob (w/ corr)</span>
                           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#888' }}>
                             {(activeEV as any).winProb}%
                           </span>
                         </div>
                       )}
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>Break-even per leg</span>
+                        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>Break-even per leg</span>
                         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#666' }}>
                           {breakeven}%
                         </span>
@@ -465,12 +465,12 @@ export default function ParlayBuilderPage() {
                     {/* Flex breakdown */}
                     {'breakdown' in activeEV && activeEV.breakdown.length > 0 && (
                       <>
-                        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '5px' }}>
+                        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.08em', marginBottom: '5px' }}>
                           FLEX PAYOUT BREAKDOWN (POISSON-BINOMIAL)
                         </div>
                         {(activeEV as any).breakdown.map((b: any, i: number) => (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #0a0a0a' }}>
-                            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555' }}>
+                            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8' }}>
                               {b.k}/{n} correct
                             </span>
                             <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#666' }}>
@@ -486,12 +486,12 @@ export default function ParlayBuilderPage() {
 
                     {/* Power breakdown */}
                     {entryType === 'power' && 'winProb' in activeEV && (
-                      <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#555' }}>
+                      <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#b0aea8' }}>
                         Power Play: all {n} legs must hit · {POWER_MULTIPLIERS[n]}x multiplier
                       </div>
                     )}
 
-                    <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#333', lineHeight: 1.6 }}>
+                    <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', lineHeight: 1.6 }}>
                       {entryType === 'flex' ? 'Flex EV uses Poisson-binomial DP.' : 'Power EV uses product rule with correlation penalty.'}
                       {' '}Assumes independent legs. Not betting advice.
                     </div>
@@ -504,7 +504,7 @@ export default function ParlayBuilderPage() {
           {/* Quick-add top picks */}
           {n === 0 && !loading && (
             <div style={{ marginTop: '12px', border: '1px solid #1a1a1a', padding: '12px' }}>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#444', letterSpacing: '0.08em', marginBottom: '8px' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', color: '#909090', letterSpacing: '0.08em', marginBottom: '8px' }}>
                 QUICK ADD — TOP 5 BY CALIBRATED PROB
               </div>
               {props.slice(0, 5).map((p, i) => (
@@ -512,7 +512,7 @@ export default function ParlayBuilderPage() {
                   padding: '6px 0', borderBottom: i < 4 ? '1px solid #0a0a0a' : 'none' }}>
                   <div>
                     <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#ccc' }}>{p.player_name}</span>
-                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555', marginLeft: '6px' }}>
+                    <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8', marginLeft: '6px' }}>
                       {STAT_LABEL[p.stat]} {p.line} {p.pick_side === 'over' ? 'O' : 'U'} · {p.composite_score.toFixed(1)}%
                     </span>
                   </div>

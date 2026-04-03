@@ -38,12 +38,12 @@ function useLiveStats(refreshMs = 60000) {
 function Ticker({ value, label, color = '#4ade80' }: { value: string | number; label: string; color?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '20px 24px', background: '#0a0a0a',
-      border: '1px solid #111', borderRadius: '4px', minWidth: '100px' }}>
+      padding: '20px 24px', background: '#141418',
+      border: '1px solid #222228', borderRadius: '4px', minWidth: '100px' }}>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '28px',
         fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-        color: '#333', letterSpacing: '0.12em', marginTop: '6px' }}>{label}</span>
+        color: '#909090', letterSpacing: '0.12em', marginTop: '6px' }}>{label}</span>
     </div>
   )
 }
@@ -79,10 +79,10 @@ function PlayerSearch() {
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: '480px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px',
-        background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '4px',
+        background: '#141418', border: '1px solid #1a1a1a', borderRadius: '4px',
         padding: '10px 14px' }}>
         <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-          color: '#2a2a2a' }}>SEARCH</span>
+          color: '#787672' }}>SEARCH</span>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -92,18 +92,18 @@ function PlayerSearch() {
             fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#e0e0e0' }}
         />
         {loading && <span style={{ fontFamily: 'IBM Plex Mono, monospace',
-          fontSize: '9px', color: '#333' }}>...</span>}
+          fontSize: '9px', color: '#909090' }}>...</span>}
       </div>
       {results.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-          background: '#0d0d0d', border: '1px solid #1a1a1a', borderTop: 'none',
+          background: '#141418', border: '1px solid #1a1a1a', borderTop: 'none',
           borderRadius: '0 0 4px 4px' }}>
           {results.map(name => (
             <button key={name} onClick={() => go(name)} style={{
               display: 'block', width: '100%', textAlign: 'left',
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 14px', fontFamily: 'IBM Plex Mono, monospace',
-              fontSize: '12px', color: '#888', borderBottom: '1px solid #111',
+              fontSize: '12px', color: '#888', borderBottom: '1px solid #222228',
               transition: 'color 0.1s, background 0.1s',
             }}
             onMouseEnter={e => { const el = e.currentTarget; el.style.color = '#4ade80'; el.style.background = '#4ade8008' }}
@@ -219,14 +219,14 @@ export default function Home() {
       {/* Hero */}
       <div style={{ marginBottom: '40px' }}>
         <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-          color: '#333', letterSpacing: '0.12em', marginBottom: '12px' }}>
+          color: '#909090', letterSpacing: '0.12em', marginBottom: '12px' }}>
           NBA ANALYTICS · 2025–26 SEASON · LIVE
         </div>
         <h1 style={{ fontSize: '32px', fontWeight: 300, color: '#f0f0f0',
           letterSpacing: '-0.02em', marginBottom: '12px', lineHeight: 1.1 }}>
           Game intelligence.<br />Prop edge. Live data.
         </h1>
-        <p style={{ color: '#444', fontSize: '14px', maxWidth: '520px', lineHeight: 1.6,
+        <p style={{ color: '#909090', fontSize: '14px', maxWidth: '520px', lineHeight: 1.6,
           marginBottom: '24px' }}>
           SwingFactr models player prop edges using distribution-based prediction,
           Bayesian shrinkage, and positional opponent defense — plus lineup chemistry,
@@ -240,10 +240,10 @@ export default function Home() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px',
           marginBottom: '12px' }}>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-            color: '#333', letterSpacing: '0.15em' }}>PROPS BOARD · LIVE</span>
+            color: '#909090', letterSpacing: '0.15em' }}>PROPS BOARD · LIVE</span>
           {lastUpdated && (
             <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-              color: '#222' }}>updated {timeAgo(lastUpdated)}</span>
+              color: '#787672' }}>updated {timeAgo(lastUpdated)}</span>
           )}
           <span style={{ width: '6px', height: '6px', borderRadius: '50%',
             background: stats?.total ? '#4ade80' : '#333',
@@ -263,13 +263,13 @@ export default function Home() {
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             {['TOTAL PROPS','STRONG OVER','LEAN OVER','STRONG UNDER','PLAYERS'].map(l => (
-              <div key={l} style={{ padding: '20px 24px', background: '#0a0a0a',
-                border: '1px solid #111', borderRadius: '4px', minWidth: '100px',
+              <div key={l} style={{ padding: '20px 24px', background: '#141418',
+                border: '1px solid #222228', borderRadius: '4px', minWidth: '100px',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                 <div style={{ width: '32px', height: '28px', background: '#111',
                   borderRadius: '3px', animation: 'pulse 1.5s ease-in-out infinite' }} />
                 <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#222', letterSpacing: '0.12em' }}>{l}</span>
+                  color: '#787672', letterSpacing: '0.12em' }}>{l}</span>
               </div>
             ))}
           </div>
@@ -287,7 +287,7 @@ export default function Home() {
         )}
         {stats && !stats.total && (
           <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace',
-            fontSize: '11px', color: '#2a2a2a' }}>
+            fontSize: '11px', color: '#787672' }}>
             No props yet today — check back after 6:30am PST
           </div>
         )}
@@ -295,7 +295,7 @@ export default function Home() {
 
       {/* Module grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px',
-        background: '#111', border: '1px solid #111' }}>
+        background: '#111', border: '1px solid #222228' }}>
         {MODULES.map((m) => (
           <Link key={`${m.href}-${m.label}`} href={m.href} className="module-card">
             <div style={{ display: 'flex', justifyContent: 'space-between',
@@ -304,7 +304,7 @@ export default function Home() {
                 <div style={{ fontSize: '16px', fontWeight: 500, color: '#e0e0e0',
                   marginBottom: '4px' }}>{m.label}</div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#2a2a2a', letterSpacing: '0.08em' }}>{m.tag}</div>
+                  color: '#787672', letterSpacing: '0.08em' }}>{m.tag}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '22px',
@@ -314,19 +314,19 @@ export default function Home() {
                     : m.stat ?? '—'}
                 </div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px',
-                  color: '#2a2a2a' }}>{m.statLabel}</div>
+                  color: '#787672' }}>{m.statLabel}</div>
               </div>
             </div>
-            <p style={{ color: '#444', fontSize: '12px', lineHeight: 1.7,
+            <p style={{ color: '#909090', fontSize: '12px', lineHeight: 1.7,
               marginBottom: '16px' }}>{m.desc}</p>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px',
-              color: '#2a2a2a' }}>View →</div>
+              color: '#787672' }}>View →</div>
           </Link>
         ))}
       </div>
 
       {/* Footer metadata */}
-      <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #111',
+      <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #222228',
         display: 'flex', flexWrap: 'wrap', gap: '24px',
         fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#1e1e1e' }}>
         <span>v14 model</span>

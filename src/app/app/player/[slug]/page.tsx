@@ -64,7 +64,7 @@ interface Profile {
 
 // Mini sparkline using inline SVG
 function Sparkline({ values, color }: { values: number[]; color: string }) {
-  if (!values || values.length < 2) return <span style={{ color: '#333', fontSize: '10px' }}>—</span>
+  if (!values || values.length < 2) return <span style={{ color: '#909090', fontSize: '10px' }}>—</span>
   const min = Math.min(...values)
   const max = Math.max(...values)
   const range = max - min || 1
@@ -86,7 +86,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function HitBar({ pct, side }: { pct: number | null; side: 'over' | 'under' }) {
-  if (pct == null) return <span style={{ color: '#333', fontSize: '10px' }}>—</span>
+  if (pct == null) return <span style={{ color: '#909090', fontSize: '10px' }}>—</span>
   const good = side === 'over' ? pct >= 60 : pct <= 40
   const color = good ? '#4ade80' : pct >= 50 ? '#fbbf24' : '#f87171'
   return (
@@ -122,15 +122,15 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
   }, [nameStr])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex',
+    <div style={{ minHeight: '100vh', background: '#0e0e12', display: 'flex',
       alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#333', fontSize: '13px',
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#909090', fontSize: '13px',
         letterSpacing: '0.1em' }}>LOADING PROFILE...</div>
     </div>
   )
 
   if (error || !profile) return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex',
+    <div style={{ minHeight: '100vh', background: '#0e0e12', display: 'flex',
       alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#f87171', fontSize: '13px' }}>
         {error || 'Player not found'}
@@ -150,16 +150,16 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
     .reverse()
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: '#e0e0e0',
+    <div style={{ minHeight: '100vh', background: '#0e0e12', color: '#e0e0e0',
       fontFamily: 'IBM Plex Mono, monospace' }}>
 
       {/* Header */}
-      <div style={{ borderBottom: '1px solid #111', padding: '12px 24px',
+      <div style={{ borderBottom: '1px solid #222228', padding: '12px 24px',
         display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <Link href="/props" style={{ color: '#333', textDecoration: 'none',
+        <Link href="/props" style={{ color: '#909090', textDecoration: 'none',
           fontSize: '11px', letterSpacing: '0.05em' }}>← PROPS</Link>
-        <span style={{ color: '#1a1a1a' }}>·</span>
-        <span style={{ color: '#555', fontSize: '11px', letterSpacing: '0.1em' }}>PLAYER PROFILE</span>
+        <span style={{ color: '#787672' }}>·</span>
+        <span style={{ color: '#b0aea8', fontSize: '11px', letterSpacing: '0.1em' }}>PLAYER PROFILE</span>
       </div>
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
@@ -168,7 +168,7 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
           marginBottom: '40px', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <div style={{ fontSize: '11px', color: '#333', letterSpacing: '0.15em',
+            <div style={{ fontSize: '11px', color: '#909090', letterSpacing: '0.15em',
               marginBottom: '8px' }}>
               {profile.team} · {profile.position || '—'} · {profile.games_played}G THIS SEASON
             </div>
@@ -185,10 +185,10 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
                 const edgeColor = p.edge > 0 ? '#4ade80' : '#f87171'
                 return (
                   <div key={p.stat} onClick={() => setActiveStat(p.stat)}
-                    style={{ cursor: 'pointer', padding: '8px 12px', background: '#0d0d0d',
+                    style={{ cursor: 'pointer', padding: '8px 12px', background: '#141418',
                       border: `1px solid ${activeStat === p.stat ? edgeColor : '#1a1a1a'}`,
                       borderRadius: '4px', transition: 'border-color 0.15s' }}>
-                    <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.1em', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.1em', marginBottom: '4px' }}>
                       {STAT_LABEL[p.stat]}
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: '#e0e0e0' }}>{p.line}</div>
@@ -204,7 +204,7 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
 
         {/* Stat tabs */}
         <div style={{ display: 'flex', gap: '2px', marginBottom: '32px',
-          borderBottom: '1px solid #111', paddingBottom: '0' }}>
+          borderBottom: '1px solid #222228', paddingBottom: '0' }}>
           {STATS.map(s => (
             <button key={s} onClick={() => setActiveStat(s)} style={{
               background: 'none', border: 'none', cursor: 'pointer',
@@ -221,9 +221,9 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
           marginBottom: '32px' }}>
 
           {/* Season averages */}
-          <div style={{ background: '#0a0a0a', border: '1px solid #111',
+          <div style={{ background: '#141418', border: '1px solid #222228',
             borderRadius: '6px', padding: '20px' }}>
-            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em',
+            <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.15em',
               marginBottom: '16px' }}>AVERAGES</div>
             {[
               ['SEASON', statSum?.avg_season],
@@ -232,8 +232,8 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
             ].map(([label, val]) => (
               <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between',
                 alignItems: 'center', padding: '8px 0',
-                borderBottom: '1px solid #0d0d0d' }}>
-                <span style={{ fontSize: '10px', color: '#444' }}>{label}</span>
+                borderBottom: '1px solid #1f1f24' }}>
+                <span style={{ fontSize: '10px', color: '#909090' }}>{label}</span>
                 <span style={{ fontSize: '18px', fontWeight: 700,
                   color: val != null ? STAT_COLOR[activeStat] : '#222' }}>
                   {val ?? '—'}
@@ -242,30 +242,30 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', padding: '8px 0' }}>
-              <span style={{ fontSize: '10px', color: '#444' }}>STD DEV</span>
-              <span style={{ fontSize: '14px', color: '#333' }}>±{statSum?.std ?? '—'}</span>
+              <span style={{ fontSize: '10px', color: '#909090' }}>STD DEV</span>
+              <span style={{ fontSize: '14px', color: '#909090' }}>±{statSum?.std ?? '—'}</span>
             </div>
           </div>
 
           {/* Sparkline + today's line */}
-          <div style={{ background: '#0a0a0a', border: '1px solid #111',
+          <div style={{ background: '#141418', border: '1px solid #222228',
             borderRadius: '6px', padding: '20px' }}>
-            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em',
+            <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.15em',
               marginBottom: '16px' }}>LAST 20 GAMES</div>
             <div style={{ marginBottom: '16px' }}>
               <Sparkline values={recentVals} color={STAT_COLOR[activeStat]} />
             </div>
             {hitRate && (
               <>
-                <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.1em',
+                <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.1em',
                   marginBottom: '12px' }}>HIT RATE VS LINE {hitRate.line}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>SEASON</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>SEASON</span>
                     <HitBar pct={hitRate.season} side="over" />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>L10</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>L10</span>
                     <HitBar pct={hitRate.l10} side="over" />
                   </div>
                 </div>
@@ -274,9 +274,9 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
           </div>
 
           {/* Model details */}
-          <div style={{ background: '#0a0a0a', border: '1px solid #111',
+          <div style={{ background: '#141418', border: '1px solid #222228',
             borderRadius: '6px', padding: '20px' }}>
-            <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.15em',
+            <div style={{ fontSize: '9px', color: '#909090', letterSpacing: '0.15em',
               marginBottom: '16px' }}>MODEL PROJECTION</div>
             {todayProp ? (() => {
               const md = todayProp.model_details || {}
@@ -284,28 +284,28 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>PROJECTED</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>PROJECTED</span>
                     <span style={{ fontSize: '14px', color: STAT_COLOR[activeStat], fontWeight: 700 }}>
                       {md.predicted_mean ?? '—'} ± {md.predicted_std ?? '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>LINE</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>LINE</span>
                     <span style={{ fontSize: '14px', color: '#e0e0e0' }}>{todayProp.line}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>P(OVER)</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>P(OVER)</span>
                     <span style={{ fontSize: '14px', color: edgeColor }}>{md.prob_over_raw ?? '—'}%</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>EDGE</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>EDGE</span>
                     <span style={{ fontSize: '14px', color: edgeColor, fontWeight: 700 }}>
                       {todayProp.edge > 0 ? '+' : ''}{todayProp.edge}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '10px', color: '#444' }}>PROJ MIN</span>
-                    <span style={{ fontSize: '12px', color: '#555' }}>{md.projected_min ?? '—'}</span>
+                    <span style={{ fontSize: '10px', color: '#909090' }}>PROJ MIN</span>
+                    <span style={{ fontSize: '12px', color: '#b0aea8' }}>{md.projected_min ?? '—'}</span>
                   </div>
                   {md.injured_teammates?.length > 0 && (
                     <div style={{ fontSize: '9px', color: '#4ade80', marginTop: '4px',
@@ -323,7 +323,7 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
                 </div>
               )
             })() : (
-              <div style={{ fontSize: '11px', color: '#222', marginTop: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#787672', marginTop: '8px' }}>
                 No prop for {STAT_LABEL[activeStat]} today
               </div>
             )}
@@ -331,17 +331,17 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
         </div>
 
         {/* Game log table */}
-        <div style={{ background: '#0a0a0a', border: '1px solid #111', borderRadius: '6px' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #111',
-            fontSize: '9px', color: '#333', letterSpacing: '0.15em' }}>
+        <div style={{ background: '#141418', border: '1px solid #222228', borderRadius: '6px' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #222228',
+            fontSize: '9px', color: '#909090', letterSpacing: '0.15em' }}>
             GAME LOG — LAST 30 GAMES
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #111' }}>
+                <tr style={{ borderBottom: '1px solid #222228' }}>
                   {['DATE','OPP','MIN','PTS','REB','AST','3PM','STL','BLK'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', fontSize: '9px', color: '#333',
+                    <th key={h} style={{ padding: '8px 12px', fontSize: '9px', color: '#909090',
                       letterSpacing: '0.1em', textAlign: h === 'DATE' || h === 'OPP' ? 'left' : 'right',
                       fontWeight: 400 }}>{h}</th>
                   ))}
@@ -353,15 +353,15 @@ export default function PlayerProfilePage({ params }: { params: { slug: string }
                   const lineVal = hitRate?.line
                   const hitLine = lineVal != null && activeVal != null && activeVal > lineVal
                   return (
-                    <tr key={i} style={{ borderBottom: '1px solid #0d0d0d',
+                    <tr key={i} style={{ borderBottom: '1px solid #1f1f24',
                       background: i % 2 === 0 ? 'transparent' : '#080808' }}>
-                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#444' }}>
+                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#909090' }}>
                         {g.game_date.slice(5)}
                       </td>
-                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#555' }}>
+                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#b0aea8' }}>
                         {g.is_home ? 'vs' : '@'} {g.opponent_abbr}
                       </td>
-                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#333',
+                      <td style={{ padding: '7px 12px', fontSize: '11px', color: '#909090',
                         textAlign: 'right' }}>{g.minutes ?? '—'}</td>
                       {['pts','reb','ast','fg3m','stl','blk'].map(s => {
                         const val = g[s as keyof GameLog] as number

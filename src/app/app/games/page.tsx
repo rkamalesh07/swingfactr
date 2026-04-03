@@ -50,7 +50,7 @@ export default function GamesPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           WIN PROBABILITY MODEL
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
@@ -77,7 +77,7 @@ export default function GamesPage() {
             </select>
           </div>
         </div>
-        <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>
+        <div style={{ marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>
           Click any game to view the win probability curve →
         </div>
       </div>
@@ -85,8 +85,8 @@ export default function GamesPage() {
       <div style={{ border: '1px solid #1a1a1a' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '100px 1fr 120px 80px',
-          padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+          padding: '10px 20px', borderBottom: '1px solid #222228',
+          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
         }}>
           <span>DATE</span><span>MATCHUP</span>
           <span style={{ textAlign: 'center' }}>SCORE</span>
@@ -94,9 +94,9 @@ export default function GamesPage() {
         </div>
 
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#909090', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>Loading...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>
             {search ? `No games found for "${search}"` : 'No games found.'}
           </div>
         ) : filtered.map((g, i) => (
@@ -110,16 +110,16 @@ export default function GamesPage() {
               onMouseEnter={e => (e.currentTarget.style.background = '#111')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{g.game_date}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{g.game_date}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontWeight: g.home_win === false ? 400 : 500, color: g.home_win === false ? '#555' : '#e0e0e0', fontSize: '13px' }}>{g.away_team}</span>
-                <span style={{ color: '#333', fontSize: '11px' }}>@</span>
+                <span style={{ color: '#909090', fontSize: '11px' }}>@</span>
                 <span style={{ fontWeight: g.home_win === true ? 500 : 400, color: g.home_win === true ? '#e0e0e0' : '#555', fontSize: '13px' }}>{g.home_team}</span>
               </div>
               <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', color: '#888' }}>
                 {g.away_score !== null && g.home_score !== null ? `${g.away_score} - ${g.home_score}` : '—'}
               </div>
-              <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#444' }}>→</div>
+              <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>→</div>
             </div>
           </Link>
         ))}
@@ -127,7 +127,7 @@ export default function GamesPage() {
 
       {!search && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px' }}>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
             {games.length > 0 ? `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + games.length}` : '0 games'}
             {' '}&middot; page {page + 1} of {totalPages}
           </div>

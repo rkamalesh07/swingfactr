@@ -190,7 +190,7 @@ function PlayerModal({ player, onClose }: { player: Player; onClose: () => void 
             const v = player[s.key as keyof Player]
             const d = (s.key === 'fg_pct' || s.key === 'efg_pct' || s.key === 'fg3_pct_est') && v != null ? `${v}%` : v ?? '—'
             return (
-              <div key={s.key} style={{ padding: '12px 14px', borderRight: '1px solid #0d0d0d',
+              <div key={s.key} style={{ padding: '12px 14px', borderRight: '1px solid #1f1f24',
                 minWidth: '64px', textAlign: 'center', flex: 1 }}>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: '#e0e0e0', marginBottom: '3px' }}>
                   {String(d)}
@@ -339,7 +339,7 @@ export default function ProfilesPage() {
     <div style={{ minHeight: '100vh', background: '#0e0e12', color: '#888', fontFamily: MONO }}>
       {selected && <PlayerModal player={selected} onClose={() => setSelected(null)} />}
 
-      <div style={{ borderBottom: '1px solid #0f0f0f', padding: '12px 24px',
+      <div style={{ borderBottom: '1px solid #1f1f24', padding: '12px 24px',
         display: 'flex', alignItems: 'center', gap: '16px' }}>
         <Link href="/" style={{ color: '#787672', textDecoration: 'none', fontSize: '11px' }}>← HOME</Link>
         <span style={{ color: '#55534f' }}>·</span>

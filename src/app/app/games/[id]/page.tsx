@@ -51,7 +51,7 @@ const CustomTooltip = ({ active, payload, label, homeTeam, awayTeam, isPreview }
     const diff = payload[0].payload.score_diff
     return (
       <div style={{ background: '#111', border: '1px solid #222', padding: '12px 16px', fontSize: '12px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#555', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#b0aea8', marginBottom: '6px' }}>
           {formatTime(label)}{isPreview ? ' (projected)' : ''}
         </div>
         <div style={{ color: '#e0e0e0', marginBottom: '4px' }}>
@@ -59,7 +59,7 @@ const CustomTooltip = ({ active, payload, label, homeTeam, awayTeam, isPreview }
             {(prob * 100).toFixed(1)}%
           </span>
         </div>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#444', fontSize: '11px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#909090', fontSize: '11px' }}>
           {isPreview ? 'Projected diff' : 'Score diff'}: {typeof diff === 'number' ? (diff > 0 ? '+' : '') + diff.toFixed(isPreview ? 1 : 0) : '—'}
         </div>
       </div>
@@ -136,13 +136,13 @@ export default function GamePage() {
   }, [id])
 
   if (loading) return (
-    <div style={{ padding: '80px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>
+    <div style={{ padding: '80px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>
       Loading...
     </div>
   )
 
   if (error || !data) return (
-    <div style={{ padding: '80px', textAlign: 'center', color: '#555', fontSize: '13px' }}>
+    <div style={{ padding: '80px', textAlign: 'center', color: '#b0aea8', fontSize: '13px' }}>
       {error || 'Game not found.'}
     </div>
   )
@@ -163,7 +163,7 @@ export default function GamePage() {
   return (
     <div>
       <div style={{ marginBottom: '32px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '12px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '12px' }}>
           {isLive ? '🔴 LIVE · WIN PROBABILITY' : isPreview ? 'GAME PREVIEW · PROJECTION' : 'GAME · WIN PROBABILITY'}
           {isLive && data.period && data.clock && (
             <span style={{ color: '#ef4444', marginLeft: '12px' }}>Q{data.period} {data.clock}</span>
@@ -184,10 +184,10 @@ export default function GamePage() {
                 {(data.away_net_rtg || 0) > 0 ? '+' : ''}{data.away_net_rtg?.toFixed(1)} net rtg
               </div>
             )}
-            <div style={{ fontSize: '11px', color: '#333', marginTop: '4px' }}>Away</div>
+            <div style={{ fontSize: '11px', color: '#909090', marginTop: '4px' }}>Away</div>
           </div>
 
-          <div style={{ color: '#222', fontSize: '24px', fontFamily: 'IBM Plex Mono, monospace' }}>@</div>
+          <div style={{ color: '#787672', fontSize: '24px', fontFamily: 'IBM Plex Mono, monospace' }}>@</div>
 
           <div style={{ textAlign: 'center', minWidth: '80px' }}>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '28px', fontWeight: 700, color: data.home_win === true ? '#e0e0e0' : '#888' }}>
@@ -202,12 +202,12 @@ export default function GamePage() {
                 {(data.home_net_rtg || 0) > 0 ? '+' : ''}{data.home_net_rtg?.toFixed(1)} net rtg
               </div>
             )}
-            <div style={{ fontSize: '11px', color: '#333', marginTop: '4px' }}>Home</div>
+            <div style={{ fontSize: '11px', color: '#909090', marginTop: '4px' }}>Home</div>
           </div>
 
           {finalProb !== null && finalProb !== undefined && (
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em', marginBottom: '4px' }}>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em', marginBottom: '4px' }}>
                 {isLive ? 'LIVE HOME WIN PROB' : isPreview ? 'PROJECTED HOME WIN PROB' : 'FINAL HOME WIN PROB'}
               </div>
               <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '36px', fontWeight: 700, color: finalProb > 0.5 ? '#4ade80' : '#f87171', lineHeight: 1 }}>
@@ -220,22 +220,22 @@ export default function GamePage() {
 
       <div style={{ background: '#111', border: '1px solid #1a1a1a', padding: '28px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em' }}>
             {isPreview ? 'PROJECTED WIN PROBABILITY · TEAM RATINGS' : isLive ? 'LIVE WIN PROBABILITY · RANDOM WALK MODEL' : 'WIN PROBABILITY · RANDOM WALK MODEL'}
           </div>
-          <div style={{ display: 'flex', gap: '12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+          <div style={{ display: 'flex', gap: '12px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
             <span>{awayTeam} favored · 50% · {homeTeam} favored</span>
           </div>
         </div>
 
         {isPreview && (
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#555', marginBottom: '16px', padding: '8px 12px', border: '1px solid #1a1a1a', display: 'inline-block' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#b0aea8', marginBottom: '16px', padding: '8px 12px', border: '1px solid #1a1a1a', display: 'inline-block' }}>
             ⚠ SIMULATION — based on team net ratings. Not a score prediction.
           </div>
         )}
 
         {!hasSeries ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#444', fontSize: '13px' }}>
+          <div style={{ padding: '60px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>
             No win probability data available yet.
           </div>
         ) : (
@@ -269,7 +269,7 @@ export default function GamePage() {
 
       {swings.length > 0 && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '12px' }}>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '12px' }}>
             LARGEST MOMENTUM SWINGS
           </div>
           <div style={{ border: '1px solid #1a1a1a' }}>
@@ -277,7 +277,7 @@ export default function GamePage() {
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: i < swings.length - 1 ? '1px solid #111' : 'none' }}>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#666' }}>
                   {formatTime(s.game_seconds)}
-                  <span style={{ marginLeft: '16px', color: '#444' }}>score diff: {s.score_diff > 0 ? '+' : ''}{s.score_diff}</span>
+                  <span style={{ marginLeft: '16px', color: '#909090' }}>score diff: {s.score_diff > 0 ? '+' : ''}{s.score_diff}</span>
                 </div>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '14px', fontWeight: 600, color: s.delta > 0.1 ? '#e8e8e8' : '#888' }}>
                   Δ {(s.delta * 100).toFixed(1)}%

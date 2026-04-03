@@ -39,11 +39,11 @@ export default function RAPMPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.12em', marginBottom: '6px' }}>
+        <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.12em', marginBottom: '6px' }}>
           RIDGE REGRESSION · ADJUSTED FOR TEAMMATES & OPPONENTS
         </div>
         <h1 style={{ fontSize: '22px', fontWeight: 400, color: '#f0f0f0', marginBottom: '8px' }}>RAPM</h1>
-        <p style={{ color: '#555', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px' }}>
+        <p style={{ color: '#b0aea8', fontSize: '13px', lineHeight: 1.6, maxWidth: '600px' }}>
           Regularized Adjusted Plus/Minus — how many points per 100 possessions each player adds above replacement, 
           controlling for the quality of teammates and opponents on the court. The same metric used by NBA front offices.
         </p>
@@ -91,8 +91,8 @@ export default function RAPMPage() {
       <div style={{ border: '1px solid #1a1a1a' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '40px 180px 60px 1fr 80px 90px',
-          padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
-          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#444', letterSpacing: '0.08em',
+          padding: '10px 20px', borderBottom: '1px solid #222228',
+          fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090', letterSpacing: '0.08em',
         }}>
           <span>#</span><span>PLAYER</span><span>TEAM</span>
           <span>RAPM CHART</span>
@@ -101,11 +101,11 @@ export default function RAPMPage() {
         </div>
 
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#444' }}>
+          <div style={{ padding: '48px', textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px', color: '#909090' }}>
             Computing RAPM... (this may take 10-15 seconds)
           </div>
         ) : sorted.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#444', fontSize: '13px' }}>No data found.</div>
+          <div style={{ padding: '48px', textAlign: 'center', color: '#909090', fontSize: '13px' }}>No data found.</div>
         ) : sorted.map((p, i) => {
           const isPos = p.rapm >= 0
           const barPct = Math.abs(p.rapm) / maxAbs * 45
@@ -115,9 +115,9 @@ export default function RAPMPage() {
               padding: '13px 20px', borderBottom: i < sorted.length - 1 ? '1px solid #111' : 'none',
               alignItems: 'center',
             }}>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#333' }}>{p.displayRank}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#909090' }}>{p.displayRank}</span>
               <span style={{ fontSize: '13px', color: '#e0e0e0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player}</span>
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.team}</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.team}</span>
               <div style={{ display: 'flex', alignItems: 'center', paddingRight: '16px' }}>
                 <div style={{ flex: 1, height: '4px', background: '#111', position: 'relative' }}>
                   <div style={{ position: 'absolute', left: '50%', top: '-2px', width: '1px', height: '8px', background: '#222' }} />
@@ -129,7 +129,7 @@ export default function RAPMPage() {
                   }} />
                 </div>
               </div>
-              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#555' }}>{p.minutes}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#b0aea8' }}>{p.minutes}</span>
               <span style={{
                 textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '13px', fontWeight: 600,
                 color: p.rapm > 0 ? '#4ade80' : p.rapm < 0 ? '#f87171' : '#555',
@@ -142,7 +142,7 @@ export default function RAPMPage() {
       </div>
 
       {sorted.length > 0 && (
-        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#333' }}>
+        <div style={{ marginTop: '16px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '10px', color: '#909090' }}>
           {sorted.length} players · min {minMinutes} minutes · ridge regression α=2000
         </div>
       )}
