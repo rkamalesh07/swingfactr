@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           .nav-links::-webkit-scrollbar { display: none; }
           .nav-link {
             font-size: 12px; font-weight: 400;
-            color: var(--text-2);
+            color: #b0aea8;
             padding: 0 14px; height: 52px;
             display: flex; align-items: center;
             white-space: nowrap;
@@ -81,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             letter-spacing: 0.02em;
           }
           .nav-link:first-child { border-left: 1px solid var(--border); }
-          .nav-link:hover { color: var(--text); }
+          .nav-link:hover { color: #f2f0eb; }
           .nav-link.active { color: var(--accent); }
           .nav-season {
             font-family: 'DM Mono', monospace;

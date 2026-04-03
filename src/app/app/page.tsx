@@ -1,193 +1,85 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Story {
-  tag:      string
-  headline: string
-  context:  string
-  player?:  string
-  link:     string
-  cta:      string
-  accent:   string
+  tag: string; headline: string; context: string
+  link: string; cta: string; accent: string
 }
 
-// ─── Story builders ────────────────────────────────────────────────────────────
+// ─── Story builder ────────────────────────────────────────────────────────────
 
-function buildStories(streakData: any, breakoutData: any, standingsData: any): Story[] {
+function buildStories(overall: any, breakout: any, standings: any): Story[] {
   const stories: Story[] = []
 
-  // Hot streak — pick the most surprising one, natural language only
-  const hotCandidates = (streakData?.hot || [])
-    .filter((p: any) => p.composite_z >= 1.2)
-    .slice(0, 3)
-
-  if (hotCandidates.length > 0) {
-    const p = hotCandidates[0]
+  const hot = (overall?.hot || []).filter((p: any) => p.composite_z >= 1.2)[0]
+  if (hot) {
     const dimWord: Record<string,string> = {
-      scoring: 'has been scoring at will',
-      playmaking: 'is facilitating at a new level',
-      rebounding: 'is dominating the glass',
-      defense: 'is locking down on defense',
-      efficiency: 'is playing his most efficient basketball',
-      minutes: 'is getting major run and delivering',
+      scoring:'has been scoring at will', playmaking:'is facilitating at a new level',
+      rebounding:'is dominating the glass', defense:'is locking opponents down',
+      efficiency:'is playing his most efficient basketball', minutes:'is getting major run and delivering',
     }
     stories.push({
-      tag:      'Hot streak',
-      headline: `${p.player_name} ${dimWord[p.best_stat] || 'is on a tear'}.`,
-      context:  'Production has trended sharply upward over the past two weeks.',
-      player:   p.player_name,
-      link:     '/insights',
-      cta:      'See all streaks',
-      accent:   '#f97316',
+      tag: 'Hot streak', accent: '#f97316',
+      headline: `${hot.player_name} ${dimWord[hot.best_stat] || 'is on a tear'}.`,
+      context: 'Production has trended sharply upward over the past two weeks.',
+      link: '/insights', cta: 'See all streaks',
     })
   }
 
-  // Cold streak
-  const coldCandidates = (streakData?.cold || [])
-    .filter((p: any) => p.composite_z <= -1.2)
-    .slice(0, 3)
-
-  if (coldCandidates.length > 0) {
-    const p = coldCandidates[0]
+  const cold = (overall?.cold || []).filter((p: any) => p.composite_z <= -1.2)[0]
+  if (cold) {
     stories.push({
-      tag:      'Cold streak',
-      headline: `${p.player_name} has gone quiet.`,
-      context:  'Output has dipped noticeably from his season baseline over recent games.',
-      player:   p.player_name,
-      link:     '/insights',
-      cta:      'See full breakdown',
-      accent:   '#5b8ef0',
+      tag: 'Cold streak', accent: '#5b8ef0',
+      headline: `${cold.player_name} has gone quiet.`,
+      context: 'Output has dipped from his season baseline over recent games.',
+      link: '/insights', cta: 'See breakdown',
     })
   }
 
-  // Breakout
-  const topBreakout = breakoutData?.results?.[0]
-  if (topBreakout) {
+  const top = breakout?.results?.[0]
+  if (top) {
     const dimLabel: Record<string,string> = {
-      efficiency: 'overall efficiency',
-      playmaking: 'playmaking',
-      rebounding: 'rebounding',
-      defense: 'defensive impact',
-      scoring: 'scoring efficiency',
-      minutes: 'role expansion',
+      efficiency:'efficiency', playmaking:'playmaking', rebounding:'rebounding',
+      defense:'defensive impact', scoring:'scoring efficiency', minutes:'role expansion',
     }
-    const dim = dimLabel[topBreakout.lead_dimension] || 'efficiency'
     stories.push({
-      tag:      'Breakout watch',
-      headline: `${topBreakout.player_name} is trending in the right direction.`,
-      context:  `Our model flags a meaningful jump in ${dim} over the past 10 games. Age ${topBreakout.age || '—'}.`,
-      player:   topBreakout.player_name,
-      link:     '/insights',
-      cta:      'See breakout players',
-      accent:   '#c8f135',
+      tag: 'Breakout watch', accent: '#c8f135',
+      headline: `${top.player_name} is trending in the right direction.`,
+      context: `Our model flags a meaningful jump in ${dimLabel[top.lead_dimension] || 'efficiency'} over the last 10 games.`,
+      link: '/insights', cta: 'See breakout players',
     })
   }
 
-  // Playoffs promo
   stories.push({
-    tag:      'Playoffs',
-    headline: 'The race for the Larry O\'Brien is wide open.',
-    context:  'Simulate the full postseason from current standings. Lock completed series. Run up to 1 million scenarios.',
-    link:     '/playoffs',
-    cta:      'Open simulator',
-    accent:   '#c8f135',
+    tag: 'Playoffs', accent: '#c8f135',
+    headline: "The race for the Larry O'Brien is wide open.",
+    context: 'Simulate the full postseason from current standings. Up to 1 million scenarios.',
+    link: '/playoffs', cta: 'Open simulator',
   })
 
-  // Trending team
-  if (standingsData) {
-    const all = [...(standingsData.east || []), ...(standingsData.west || [])]
-    const surprising = all
-      .filter((t: any) => t.seed >= 5 && t.net_rtg > 3)
-      .sort((a: any, b: any) => b.net_rtg - a.net_rtg)
-    if (surprising.length > 0) {
-      const t = surprising[0]
-      stories.push({
-        tag:      'Playoff picture',
-        headline: `${t.team} are playing better than their seed suggests.`,
-        context:  'Efficiency metrics point to a team that could be dangerous in the postseason.',
-        link:     '/playoffs',
-        cta:      'See standings',
-        accent:   '#f97316',
-      })
-    }
+  if (standings) {
+    const all = [...(standings.east||[]), ...(standings.west||[])]
+    const t = all.filter((t:any) => t.seed >= 5 && t.net_rtg > 3).sort((a:any,b:any) => b.net_rtg - a.net_rtg)[0]
+    if (t) stories.push({
+      tag: 'Playoff picture', accent: '#f97316',
+      headline: `${t.team} are playing above their seed.`,
+      context: 'Efficiency metrics point to a team that could be dangerous come April.',
+      link: '/playoffs', cta: 'See full standings',
+    })
   }
 
   return stories
 }
 
-// ─── Editorial feed card ───────────────────────────────────────────────────────
-
-function StoryCard({ story, active }: { story: Story; active: boolean }) {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      opacity: active ? 1 : 0,
-      transform: active ? 'translateY(0)' : 'translateY(12px)',
-      transition: 'opacity 0.55s ease, transform 0.55s ease',
-      pointerEvents: active ? 'auto' : 'none',
-      padding: '36px 40px',
-      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-    }}>
-      {/* Tag */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center',
-        fontFamily: 'DM Mono, monospace', fontSize: '10px',
-        letterSpacing: '0.15em', color: story.accent,
-        textTransform: 'uppercase' as const,
-      }}>
-        <span style={{
-          display: 'inline-block', width: '6px', height: '6px',
-          borderRadius: '50%', background: story.accent, marginRight: '8px',
-        }} />
-        {story.tag}
-      </div>
-
-      {/* Content */}
-      <div>
-        <h2 style={{
-          fontFamily: 'Inter, sans-serif',
-          fontSize: '26px', fontWeight: 600,
-          color: '#f2f0eb', lineHeight: 1.25,
-          marginBottom: '12px', letterSpacing: '-0.02em',
-          maxWidth: '520px',
-        }}>
-          {story.headline}
-        </h2>
-        <p style={{
-          fontFamily: 'Inter, sans-serif',
-          fontSize: '14px', color: '#6b6a6f',
-          lineHeight: 1.65, maxWidth: '440px',
-        }}>
-          {story.context}
-        </p>
-      </div>
-
-      {/* CTA */}
-      <Link href={story.link} style={{
-        display: 'inline-flex', alignItems: 'center', gap: '6px',
-        fontFamily: 'DM Mono, monospace', fontSize: '11px',
-        color: story.accent, letterSpacing: '0.1em',
-        textTransform: 'uppercase' as const,
-        transition: 'opacity 0.15s',
-      }}>
-        {story.cta}
-        <span style={{ fontSize: '14px' }}>→</span>
-      </Link>
-    </div>
-  )
-}
-
 // ─── Carousel ─────────────────────────────────────────────────────────────────
 
-function FeedCarousel({ stories }: { stories: Story[] }) {
-  const [idx, setIdx]       = useState(0)
-  const [paused, setPaused] = useState(false)
+function Carousel({ stories }: { stories: Story[] }) {
+  const [idx, setIdx] = useState(0)
   const pausedRef = useRef(false)
-  useEffect(() => { pausedRef.current = paused }, [paused])
 
   useEffect(() => {
     if (stories.length < 2) return
@@ -198,141 +90,334 @@ function FeedCarousel({ stories }: { stories: Story[] }) {
   }, [stories.length])
 
   if (!stories.length) return (
-    <div style={{ height: '280px', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', color: '#333' }}>
-      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px' }}>Loading...</span>
+    <div style={{ height: '260px', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', background: '#141418', borderRadius: '8px',
+      border: '1px solid #222228' }}>
+      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#555' }}>
+        Loading...
+      </span>
     </div>
   )
 
+  const s = stories[idx]
+
   return (
-    <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      {/* Card area */}
-      <div style={{
-        position: 'relative', height: '280px',
-        background: '#141418',
-        border: '1px solid #222228',
-        borderRadius: '8px', overflow: 'hidden',
-      }}>
-        {/* Accent line */}
-        <div style={{
-          position: 'absolute', left: 0, top: '28px', bottom: '28px',
-          width: '2px', background: stories[idx]?.accent || '#c8f135',
-          opacity: 0.7, transition: 'background 0.5s',
-        }} />
-        {stories.map((s, i) => (
-          <StoryCard key={i} story={s} active={i === idx} />
-        ))}
+    <div onMouseEnter={() => { pausedRef.current = true }}
+         onMouseLeave={() => { pausedRef.current = false }}>
+      <div style={{ position: 'relative', height: '260px', background: '#141418',
+        border: '1px solid #222228', borderRadius: '8px', overflow: 'hidden' }}>
+        {/* Left accent */}
+        <div style={{ position: 'absolute', left: 0, top: '24px', bottom: '24px',
+          width: '2px', background: s.accent, transition: 'background 0.5s', borderRadius: '1px' }} />
+
+        {/* Content */}
+        <div style={{ padding: '32px 40px', height: '100%',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.accent }} />
+            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+              color: s.accent, letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+              {s.tag}
+            </span>
+          </div>
+
+          <div>
+            <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '22px', fontWeight: 600,
+              color: '#f2f0eb', lineHeight: 1.3, marginBottom: '10px', letterSpacing: '-0.02em',
+              maxWidth: '500px' }}>
+              {s.headline}
+            </h2>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#8c8a85',
+              lineHeight: 1.6, maxWidth: '420px' }}>
+              {s.context}
+            </p>
+          </div>
+
+          <Link href={s.link} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px',
+            fontFamily: 'DM Mono, monospace', fontSize: '11px', color: s.accent,
+            letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>
+            {s.cta} →
+          </Link>
+        </div>
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px',
-        marginTop: '14px', padding: '0 2px' }}>
-        {['←','→'].map((arrow, di) => (
-          <button key={arrow} onClick={() => setIdx(i =>
-            di === 0 ? (i - 1 + stories.length) % stories.length : (i + 1) % stories.length
-          )} style={{
-            background: 'none', border: '1px solid #222228', borderRadius: '4px',
-            padding: '4px 10px', cursor: 'pointer',
-            fontFamily: 'DM Mono, monospace', fontSize: '12px', color: '#444',
-            transition: 'color 0.15s, border-color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#f2f0eb'; e.currentTarget.style.borderColor = '#444' }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = '#222228' }}>
-            {arrow}
+      {/* Dots + counter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px' }}>
+        {['←','→'].map((a, di) => (
+          <button key={a} onClick={() => setIdx(i => di===0?(i-1+stories.length)%stories.length:(i+1)%stories.length)}
+            style={{ background:'none', border:'1px solid #2e2e36', borderRadius:'4px',
+              padding:'4px 10px', cursor:'pointer', color:'#555', fontSize:'12px',
+              fontFamily:'DM Mono, monospace', transition:'all 0.15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.color='#f2f0eb';e.currentTarget.style.borderColor='#555'}}
+            onMouseLeave={e=>{e.currentTarget.style.color='#555';e.currentTarget.style.borderColor='#2e2e36'}}>
+            {a}
           </button>
         ))}
-
-        {/* Dots */}
-        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-          {stories.map((s, i) => (
-            <button key={i} onClick={() => setIdx(i)} style={{
-              height: '4px', width: i === idx ? '18px' : '4px',
-              background: i === idx ? s.accent : '#2e2e36',
-              border: 'none', borderRadius: '2px', cursor: 'pointer', padding: 0,
-              transition: 'width 0.3s ease, background 0.3s ease',
-            }} />
+        <div style={{ display:'flex', gap:'5px', flex:1 }}>
+          {stories.map((st, i) => (
+            <button key={i} onClick={()=>setIdx(i)} style={{
+              height:'3px', width:i===idx?'20px':'4px',
+              background:i===idx?st.accent:'#2e2e36', border:'none',
+              borderRadius:'2px', cursor:'pointer', padding:0,
+              transition:'width 0.3s, background 0.3s' }} />
           ))}
         </div>
-
-        <span style={{
-          fontFamily: 'DM Mono, monospace', fontSize: '10px', color: '#333',
-          letterSpacing: '0.08em',
-        }}>
+        <span style={{ fontFamily:'DM Mono, monospace', fontSize:'10px', color:'#444' }}>
           {String(idx+1).padStart(2,'0')}/{String(stories.length).padStart(2,'0')}
         </span>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{
-            width: '5px', height: '5px', borderRadius: '50%',
-            background: paused ? '#2e2e36' : '#c8f135',
-            transition: 'background 0.3s',
-          }} />
-        </div>
       </div>
     </div>
   )
 }
 
-// ─── Quick nav grid ────────────────────────────────────────────────────────────
+// ─── Feature modules ──────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { label: 'Props Board',   sub: 'Model predictions · Daily',    href: '/props',    },
-  { label: 'Insights',      sub: 'Streaks · Breakouts · Trends', href: '/insights', },
-  { label: 'Playoffs',      sub: 'Simulate the postseason',      href: '/playoffs', },
-  { label: 'Head-to-Head',  sub: 'Any two players',              href: '/compare',  },
-  { label: 'Matchups',      sub: 'Difficulty ratings',           href: '/matchup',  },
-  { label: 'Profiles',      sub: '500+ players',                 href: '/profiles', },
+const MODULES = [
+  {
+    label: 'Insights',
+    desc: 'Hot and cold streaks detected using composite z-scores across points, rebounds, assists, and defense. Breakout probability powered by PER-based multi-dimensional efficiency analysis.',
+    stat: '574 players tracked',
+    href: '/insights',
+    accent: '#c8f135',
+    icon: '↑',
+  },
+  {
+    label: 'Playoff Simulator',
+    desc: "Monte Carlo simulation from current standings. Locks completed series, simulates forward from any point in the season. Conference finals, semis, or Game 7 of the first round.",
+    stat: 'Up to 1M simulations',
+    href: '/playoffs',
+    accent: '#f97316',
+    icon: '◎',
+  },
+  {
+    label: 'Matchup Difficulty',
+    desc: 'Positional defensive profiles for every team. See projected output per stat for any player against any opponent, plus their actual game log history vs that team.',
+    stat: '540 defensive profiles',
+    href: '/matchup',
+    accent: '#5b8ef0',
+    icon: '⊕',
+  },
+  {
+    label: 'Head-to-Head',
+    desc: 'Full side-by-side comparison of any two players. Season averages, last 10 splits, consistency ratings, and per-stat edge summary. Type any two names.',
+    stat: 'Any two players',
+    href: '/compare',
+    accent: '#a78bfa',
+    icon: '↔',
+  },
+  {
+    label: 'Player Profiles',
+    desc: 'Radar chart, game log, and season averages for every player with 5+ games this season. Sortable by any stat. Click any player to open their full profile.',
+    stat: '574 players · 2025–26',
+    href: '/profiles',
+    accent: '#34d399',
+    icon: '◉',
+  },
+  {
+    label: 'Clutch Rankings',
+    desc: 'Net ratings in Q4 within 5 points only — separates closers from aggregate noise. Which teams and players show up when it actually matters.',
+    stat: 'Q4 ±5 pts only',
+    href: '/clutch',
+    accent: '#fbbf24',
+    icon: '★',
+  },
 ]
 
-function QuickNav() {
+// ─── Scrolling sections ───────────────────────────────────────────────────────
+
+function HeroSection({ stories }: { stories: Story[] }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px',
-      background: '#222228', border: '1px solid #222228', borderRadius: '8px',
-      overflow: 'hidden' }}>
-      {NAV_ITEMS.map(item => (
-        <Link key={item.href} href={item.href} style={{
-          display: 'block', padding: '16px 18px',
-          background: '#141418',
-          transition: 'background 0.15s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#1a1a20')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#141418')}>
-          <div style={{
-            fontFamily: 'Inter, sans-serif', fontSize: '13px',
-            fontWeight: 500, color: '#f2f0eb', marginBottom: '3px',
-          }}>{item.label}</div>
-          <div style={{
-            fontFamily: 'DM Mono, monospace', fontSize: '10px',
-            color: '#444', letterSpacing: '0.04em',
-          }}>{item.sub}</div>
-        </Link>
-      ))}
-    </div>
+    <section style={{ padding: '52px 0 60px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '32px', alignItems: 'start' }}>
+        <div>
+          {/* Date */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
+            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px',
+              color: '#8c8a85', letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>
+              {new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })}
+            </span>
+            <div style={{ flex: 1, height: '1px', background: '#1a1a20' }} />
+          </div>
+
+          {/* Headline */}
+          <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: '42px', fontWeight: 300,
+            color: '#f2f0eb', lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: '20px' }}>
+            NBA intelligence,<br />
+            <span style={{ color: '#c8f135', fontWeight: 500 }}>updated daily.</span>
+          </h1>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '15px', color: '#8c8a85',
+            lineHeight: 1.7, maxWidth: '440px', marginBottom: '32px' }}>
+            Streaks, breakouts, playoff odds, matchup difficulty — built on
+            play-by-play data and refreshed three times a day before tip-off.
+          </p>
+
+          {/* Feed */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginBottom: '12px' }}>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+                color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+                Today's intelligence
+              </span>
+              <Link href="/insights" style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+                color: '#555', letterSpacing: '0.1em', transition: 'color 0.15s',
+                textTransform: 'uppercase' as const }}
+                onMouseEnter={e=>(e.currentTarget.style.color='#c8f135')}
+                onMouseLeave={e=>(e.currentTarget.style.color='#555')}>
+                All insights →
+              </Link>
+            </div>
+            <Carousel stories={stories} />
+          </div>
+        </div>
+
+        {/* Right — platform stats */}
+        <div style={{ paddingTop: '72px' }}>
+          <div style={{ border: '1px solid #222228', borderRadius: '8px', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #222228',
+              background: '#141418' }}>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+                color: '#8c8a85', letterSpacing: '0.12em', textTransform: 'uppercase' as const }}>
+                Platform
+              </span>
+            </div>
+            {[
+              { v: '574', l: 'Players tracked' },
+              { v: '3×',  l: 'Daily ETL updates' },
+              { v: '23K', l: 'Game logs this season' },
+              { v: 'v14', l: 'Model version' },
+              { v: '1M',  l: 'Max playoff simulations' },
+              { v: '540', l: 'Defensive profiles' },
+            ].map((item, i, arr) => (
+              <div key={item.l} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '12px 18px', background: '#141418',
+                borderBottom: i < arr.length-1 ? '1px solid #1a1a20' : 'none',
+              }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#8c8a85' }}>
+                  {item.l}
+                </span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '14px',
+                  fontWeight: 500, color: '#f2f0eb' }}>{item.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
-// ─── Date strip ───────────────────────────────────────────────────────────────
-
-function DateStrip() {
-  const now = new Date()
-  const day = now.toLocaleDateString('en-US', { weekday: 'long' })
-  const date = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+function FeaturesSection() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '16px',
-      marginBottom: '36px' }}>
-      <span style={{
-        fontFamily: 'DM Mono, monospace', fontSize: '11px',
-        color: '#444', letterSpacing: '0.12em',
-        textTransform: 'uppercase' as const,
-      }}>
-        {day}, {date}
-      </span>
-      <span style={{ flex: 1, height: '1px', background: '#1a1a20' }} />
-      <span style={{
-        fontFamily: 'DM Mono, monospace', fontSize: '10px',
-        color: '#2e2e36', letterSpacing: '0.08em',
-      }}>2025–26 NBA</span>
-    </div>
+    <section style={{ padding: '60px 0', borderTop: '1px solid #1a1a20' }}>
+      <div style={{ marginBottom: '40px' }}>
+        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+          color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+          What's inside
+        </span>
+        <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '30px', fontWeight: 400,
+          color: '#f2f0eb', marginTop: '10px', letterSpacing: '-0.02em' }}>
+          Six ways to read the NBA differently.
+        </h2>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px',
+        background: '#1a1a20', border: '1px solid #1a1a20', borderRadius: '8px',
+        overflow: 'hidden' }}>
+        {MODULES.map(m => (
+          <Link key={m.href} href={m.href} style={{ display: 'block', textDecoration: 'none' }}>
+            <div style={{ padding: '28px 24px', background: '#0c0c0e', height: '100%',
+              transition: 'background 0.15s', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#141418')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#0c0c0e')}>
+              {/* Icon + label */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '16px',
+                  color: m.accent, lineHeight: 1 }}>{m.icon}</span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px',
+                  fontWeight: 600, color: '#f2f0eb' }}>{m.label}</span>
+              </div>
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#8c8a85',
+                lineHeight: 1.65, marginBottom: '20px' }}>{m.desc}</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+                  color: '#444', letterSpacing: '0.06em' }}>{m.stat}</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px',
+                  color: m.accent }}>→</span>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ModelSection() {
+  const points = [
+    { label: 'Bayesian shrinkage', desc: 'Regresses small-sample performances toward position averages.' },
+    { label: 'Positional defense profiles', desc: 'Compares each team\'s allowed stats by G/F/C position bucket.' },
+    { label: 'Normal CDF scoring', desc: 'Models each prop line as a probability using predicted mean and variance.' },
+    { label: 'Usage redistribution', desc: 'When a teammate is out, missing possessions get reallocated.' },
+    { label: 'Exponential decay ratings', desc: 'Recent games weighted more heavily than October results.' },
+    { label: 'Monte Carlo playoff sim', desc: 'Win probability per game via logistic model, run N times.' },
+  ]
+
+  return (
+    <section style={{ padding: '60px 0', borderTop: '1px solid #1a1a20' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'start' }}>
+        <div>
+          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px',
+            color: '#555', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+            How it works
+          </span>
+          <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '28px', fontWeight: 400,
+            color: '#f2f0eb', marginTop: '10px', letterSpacing: '-0.02em', lineHeight: 1.3 }}>
+            Built on the math,<br />not the narrative.
+          </h2>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#8c8a85',
+            lineHeight: 1.7, marginTop: '16px' }}>
+            Every prediction runs through a pipeline of statistical models.
+            No hot takes. No vibes. Just exponentially-weighted ratings,
+            distribution-based prediction, and position-adjusted defense.
+          </p>
+          <Link href="/about" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px',
+            marginTop: '20px', fontFamily: 'DM Mono, monospace', fontSize: '11px',
+            color: '#c8f135', letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>
+            Read the methodology →
+          </Link>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+          {points.map((p, i) => (
+            <div key={p.label} style={{ padding: '16px 0',
+              borderBottom: i < points.length-1 ? '1px solid #1a1a20' : 'none' }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px',
+                fontWeight: 500, color: '#f2f0eb', marginBottom: '4px' }}>
+                {p.label}
+              </div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#6b6a6f' }}>
+                {p.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FooterSection() {
+  return (
+    <section style={{ padding: '40px 0', borderTop: '1px solid #1a1a20' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '12px',
+          color: '#c8f135', fontWeight: 500, letterSpacing: '0.12em' }}>SWINGFACTR</span>
+        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '11px', color: '#444',
+          letterSpacing: '0.08em' }}>2025–26 NBA · Updated 3× daily</span>
+      </div>
+    </section>
   )
 }
 
@@ -348,116 +433,21 @@ export default function HomePage() {
         fetch(`${API}/insights/breakout?limit=5`).then(r => r.json()),
         fetch(`${API}/playoffs/standings`).then(r => r.json()),
       ])
-      const overall   = overallRes.status   === 'fulfilled' ? overallRes.value   : null
-      const breakout  = breakoutRes.status  === 'fulfilled' ? breakoutRes.value  : null
-      const standings = standingsRes.status === 'fulfilled' ? standingsRes.value : null
-      setStories(buildStories(overall, breakout, standings))
+      setStories(buildStories(
+        overallRes.status   === 'fulfilled' ? overallRes.value   : null,
+        breakoutRes.status  === 'fulfilled' ? breakoutRes.value  : null,
+        standingsRes.status === 'fulfilled' ? standingsRes.value : null,
+      ))
     }
     load()
   }, [])
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 28px' }}>
-      <DateStrip />
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '32px',
-        alignItems: 'start' }}>
-
-        {/* Left — feed */}
-        <div>
-          {/* Eyebrow */}
-          <div style={{ display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', marginBottom: '14px' }}>
-            <span style={{
-              fontFamily: 'DM Mono, monospace', fontSize: '10px',
-              color: '#444', letterSpacing: '0.15em',
-              textTransform: 'uppercase' as const,
-            }}>
-              Today's intelligence
-            </span>
-            <Link href="/insights" style={{
-              fontFamily: 'DM Mono, monospace', fontSize: '10px',
-              color: '#444', letterSpacing: '0.1em',
-              textTransform: 'uppercase' as const,
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#c8f135')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
-              All insights →
-            </Link>
-          </div>
-
-          <FeedCarousel stories={stories} />
-
-          {/* Tagline below */}
-          <div style={{ marginTop: '32px', paddingTop: '28px',
-            borderTop: '1px solid #1a1a20' }}>
-            <h1 style={{
-              fontFamily: 'Inter, sans-serif',
-              fontSize: '28px', fontWeight: 300,
-              color: '#f2f0eb', lineHeight: 1.3,
-              letterSpacing: '-0.02em',
-            }}>
-              NBA intelligence,<br />
-              <span style={{ color: '#c8f135' }}>updated daily.</span>
-            </h1>
-            <p style={{
-              marginTop: '12px', fontFamily: 'Inter, sans-serif',
-              fontSize: '14px', color: '#6b6a6f', lineHeight: 1.7,
-              maxWidth: '420px',
-            }}>
-              Streaks, breakouts, playoff odds, player matchups — built on
-              play-by-play data and updated three times a day.
-            </p>
-          </div>
-        </div>
-
-        {/* Right — quick nav */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <div style={{
-              fontFamily: 'DM Mono, monospace', fontSize: '10px',
-              color: '#444', letterSpacing: '0.15em',
-              textTransform: 'uppercase' as const,
-              marginBottom: '10px',
-            }}>
-              Explore
-            </div>
-            <QuickNav />
-          </div>
-
-          {/* Small stat strip */}
-          <div style={{
-            border: '1px solid #222228', borderRadius: '8px',
-            padding: '16px 18px', background: '#141418',
-          }}>
-            <div style={{
-              fontFamily: 'DM Mono, monospace', fontSize: '10px',
-              color: '#444', letterSpacing: '0.12em',
-              textTransform: 'uppercase' as const,
-              marginBottom: '12px',
-            }}>Platform</div>
-            {[
-              { v: '3×',  l: 'Daily ETL updates' },
-              { v: '574', l: 'Players tracked' },
-              { v: 'v14', l: 'Model version' },
-              { v: '1M',  l: 'Playoff simulations' },
-            ].map(item => (
-              <div key={item.l} style={{ display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', padding: '6px 0',
-                borderBottom: '1px solid #1a1a20' }}>
-                <span style={{
-                  fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#6b6a6f',
-                }}>{item.l}</span>
-                <span style={{
-                  fontFamily: 'DM Mono, monospace', fontSize: '12px',
-                  fontWeight: 500, color: '#f2f0eb',
-                }}>{item.v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 28px' }}>
+      <HeroSection stories={stories} />
+      <FeaturesSection />
+      <ModelSection />
+      <FooterSection />
     </div>
   )
 }
