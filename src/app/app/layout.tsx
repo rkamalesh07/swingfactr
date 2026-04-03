@@ -45,14 +45,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/playoffs" className="nav-link">Playoffs</Link>
           <Link href="/props" className="nav-link">Props</Link>
           <Link href="/profiles" className="nav-link">Profiles</Link>
-          <Link href="/methodology" className="nav-link">Methodology</Link>
-          <Link href="/health" className="nav-link">Health</Link>
+          <Link href="/insights" className="nav-link">Insights</Link>
+          <Link href="/compare" className="nav-link">Head-to-Head</Link>
+          <Link href="/matchup" className="nav-link">Matchup</Link>
           <Link href="/lineups" className="nav-link">Lineups</Link>
           <Link href="/clutch" className="nav-link">Clutch</Link>
           <Link href="/fatigue" className="nav-link">Fatigue</Link>
           <Link href="/players" className="nav-link">Players</Link>
           <Link href="/teams" className="nav-link">Teams</Link>
           <Link href="/rapm" className="nav-link">RAPM</Link>
+          <Link href="/about" className="nav-link">About</Link>
           <div style={{ marginLeft: 'auto', fontFamily: 'IBM Plex Mono, monospace', fontSize: '11px', color: '#2a2a2a' }}>
             2025–26
           </div>

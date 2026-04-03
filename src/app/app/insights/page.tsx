@@ -209,44 +209,52 @@ function Breakout() {
       <h2 style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700, color:'#e0e0e0',
         letterSpacing:'0.12em', margin:'0 0 4px' }}>BREAKOUT PROBABILITY</h2>
       <div style={{ fontFamily:MONO, fontSize:'10px', color:'#333', marginBottom:'4px' }}>
-        Rising players in scoring, minutes, and usage · Filtered to players still in developmental window (≤350 games)
+        Multi-dimensional efficiency analysis for players ≤26 years old · PER-proxy + playmaking + defense + usage
       </div>
       <div style={{ fontFamily:MONO, fontSize:'9px', color:'#2a2a2a', marginBottom:'20px' }}>
-        Score components: points trend (L10 vs season) · acceleration (L5 vs L10) · minutes trend · usage trend
+        Score = weighted composite of: PER improvement (30%) · minutes expansion (20%) · scoring efficiency (15%) · playmaking (15%) · rebounding (10%) · defense (10%)
       </div>
       {loading && <div style={{ fontFamily:MONO, fontSize:'11px', color:'#2a2a2a', padding:'20px' }}>Loading...</div>}
       {!loading && (
         <div style={{ background:'#0a0a0a', border:'1px solid #111', borderRadius:'4px', overflowX:'auto' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 45px 100px 90px 90px 75px 90px 90px',
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 35px 40px 100px 100px 90px 90px 75px 80px',
             padding:'6px 16px', fontFamily:MONO, fontSize:'8px', color:'#2a2a2a',
-            letterSpacing:'0.1em', borderBottom:'1px solid #111', minWidth:'740px' }}>
-            <span>PLAYER</span><span>GP</span><span>SCORE</span>
-            <span>PTS SEASON</span><span>PTS L10</span><span>PTS L5</span>
+            letterSpacing:'0.1em', borderBottom:'1px solid #111', minWidth:'800px' }}>
+            <span>PLAYER</span><span>GP</span><span>AGE</span><span>SCORE</span>
+            <span>LEAD DIM</span><span>PTS L10</span><span>PER TREND</span>
             <span>MIN TREND</span><span>PTS TREND</span>
           </div>
           {data.map((p,i) => (
             <div key={p.player_name} style={{ display:'grid',
-              gridTemplateColumns:'1fr 45px 100px 90px 90px 75px 90px 90px',
+              gridTemplateColumns:'1fr 35px 40px 100px 100px 90px 90px 75px 80px',
               padding:'10px 16px', borderBottom:'1px solid #0d0d0d', alignItems:'center',
-              minWidth:'740px', background:i%2===0?'transparent':'#080808' }}>
+              minWidth:'800px', background:i%2===0?'transparent':'#080808' }}>
               <div>
                 <div style={{ fontFamily:MONO, fontSize:'12px', fontWeight:600, color:'#e0e0e0' }}>{p.player_name}</div>
-                <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{p.team} · {p.position} · {p.gp}G</div>
+                <div style={{ fontFamily:MONO, fontSize:'9px', color:'#333' }}>{p.team} · {p.position}</div>
               </div>
               <span style={{ fontFamily:MONO, fontSize:'10px', color:'#444' }}>{p.gp}</span>
-              <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                <div style={{ width:'44px', height:'4px', background:'#111', borderRadius:'2px', overflow:'hidden' }}>
+              <span style={{ fontFamily:MONO, fontSize:'10px', color:(p as any).age <= 22 ? '#4ade80' : '#555' }}>
+                {(p as any).age || '—'}
+              </span>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                <div style={{ width:'36px', height:'4px', background:'#111', borderRadius:'2px', overflow:'hidden' }}>
                   <div style={{ width:`${(p.breakout_score/maxScore)*100}%`, height:'100%', background:'#a78bfa' }} />
                 </div>
                 <span style={{ fontFamily:MONO, fontSize:'11px', color:'#a78bfa', fontWeight:600 }}>
                   {p.breakout_score.toFixed(0)}
                 </span>
               </div>
-              <span style={{ fontFamily:MONO, fontSize:'12px', color:'#555' }}>{p.pts_season}</span>
+              <span style={{ fontFamily:MONO, fontSize:'9px', color:'#a78bfa',
+                letterSpacing:'0.06em', textTransform:'uppercase' as const }}>
+                {(p as any).lead_dimension || '—'}
+              </span>
               <span style={{ fontFamily:MONO, fontSize:'13px', fontWeight:600,
                 color:p.pts_l10>p.pts_season?'#4ade80':'#f87171' }}>{p.pts_l10}</span>
-              <span style={{ fontFamily:MONO, fontSize:'13px', fontWeight:700,
-                color:p.pts_l5>p.pts_l10?'#4ade80':p.pts_l5<p.pts_l10?'#f87171':'#888' }}>{p.pts_l5}</span>
+              <span style={{ fontFamily:MONO, fontSize:'11px',
+                color:(p as any).z_per>0?'#4ade80':'#f87171' }}>
+                {(p as any).z_per>0?'+':''}{((p as any).z_per||0).toFixed(2)}σ
+              </span>
               <span style={{ fontFamily:MONO, fontSize:'11px',
                 color:p.min_trend_pct>0?'#4ade80':'#f87171' }}>
                 {p.min_trend_pct>0?'+':''}{p.min_trend_pct}%

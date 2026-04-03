@@ -29,57 +29,58 @@ interface BoardStats {
 
 function buildStreakStories(pts: any, reb: any, ast: any): StoryCard[] {
   const stories: StoryCard[] = []
-  const LABEL: Record<string,string> = {pts:'PPG',reb:'RPG',ast:'APG',fg3m:'3PM',stl:'SPG',blk:'BPG'}
+  const STAT_WORD: Record<string,string> = {pts:'scoring',reb:'rebounding',ast:'playmaking',fg3m:'shooting',stl:'steals',blk:'blocks'}
 
-  // Pick the single most surprising HOT streak across all stats
+  // Pick the single most surprising HOT streak
   const hotCandidates: any[] = []
   for (const [data, stat] of [[pts,'pts'],[reb,'reb'],[ast,'ast']] as [any,string][]) {
-    const hot = (data?.hot || []).filter((p: any) => p.z_score >= 1.5)
-    for (const p of hot) hotCandidates.push({...p, stat})
+    for (const p of (data?.hot || []).filter((p: any) => p.z_score >= 1.5))
+      hotCandidates.push({...p, stat})
   }
   hotCandidates.sort((a,b) => b.z_score - a.z_score)
 
   if (hotCandidates.length > 0) {
     const p = hotCandidates[0]
-    const label = LABEL[p.stat]
-    const pct = Math.abs(p.pct_change).toFixed(0)
+    const word = STAT_WORD[p.stat] || 'game'
+    const headlines = [
+      `${p.player_name} is on a hot streak`,
+      `${p.player_name} is playing some of the best basketball of his season`,
+      `${p.player_name} has been impossible to stop lately`,
+    ]
     stories.push({
       type: 'hot',
-      headline: `${p.player_name} is on a tear right now`,
-      subline:  `Averaging ${p.l5_avg} ${label} over his last 5 games — ${pct}% above his season average of ${p.season_avg}. That's ${p.z_score.toFixed(1)} standard deviations above his mean.`,
-      value:    String(p.l5_avg),
-      valueLabel: `${label} LAST 5`,
-      delta:    `+${pct}%`,
-      tag:      'HOT STREAK',
+      headline: headlines[Math.floor(Math.random() * headlines.length)],
+      subline:  `His ${word} has been trending sharply upward over the last two weeks. Check the full breakdown on the Insights page.`,
+      value:    '🔥',
+      valueLabel: 'HOT STREAK',
+      tag:      'TRENDING UP',
       tagColor: '#f97316',
       link:     '/insights',
-      cta:      'SEE ALL STREAKS',
+      cta:      'SEE FULL BREAKDOWN',
     })
   }
 
   // Pick the single most surprising COLD streak
   const coldCandidates: any[] = []
   for (const [data, stat] of [[pts,'pts'],[reb,'reb'],[ast,'ast']] as [any,string][]) {
-    const cold = (data?.cold || []).filter((p: any) => p.z_score <= -1.5)
-    for (const p of cold) coldCandidates.push({...p, stat})
+    for (const p of (data?.cold || []).filter((p: any) => p.z_score <= -1.5))
+      coldCandidates.push({...p, stat})
   }
   coldCandidates.sort((a,b) => a.z_score - b.z_score)
 
   if (coldCandidates.length > 0) {
     const p = coldCandidates[0]
-    const label = LABEL[p.stat]
-    const pct = Math.abs(p.pct_change).toFixed(0)
+    const word = STAT_WORD[p.stat] || 'game'
     stories.push({
       type: 'cold',
-      headline: `${p.player_name} has gone quiet — and it's not a small sample fluke`,
-      subline:  `Just ${p.l5_avg} ${label} over his last 5 games, down ${pct}% from his ${p.season_avg} season average. Z-score of ${p.z_score.toFixed(1)} — statistically significant.`,
-      value:    String(p.l5_avg),
-      valueLabel: `${label} LAST 5`,
-      delta:    `-${pct}%`,
-      tag:      'COLD STREAK',
+      headline: `${p.player_name} has gone quiet`,
+      subline:  `His ${word} has dipped noticeably over recent games. Whether it's a slump, matchups, or something else — the trend is real. See the data.`,
+      value:    '🧊',
+      valueLabel: 'COLD STREAK',
+      tag:      'TRENDING DOWN',
       tagColor: '#60a5fa',
       link:     '/insights',
-      cta:      'SEE ALL STREAKS',
+      cta:      'SEE FULL BREAKDOWN',
     })
   }
 
@@ -89,21 +90,21 @@ function buildStreakStories(pts: any, reb: any, ast: any): StoryCard[] {
 function buildBreakoutStories(data: any): StoryCard[] {
   if (!data?.results?.length) return []
   const p = data.results[0]
-  const diff = (p.pts_l5 - p.pts_season).toFixed(1)
-  const minDiff = (p.min_l10 - p.min_season).toFixed(1)
-  const positive = parseFloat(diff) > 0
-
+  const headlines = [
+    `${p.player_name} might be on the verge of something`,
+    `Keep an eye on ${p.player_name}`,
+    `${p.player_name} is earning a bigger role`,
+  ]
   return [{
     type: 'breakout',
-    headline: `${p.player_name} is getting more run — and taking full advantage`,
-    subline:  `${p.pts_l5} PPG over his last 5 (${positive?'+':''}${diff} vs season avg), with ${parseFloat(minDiff)>0?'+':''}${minDiff} more minutes per game recently. Usage is trending up.`,
-    value:    String(p.pts_l5),
-    valueLabel: 'PPG LAST 5',
-    delta:    `${positive?'+':''}${diff} pts`,
-    tag:      'BREAKOUT ALERT',
+    headline: headlines[0],
+    subline:  `More minutes, more touches, and the production is following. Our model flags this as one of the stronger breakout signals right now.`,
+    value:    '⚡',
+    valueLabel: 'BREAKOUT',
+    tag:      'BREAKOUT WATCH',
     tagColor: '#a78bfa',
     link:     '/insights',
-    cta:      'SEE ALL BREAKOUTS',
+    cta:      'SEE BREAKOUT PLAYERS',
   }]
 }
 
@@ -152,9 +153,9 @@ function buildTrendingStory(standings: any): StoryCard[] {
   return [{
     type: 'trending',
     headline: `${t.team} are playing better than their record suggests`,
-    subline:  `Seeded ${t.seed} in their conference at ${t.wins}-${t.losses}, but their net rating tells a different story. They could be a dangerous postseason team.`,
-    value:    `+${parseFloat(t.net_rtg).toFixed(1)}`,
-    valueLabel: 'NET RATING',
+    subline:  `Their record doesn't tell the full story. By efficiency metrics, they're playing at a level that should make any playoff opponent nervous.`,
+    value:    '📈',
+    valueLabel: 'TRENDING',
     tag:      'TRENDING UP',
     tagColor: '#34d399',
     link:     '/playoffs',
@@ -203,7 +204,9 @@ function Card({ card, visible }: { card: StoryCard; visible: boolean }) {
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', marginBottom: '16px' }}>
           <span style={{
-            fontFamily: MONO, fontSize: '60px', fontWeight: 700,
+            fontSize: card.value.length <= 2 ? '48px' : '60px',
+            fontFamily: card.value.length <= 2 ? 'sans-serif' : MONO,
+            fontWeight: 700,
             color: card.tagColor, lineHeight: 1, letterSpacing: '-0.03em',
           }}>{card.value}</span>
           <div>

@@ -140,20 +140,27 @@ async def get_streaks(
 @router.get("/breakout")
 async def get_breakout(limit: int = Query(30)):
     """
-    Identify players with rising trends across multiple stats.
-    Breakout score = weighted combo of:
-    - Usage trend (minutes increasing)
-    - Stat production trend (L10 vs season avg)
-    - Consistency (low std dev = reliable)
-    - Opportunity (high minutes, positive role change)
+    Breakout probability using multi-dimensional efficiency analysis.
+
+    Inspired by PER methodology — measures efficiency per minute across:
+    - Scoring efficiency (pts/fga trend)
+    - Playmaking leap (ast trend)
+    - Rebounding leap (reb trend)
+    - Defensive leap (stl+blk trend)
+    - Usage expansion (minutes + fga trend)
+    - Overall PER-style composite (pts+reb+ast+stl+blk-tov per min)
+
+    Age-filtered via player_ages table (≤26 only).
+    Each dimension z-scored vs player's own season baseline.
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 WITH ranked AS (
                     SELECT player_name, team_abbr, position,
-                           pts, reb, ast, fg3m, stl, blk, minutes,
-                           fga, tov, game_date,
+                           pts, reb, ast, stl, blk, tov,
+                           fga, fg3m, fta, ft_made, fg_made,
+                           minutes, game_date,
                            ROW_NUMBER() OVER (PARTITION BY player_name ORDER BY game_date DESC) as rn
                     FROM player_game_logs
                     WHERE season_id = %s AND minutes >= 8
@@ -163,99 +170,180 @@ async def get_breakout(limit: int = Query(30)):
                            MAX(team_abbr) as team,
                            MAX(position)  as position,
                            COUNT(*)       as gp,
+                           -- Raw averages
                            AVG(pts)       as pts_avg,
                            AVG(reb)       as reb_avg,
                            AVG(ast)       as ast_avg,
-                           AVG(minutes)   as min_avg,
+                           AVG(stl)       as stl_avg,
+                           AVG(blk)       as blk_avg,
+                           AVG(tov)       as tov_avg,
                            AVG(fga)       as fga_avg,
+                           AVG(minutes)   as min_avg,
+                           -- Per-minute PER proxy: (pts+reb+ast+stl+blk-tov)/min
+                           AVG(CASE WHEN minutes > 0
+                               THEN (pts+reb+ast+stl+blk-tov)::float/minutes
+                               ELSE 0 END) as per_proxy_avg,
+                           STDDEV(CASE WHEN minutes > 0
+                               THEN (pts+reb+ast+stl+blk-tov)::float/minutes
+                               ELSE 0 END) as per_proxy_std,
+                           -- Scoring efficiency: pts/fga
+                           AVG(CASE WHEN fga > 0 THEN pts::float/fga ELSE 0 END) as score_eff_avg,
+                           STDDEV(CASE WHEN fga > 0 THEN pts::float/fga ELSE 0 END) as score_eff_std,
+                           AVG(ast)       as ast_season,  STDDEV(ast)       as ast_std,
+                           AVG(reb)       as reb_season,  STDDEV(reb)       as reb_std,
+                           AVG(stl+blk)   as def_season,  STDDEV(stl+blk)   as def_std,
+                           AVG(minutes)   as min_season,  STDDEV(minutes)   as min_std,
                            STDDEV(pts)    as pts_std
                     FROM ranked
                     GROUP BY player_name
                     HAVING COUNT(*) >= 12
                 ),
-                recent_stats AS (
+                recent AS (
                     SELECT player_name,
                            AVG(pts)     as pts_l10,
                            AVG(reb)     as reb_l10,
                            AVG(ast)     as ast_l10,
+                           AVG(stl+blk) as def_l10,
                            AVG(minutes) as min_l10,
-                           AVG(fga)     as fga_l10
+                           AVG(fga)     as fga_l10,
+                           AVG(CASE WHEN minutes > 0 THEN (pts+reb+ast+stl+blk-tov)::float/minutes ELSE 0 END) as per_l10,
+                           AVG(CASE WHEN fga > 0 THEN pts::float/fga ELSE 0 END) as score_eff_l10
                     FROM ranked WHERE rn <= 10
                     GROUP BY player_name
                 ),
                 very_recent AS (
                     SELECT player_name,
                            AVG(pts)     as pts_l5,
-                           AVG(minutes) as min_l5
+                           AVG(minutes) as min_l5,
+                           AVG(CASE WHEN minutes > 0 THEN (pts+reb+ast+stl+blk-tov)::float/minutes ELSE 0 END) as per_l5
                     FROM ranked WHERE rn <= 5
                     GROUP BY player_name
                 )
                 SELECT s.player_name, s.team, s.position, s.gp,
-                       ROUND(s.pts_avg::numeric,1) as pts_season,
-                       ROUND(r.pts_l10::numeric,1) as pts_l10,
-                       ROUND(v.pts_l5::numeric,1)  as pts_l5,
-                       ROUND(s.min_avg::numeric,1) as min_season,
-                       ROUND(r.min_l10::numeric,1) as min_l10,
-                       ROUND(v.min_l5::numeric,1)  as min_l5,
-                       ROUND(s.pts_std::numeric,2) as pts_std,
-                       ROUND(r.fga_l10::numeric,1) as fga_l10,
-                       ROUND(s.fga_avg::numeric,1) as fga_season,
-                       COALESCE(pa.age, 99)         as player_age
+                       ROUND(s.pts_avg::numeric,1)      as pts_season,
+                       ROUND(r.pts_l10::numeric,1)      as pts_l10,
+                       ROUND(v.pts_l5::numeric,1)       as pts_l5,
+                       ROUND(s.min_season::numeric,1)   as min_season,
+                       ROUND(r.min_l10::numeric,1)      as min_l10,
+                       ROUND(v.min_l5::numeric,1)       as min_l5,
+                       ROUND(s.pts_std::numeric,2)      as pts_std,
+                       -- PER proxy
+                       ROUND(s.per_proxy_avg::numeric,3) as per_season,
+                       ROUND(r.per_l10::numeric,3)       as per_l10,
+                       ROUND(v.per_l5::numeric,3)        as per_l5,
+                       ROUND(s.per_proxy_std::numeric,3) as per_std,
+                       -- Playmaking
+                       ROUND(s.ast_season::numeric,1)   as ast_season,
+                       ROUND(r.ast_l10::numeric,1)      as ast_l10,
+                       ROUND(s.ast_std::numeric,2)      as ast_std,
+                       -- Rebounding
+                       ROUND(s.reb_season::numeric,1)   as reb_season,
+                       ROUND(r.reb_l10::numeric,1)      as reb_l10,
+                       ROUND(s.reb_std::numeric,2)      as reb_std,
+                       -- Defense
+                       ROUND(s.def_season::numeric,1)   as def_season,
+                       ROUND(r.def_l10::numeric,1)      as def_l10,
+                       ROUND(s.def_std::numeric,2)      as def_std,
+                       -- Scoring efficiency
+                       ROUND(s.score_eff_avg::numeric,3) as eff_season,
+                       ROUND(r.score_eff_l10::numeric,3) as eff_l10,
+                       ROUND(s.score_eff_std::numeric,3) as eff_std,
+                       -- Minutes expansion
+                       ROUND(s.min_std::numeric,2)       as min_std,
+                       COALESCE(pa.age, 99)              as player_age
                 FROM season_stats s
-                JOIN recent_stats r ON s.player_name = r.player_name
-                JOIN very_recent  v ON s.player_name = v.player_name
+                JOIN recent r      ON s.player_name = r.player_name
+                JOIN very_recent v ON s.player_name = v.player_name
                 LEFT JOIN player_ages pa ON LOWER(pa.full_name) = LOWER(s.player_name)
             """, (SEASON,))
             cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
 
+    def zscore(recent, avg, std):
+        if not std or float(std or 0) == 0: return 0.0
+        return float((float(recent or 0) - float(avg or 0)) / float(std))
+
     results = []
     for row in rows:
         r = dict(zip(cols, row))
 
-        # Age filter — skip players 27+ (established vets, not breakout candidates)
-        player_age = int(r.get("player_age") or 99)
-        if player_age > 26 and player_age != 99:
+        # Age gate — skip 27+ (established vets)
+        age = int(r.get("player_age") or 99)
+        if age > 26 and age != 99:
             continue
 
-        pts_s   = float(r["pts_season"] or 0)
-        pts_l10 = float(r["pts_l10"]    or 0)
-        pts_l5  = float(r["pts_l5"]     or 0)
-        min_s   = float(r["min_season"] or 0)
-        min_l10 = float(r["min_l10"]    or 0)
-        min_l5  = float(r["min_l5"]     or 0)
-        pts_std = float(r["pts_std"]    or 1)
-        fga_l10 = float(r["fga_l10"]    or 0)
-        fga_s   = float(r["fga_season"] or 0)
+        # ── Compute z-scores for each dimension ──────────────────────────────
+        # 1. PER proxy improvement (overall efficiency per minute)
+        z_per   = zscore(r["per_l10"],  r["per_season"],  r["per_std"])
 
-        # Component scores (each 0-25 points)
-        # 1. Pts trend: L10 vs season
-        pts_trend = min(25, max(0, (pts_l10 - pts_s) / max(pts_s, 1) * 50))
-        # 2. Acceleration: L5 vs L10
-        pts_accel = min(25, max(0, (pts_l5 - pts_l10) / max(pts_l10, 1) * 50))
-        # 3. Minutes trend: L10 vs season
-        min_trend = min(25, max(0, (min_l10 - min_s) / max(min_s, 1) * 50))
-        # 4. Usage trend: FGA increasing
-        usage_trend = min(25, max(0, (fga_l10 - fga_s) / max(fga_s, 1) * 50))
+        # 2. Scoring efficiency (pts per FGA — quality not volume)
+        z_eff   = zscore(r["eff_l10"],  r["eff_season"],  r["eff_std"])
 
-        score = round(pts_trend + pts_accel + min_trend + usage_trend, 1)
+        # 3. Playmaking leap
+        z_ast   = zscore(r["ast_l10"],  r["ast_season"],  r["ast_std"])
 
-        if score < 5: continue  # filter out flat players
+        # 4. Rebounding leap
+        z_reb   = zscore(r["reb_l10"],  r["reb_season"],  r["reb_std"])
+
+        # 5. Defensive leap (stl+blk)
+        z_def   = zscore(r["def_l10"],  r["def_season"],  r["def_std"])
+
+        # 6. Usage/minutes expansion (opportunity)
+        z_min   = zscore(r["min_l10"],  r["min_season"],  r["min_std"])
+
+        # ── Composite breakout score (0–100) ──────────────────────────────────
+        # Weights: PER proxy most important, then usage expansion, then specific skills
+        raw = (
+            0.30 * z_per  +   # overall efficiency improvement
+            0.20 * z_min  +   # getting more opportunity
+            0.15 * z_eff  +   # scoring smarter (not just more)
+            0.15 * z_ast  +   # playmaking
+            0.10 * z_reb  +   # rebounding
+            0.10 * z_def      # defense
+        )
+
+        # Normalize to 0–100 (clip at ±3 sigma = 0/100)
+        score = round(max(0, min(100, (raw + 3) / 6 * 100)), 1)
+
+        if score < 45: continue  # filter out flat/declining players
+
+        # Identify the BIGGEST dimension driving the breakout
+        dims = {
+            "efficiency": z_per,
+            "playmaking": z_ast,
+            "rebounding": z_reb,
+            "defense":    z_def,
+            "scoring":    z_eff,
+            "minutes":    z_min,
+        }
+        lead_dim = max(dims, key=lambda k: dims[k])
+
+        pts_trend = round((float(r["pts_l10"] or 0) - float(r["pts_season"] or 0)) / max(float(r["pts_season"] or 1), 1) * 100, 1)
+        min_trend = round((float(r["min_l10"] or 0) - float(r["min_season"] or 0)) / max(float(r["min_season"] or 1), 1) * 100, 1)
 
         results.append({
-            "player_name":  r["player_name"],
-            "team":         r["team"],
-            "position":     r["position"],
-            "gp":           r["gp"],
+            "player_name":    r["player_name"],
+            "team":           r["team"],
+            "position":       r["position"],
+            "gp":             r["gp"],
+            "age":            age if age != 99 else None,
             "breakout_score": score,
-            "pts_season":   pts_s,
-            "pts_l10":      pts_l10,
-            "pts_l5":       pts_l5,
-            "min_season":   min_s,
-            "min_l10":      min_l10,
-            "min_l5":       min_l5,
-            "pts_trend_pct": round(pct_change(pts_s, pts_l10), 1),
-            "min_trend_pct": round(pct_change(min_s, min_l10), 1),
+            "lead_dimension": lead_dim,
+            "z_per":          round(z_per, 2),
+            "z_ast":          round(z_ast, 2),
+            "z_reb":          round(z_reb, 2),
+            "z_def":          round(z_def, 2),
+            "z_eff":          round(z_eff, 2),
+            "z_min":          round(z_min, 2),
+            "pts_season":     float(r["pts_season"] or 0),
+            "pts_l10":        float(r["pts_l10"] or 0),
+            "pts_l5":         float(r["pts_l5"] or 0),
+            "min_season":     float(r["min_season"] or 0),
+            "min_l10":        float(r["min_l10"] or 0),
+            "pts_trend_pct":  pts_trend,
+            "min_trend_pct":  min_trend,
+            "per_season":     float(r["per_season"] or 0),
+            "per_l10":        float(r["per_l10"] or 0),
         })
 
     results.sort(key=lambda x: -x["breakout_score"])
