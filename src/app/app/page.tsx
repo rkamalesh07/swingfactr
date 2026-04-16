@@ -417,7 +417,7 @@ export default function HomePage() {
 
               {/* Feed label + carousel */}
               <div style={{ marginBottom:'8px', display:'flex',
-                justifyContent:'space-between', alignItems:'center', marginBottom:'12px' }}>
+                justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ fontFamily:'DM Mono, monospace', fontSize:'10px',
                   color:'#55534f', letterSpacing:'0.14em', textTransform:'uppercase' as const }}>
                   Today's intelligence
