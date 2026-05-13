@@ -270,18 +270,6 @@ export default function HomePage() {
   return (
     <>
       {/* Blob cursor — fixed overlay */}
-      <Suspense fallback={null}>
-        <BlobCursor
-          fillColor="#ffffff"
-          trailCount={3}
-          sizes={[50, 100, 65]}
-          innerSizes={[16, 28, 18]}
-          innerColor="rgba(0,0,0,0.5)"
-          opacities={[0.15, 0.08, 0.12]}
-          filterStdDeviation={25}
-          zIndex={9999}
-        />
-      </Suspense>
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section style={{ position: 'relative', minHeight: 620, overflow: 'hidden', background: '#000' }}>

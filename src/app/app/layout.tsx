@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
           }
-          * { cursor: none !important; }
+
           a { color: inherit; text-decoration: none; }
           button { font-family: inherit; }
 
