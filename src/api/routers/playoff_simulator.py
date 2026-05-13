@@ -608,10 +608,27 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
         pass
 
     stage = bracket_data.get("stage", "regular_season")
-    # Force playoff mode if we're past April 2026
-    from datetime import date as _date
-    if _date.today() >= _date(2026, 4, 18) and stage == "regular_season":
-        stage = "first_round"  # playoffs are live
+
+    # --- Hardcoded 2026 second round bracket (May 12 2026) ---
+    # Overrides any stale ESPN data to ensure only alive teams are simulated
+    HARDCODED_BRACKET = {
+        "stage": "second_round",
+        "east": [
+            # NYK swept PHI — advancing
+            {"home":"NYK","away":"PHI","home_wins":4,"away_wins":0,"winner":"NYK","status":"complete","round":1,"conference":"East"},
+            # DET vs CLE tied 2-2, Game 5 tonight
+            {"home":"DET","away":"CLE","home_wins":2,"away_wins":2,"winner":None,"status":"in_progress","round":1,"conference":"East"},
+        ],
+        "west": [
+            # OKC swept LAL — advancing
+            {"home":"OKC","away":"LAL","home_wins":4,"away_wins":0,"winner":"OKC","status":"complete","round":1,"conference":"West"},
+            # SAS vs MIN tied 2-2, Game 5 tomorrow
+            {"home":"SAS","away":"MIN","home_wins":2,"away_wins":2,"winner":None,"status":"in_progress","round":1,"conference":"West"},
+        ],
+        "finals": None,
+    }
+    bracket_data = HARDCODED_BRACKET
+    stage = "second_round"
 
     # If playoffs haven't started, simulate remaining regular season first
     if stage == "regular_season":
