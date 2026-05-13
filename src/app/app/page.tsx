@@ -85,7 +85,7 @@ function Fade({ children, delay = 0 }: { children: React.ReactNode; delay?: numb
 
 function Ticker() {
   const items = [
-    'Play-in: GSW vs PHX · ORL vs CHA pending',
+    'NBA Playoffs first round underway',
     '574 players tracked', 'Model v14 · Bayesian shrinkage',
     '3× daily updates', 'Positional defense profiles',
     'PER-based breakout analysis', '1M playoff simulations',
@@ -150,8 +150,8 @@ function buildStories(overall: any, breakout: any): Story[] {
     })
   }
   stories.push({
-    tag: 'Play-in · April 2026',
-    headline: 'GSW vs PHX and ORL vs CHA — two 8-seeds still to be decided.',
+    tag: 'Playoffs · May 2026',
+    headline: 'First round underway. Bracket and odds updated after every game.',
     context: 'Playoff simulator updates as results come in.',
     link: '/playoffs', cta: 'See playoff picture',
   })
@@ -308,7 +308,7 @@ export default function HomePage() {
               </span>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
               <span style={{ fontFamily: MONO, fontSize: 10, color: '#333', letterSpacing: '0.08em' }}>
-                2025–26 · Play-in
+                2025–26 · Playoffs
               </span>
             </div>
 
@@ -358,7 +358,7 @@ export default function HomePage() {
               {[
                 { to: 574,     sfx: '',  label: 'Players tracked' },
                 { to: 3,       sfx: '×', label: 'Daily ETL updates' },
-                { to: 23997,   sfx: '',  label: 'Game logs · 2025–26' },
+                { to: 28127,   sfx: '',  label: 'Game logs · 2025–26' },
                 { to: 540,     sfx: '',  label: 'Defensive profiles' },
                 { to: 1000000, sfx: '',  label: 'Max playoff sims' },
               ].map((item, i, arr) => (
@@ -380,7 +380,7 @@ export default function HomePage() {
               border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
               <div style={{ fontFamily: MONO, fontSize: 9, color: '#444',
                 letterSpacing: '0.16em', marginBottom: 8,
-                textTransform: 'uppercase' as const }}>Play-in · April 2026</div>
+                textTransform: 'uppercase' as const }}>Playoffs · May 2026</div>
               <div style={{ fontFamily: SANS, fontSize: 12, color: '#666', lineHeight: 1.6 }}>
                 GSW vs PHX and ORL vs CHA —<br />two 8-seeds still to be decided.
               </div>
@@ -458,7 +458,7 @@ export default function HomePage() {
               borderRadius: 8, overflow: 'hidden' }}>
               {[
                 { to: 574,     sfx: '', label: 'Players tracked',    sub: '2025–26 season' },
-                { to: 23997,   sfx: '', label: 'Game logs',          sub: 'Through April 2026' },
+                { to: 28127,   sfx: '', label: 'Game logs',          sub: 'Through May 2026' },
                 { to: 540,     sfx: '', label: 'Defensive profiles', sub: 'By G / F / C' },
                 { to: 1000000, sfx: '', label: 'Max simulations',    sub: 'Playoff simulator' },
               ].map(item => (
@@ -531,7 +531,7 @@ export default function HomePage() {
         <span style={{ fontFamily: MONO, fontSize: 12, color: '#fff',
           fontWeight: 500, letterSpacing: '0.16em' }}>SWINGFACTR</span>
         <span style={{ fontFamily: MONO, fontSize: 9, color: '#2a2a2a',
-          letterSpacing: '0.1em' }}>2025–26 NBA · Play-in round · Updated 3× daily</span>
+          letterSpacing: '0.1em' }}>2025–26 NBA · Playoffs · Updated 3× daily</span>
       </div>
     </>
   )
