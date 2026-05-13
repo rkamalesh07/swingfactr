@@ -468,61 +468,77 @@ async def get_standings():
 
 @router.get("/bracket")
 async def get_bracket():
-    """
-    Live playoff bracket from ESPN.
-    Returns completed series + in-progress series with game scores.
-    """
+    """Live playoff bracket from ESPN scoreboard seasontype=3."""
+    import httpx
     bracket = {"east": [], "west": [], "finals": None, "stage": "regular_season"}
-
+    EAST = {"BOS","NYK","MIL","CLE","ORL","IND","MIA","PHI","ATL","CHI",
+            "TOR","BKN","DET","WAS","CHA","NY","WSH"}
     try:
-        async with httpx.AsyncClient(headers=HEADERS, timeout=15) as client:
-            # Try ESPN bracket endpoint
+        async with httpx.AsyncClient(timeout=12) as client:
             r = await client.get(
-                f"https://site.api.espn.com/apis/v2/sports/basketball/nba/playoff-schedule",
-                params={"season": "2026"}
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+                params={"seasontype":"3","year":"2026","limit":"500"},
+                headers={"User-Agent":"Mozilla/5.0"}
             )
-            data = r.json()
+            events = r.json().get("events", [])
 
-            series_list = []
-            for item in data.get("series", data.get("schedule", [])):
-                home = normalize(item.get("home", {}).get("abbreviation", ""))
-                away = normalize(item.get("away", {}).get("abbreviation", ""))
-                home_wins = item.get("home", {}).get("wins", 0)
-                away_wins = item.get("away", {}).get("wins", 0)
-                winner = ""
-                if home_wins == 4:
-                    winner = home
-                elif away_wins == 4:
-                    winner = away
-                round_n = item.get("round", 1)
-                conf = item.get("conference", "")
+        series_map = {}
+        for event in events:
+            comps = event.get("competitions", [{}])[0]
+            competitors = comps.get("competitors", [])
+            if len(competitors) < 2: continue
+            home = next((c for c in competitors if c.get("homeAway")=="home"), competitors[0])
+            away = next((c for c in competitors if c.get("homeAway")=="away"), competitors[1])
+            ha = home.get("team",{}).get("abbreviation","")
+            aa = away.get("team",{}).get("abbreviation","")
+            hn = home.get("team",{}).get("shortDisplayName", ha)
+            an = away.get("team",{}).get("shortDisplayName", aa)
+            key = tuple(sorted([ha, aa]))
 
-                series_list.append({
-                    "round":      round_n,
-                    "conference": conf,
-                    "home":       home,
-                    "away":       away,
-                    "home_wins":  home_wins,
-                    "away_wins":  away_wins,
-                    "winner":     winner,
-                    "status":     "complete" if winner else "in_progress",
-                })
+            notes = comps.get("notes",[{}])
+            note_text = notes[0].get("headline","") if notes else ""
+            round_num = 1
+            if "Second Round" in note_text or "Semifinal" in note_text: round_num = 2
+            elif "Conference Final" in note_text: round_num = 3
+            elif "NBA Final" in note_text: round_num = 4
 
-            if series_list:
-                bracket["east"]  = [s for s in series_list if s["conference"] == "East"]
-                bracket["west"]  = [s for s in series_list if s["conference"] == "West"]
-                bracket["finals"]= next((s for s in series_list if s["conference"] == "Finals"), None)
-                max_round = max(s["round"] for s in series_list)
-                bracket["stage"] = ["first_round", "second_round", "conf_finals", "finals"][min(max_round - 1, 3)]
-    except Exception:
-        bracket["stage"] = "regular_season"
+            conf = "Finals" if round_num == 4 else ("East" if ha in EAST or aa in EAST else "West")
 
+            status = comps.get("status",{}).get("type",{})
+            completed = status.get("completed", False)
+            hs = int(home.get("score",0) or 0)
+            as_ = int(away.get("score",0) or 0)
+
+            if key not in series_map:
+                series_map[key] = {"home":ha,"away":aa,"home_name":hn,"away_name":an,
+                                   "home_wins":0,"away_wins":0,"round":round_num,
+                                   "conference":conf,"games":[],"status":"scheduled"}
+            s = series_map[key]
+            s["round"] = max(s["round"], round_num)
+            s["games"].append({"home_score":hs,"away_score":as_,"completed":completed,
+                                "status":status.get("description","")})
+            if completed:
+                if hs > as_: s["home_wins"] += 1
+                else: s["away_wins"] += 1
+
+        series_list = []
+        for s in series_map.values():
+            hw, aw = s["home_wins"], s["away_wins"]
+            s["winner"] = s["home"] if hw==4 else (s["away"] if aw==4 else None)
+            s["status"] = "complete" if (hw==4 or aw==4) else ("in_progress" if hw+aw>0 else "scheduled")
+            s["series_score"] = f"{hw}-{aw}"
+            series_list.append(s)
+
+        if series_list:
+            bracket["east"]   = sorted([s for s in series_list if s["conference"]=="East"], key=lambda x: x["round"])
+            bracket["west"]   = sorted([s for s in series_list if s["conference"]=="West"], key=lambda x: x["round"])
+            bracket["finals"] = next((s for s in series_list if s["conference"]=="Finals"), None)
+            max_round = max(s["round"] for s in series_list)
+            bracket["stage"]  = ["first_round","second_round","conf_finals","finals"][min(max_round-1,3)]
+
+    except Exception as e:
+        bracket["error"] = str(e)
     return JSONResponse(bracket)
-
-
-# ---------------------------------------------------------------------------
-# Simulate from current state
-# ---------------------------------------------------------------------------
 
 @router.get("/simulate-from-now")
 async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
