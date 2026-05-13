@@ -301,17 +301,37 @@ async def run_simulation(n_sims: int = Query(10000, le=1000000)):
                 )
             )
 
-        e_seeds = [t for t, _ in seed_conf(EASTERN)]
-        w_seeds = [t for t, _ in seed_conf(WESTERN)]
+        if stage != "regular_season":
+            # Playoffs active — derive alive teams directly from bracket
+            # Get winners of completed series + both teams of in-progress series
+            def alive_from_series(series_list):
+                alive = []
+                for s in series_list:
+                    if s.get("winner"):
+                        alive.append(s["winner"])
+                    else:
+                        alive.append(s["home"])
+                        alive.append(s["away"])
+                return list(dict.fromkeys(alive))  # preserve order, dedupe
 
-        e_playoff = apply_playin(e_seeds, ratings)
-        w_playoff = apply_playin(w_seeds, ratings)
+            e_playoff = alive_from_series(bracket_data.get("east", []))
+            w_playoff = alive_from_series(bracket_data.get("west", []))
 
-        if len(e_playoff) < 8 or len(w_playoff) < 8:
-            continue
+            # Pad to even number if needed
+            if not e_playoff or not w_playoff:
+                continue
 
-        for t in e_playoff + w_playoff:
-            playoff_counts[t] += 1
+            for t in e_playoff + w_playoff:
+                playoff_counts[t] += 1
+        else:
+            e_seeds = [t for t, _ in seed_conf(EASTERN)]
+            w_seeds = [t for t, _ in seed_conf(WESTERN)]
+            e_playoff = apply_playin(e_seeds, ratings)
+            w_playoff = apply_playin(w_seeds, ratings)
+            if len(e_playoff) < 8 or len(w_playoff) < 8:
+                continue
+            for t in e_playoff + w_playoff:
+                playoff_counts[t] += 1
 
         e_champ, e_cf = run_conference(e_playoff, ratings)
         w_champ, w_cf = run_conference(w_playoff, ratings)
@@ -670,17 +690,37 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
                 )
             )
 
-        e_seeds = [t for t, _ in seed_conf(EASTERN)]
-        w_seeds = [t for t, _ in seed_conf(WESTERN)]
+        if stage != "regular_season":
+            # Playoffs active — derive alive teams directly from bracket
+            # Get winners of completed series + both teams of in-progress series
+            def alive_from_series(series_list):
+                alive = []
+                for s in series_list:
+                    if s.get("winner"):
+                        alive.append(s["winner"])
+                    else:
+                        alive.append(s["home"])
+                        alive.append(s["away"])
+                return list(dict.fromkeys(alive))  # preserve order, dedupe
 
-        e_playoff = apply_playin(e_seeds, ratings)
-        w_playoff = apply_playin(w_seeds, ratings)
+            e_playoff = alive_from_series(bracket_data.get("east", []))
+            w_playoff = alive_from_series(bracket_data.get("west", []))
 
-        if len(e_playoff) < 8 or len(w_playoff) < 8:
-            continue
+            # Pad to even number if needed
+            if not e_playoff or not w_playoff:
+                continue
 
-        for t in e_playoff + w_playoff:
-            playoff_counts[t] += 1
+            for t in e_playoff + w_playoff:
+                playoff_counts[t] += 1
+        else:
+            e_seeds = [t for t, _ in seed_conf(EASTERN)]
+            w_seeds = [t for t, _ in seed_conf(WESTERN)]
+            e_playoff = apply_playin(e_seeds, ratings)
+            w_playoff = apply_playin(w_seeds, ratings)
+            if len(e_playoff) < 8 or len(w_playoff) < 8:
+                continue
+            for t in e_playoff + w_playoff:
+                playoff_counts[t] += 1
 
         # Step 3: Simulate playoffs — locking completed series
         def sim_series_from_state(team_a: str, team_b: str,
