@@ -863,21 +863,33 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
 
         east_series = bracket_data.get("east", [])
         west_series = bracket_data.get("west", [])
-
-        e_champ, e_cf = run_bracket_half(e_playoff, east_series)
-        w_champ, w_cf = run_bracket_half(w_playoff, west_series)
-
-        for t in e_cf | w_cf:
-            cf_counts[t] += 1
-        finals_counts[e_champ] += 1
-        finals_counts[w_champ] += 1
-
-        # Finals
         finals = bracket_data.get("finals") or {}
-        f_home = normalize(finals.get("home", e_champ))
-        f_away = normalize(finals.get("away", w_champ))
-        fhw = finals.get("home_wins", 0)
-        faw = finals.get("away_wins", 0)
+
+        if stage == "finals":
+            # Skip bracket simulation entirely — go straight to Finals
+            e_champ = finals.get("winner") or e_playoff[0] if e_playoff else finals.get("away", "NYK")
+            w_champ = finals.get("winner") or w_playoff[0] if w_playoff else finals.get("home", "SAS")
+            # For Finals stage, home = SAS (west champ), away = NYK (east champ)
+            f_home = finals.get("home", "SAS")
+            f_away = finals.get("away", "NYK")
+            fhw = finals.get("home_wins", 0)
+            faw = finals.get("away_wins", 0)
+            finals_counts[f_home] += 1
+            finals_counts[f_away] += 1
+        else:
+            e_champ, e_cf = run_bracket_half(e_playoff, east_series)
+            w_champ, w_cf = run_bracket_half(w_playoff, west_series)
+
+            for t in e_cf | w_cf:
+                cf_counts[t] += 1
+            finals_counts[e_champ] += 1
+            finals_counts[w_champ] += 1
+
+            # Finals
+            f_home = normalize(finals.get("home", e_champ))
+            f_away = normalize(finals.get("away", w_champ))
+            fhw = finals.get("home_wins", 0)
+            faw = finals.get("away_wins", 0)
         p_east = win_prob(ratings.get(e_champ, 0), ratings.get(w_champ, 0), home_adv=0)
         champion = e_champ if random.random() < p_east else w_champ
         champ_counts[champion] += 1
