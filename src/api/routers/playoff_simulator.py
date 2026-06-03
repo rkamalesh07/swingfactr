@@ -302,22 +302,53 @@ async def run_simulation(n_sims: int = Query(10000, le=1000000)):
             )
 
         if stage != "regular_season":
-            # Playoffs active — derive alive teams directly from bracket
-            # Get winners of completed series + both teams of in-progress series
-            def alive_from_series(series_list):
-                alive = []
-                for s in series_list:
-                    if s.get("winner"):
-                        alive.append(s["winner"])
-                    else:
-                        alive.append(s["home"])
-                        alive.append(s["away"])
-                return list(dict.fromkeys(alive))  # preserve order, dedupe
+            # Only use teams still alive — winners of most recent completed round
+            # or both teams in an in-progress series at the current stage
 
-            e_playoff = alive_from_series(bracket_data.get("east", []))
-            w_playoff = alive_from_series(bracket_data.get("west", []))
+            def get_alive_teams(bracket):
+                s = bracket.get("stage", "regular_season")
+                east_series = bracket.get("east", [])
+                west_series = bracket.get("west", [])
+                finals = bracket.get("finals")
 
-            # Pad to even number if needed
+                if s == "finals":
+                    # Only the two Finals teams
+                    if finals:
+                        if finals.get("winner"):
+                            return [finals["winner"]], []
+                        return [finals["home"]], [finals["away"]]
+                    return [], []
+
+                # For earlier rounds: get teams in the most advanced incomplete series
+                def latest_alive(series_list):
+                    if not series_list:
+                        return []
+                    max_round = max(s.get("round", 1) for s in series_list)
+                    current = [s for s in series_list if s.get("round") == max_round]
+                    alive = []
+                    for s in current:
+                        if s.get("winner"):
+                            alive.append(s["winner"])
+                        else:
+                            alive.append(s["home"])
+                            alive.append(s["away"])
+                    return list(dict.fromkeys(alive))
+
+                return latest_alive(east_series), latest_alive(west_series)
+
+            e_alive, w_alive = get_alive_teams(bracket_data)
+
+            if stage == "finals":
+                # Both teams come from Finals — one east, one west
+                if not e_alive and not w_alive:
+                    continue
+                # e_alive = [home], w_alive = [away] for Finals
+                e_playoff = e_alive if e_alive else [bracket_data.get("finals", {}).get("home", "")]
+                w_playoff = w_alive if w_alive else [bracket_data.get("finals", {}).get("away", "")]
+            else:
+                e_playoff = e_alive
+                w_playoff = w_alive
+
             if not e_playoff or not w_playoff:
                 continue
 
@@ -705,22 +736,53 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
             )
 
         if stage != "regular_season":
-            # Playoffs active — derive alive teams directly from bracket
-            # Get winners of completed series + both teams of in-progress series
-            def alive_from_series(series_list):
-                alive = []
-                for s in series_list:
-                    if s.get("winner"):
-                        alive.append(s["winner"])
-                    else:
-                        alive.append(s["home"])
-                        alive.append(s["away"])
-                return list(dict.fromkeys(alive))  # preserve order, dedupe
+            # Only use teams still alive — winners of most recent completed round
+            # or both teams in an in-progress series at the current stage
 
-            e_playoff = alive_from_series(bracket_data.get("east", []))
-            w_playoff = alive_from_series(bracket_data.get("west", []))
+            def get_alive_teams(bracket):
+                s = bracket.get("stage", "regular_season")
+                east_series = bracket.get("east", [])
+                west_series = bracket.get("west", [])
+                finals = bracket.get("finals")
 
-            # Pad to even number if needed
+                if s == "finals":
+                    # Only the two Finals teams
+                    if finals:
+                        if finals.get("winner"):
+                            return [finals["winner"]], []
+                        return [finals["home"]], [finals["away"]]
+                    return [], []
+
+                # For earlier rounds: get teams in the most advanced incomplete series
+                def latest_alive(series_list):
+                    if not series_list:
+                        return []
+                    max_round = max(s.get("round", 1) for s in series_list)
+                    current = [s for s in series_list if s.get("round") == max_round]
+                    alive = []
+                    for s in current:
+                        if s.get("winner"):
+                            alive.append(s["winner"])
+                        else:
+                            alive.append(s["home"])
+                            alive.append(s["away"])
+                    return list(dict.fromkeys(alive))
+
+                return latest_alive(east_series), latest_alive(west_series)
+
+            e_alive, w_alive = get_alive_teams(bracket_data)
+
+            if stage == "finals":
+                # Both teams come from Finals — one east, one west
+                if not e_alive and not w_alive:
+                    continue
+                # e_alive = [home], w_alive = [away] for Finals
+                e_playoff = e_alive if e_alive else [bracket_data.get("finals", {}).get("home", "")]
+                w_playoff = w_alive if w_alive else [bracket_data.get("finals", {}).get("away", "")]
+            else:
+                e_playoff = e_alive
+                w_playoff = w_alive
+
             if not e_playoff or not w_playoff:
                 continue
 
