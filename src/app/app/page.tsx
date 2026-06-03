@@ -382,7 +382,7 @@ export default function HomePage() {
                 letterSpacing: '0.16em', marginBottom: 8,
                 textTransform: 'uppercase' as const }}>Playoffs · May 2026</div>
               <div style={{ fontFamily: SANS, fontSize: 12, color: '#666', lineHeight: 1.6 }}>
-                GSW vs PHX and ORL vs CHA —<br />two 8-seeds still to be decided.
+                SAS vs NYK — Game 1 tonight.<br />Wembanyama vs Brunson for the title.
               </div>
               <Link href="/playoffs" style={{ fontFamily: MONO, fontSize: 9, color: '#555',
                 letterSpacing: '0.1em', display: 'inline-block', marginTop: 8,

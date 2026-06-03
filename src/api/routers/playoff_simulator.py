@@ -631,24 +631,38 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
 
     # --- Hardcoded 2026 second round bracket (May 12 2026) ---
     # Overrides any stale ESPN data to ensure only alive teams are simulated
+    # 2026 NBA Finals — SAS vs NYK — Game 1 tonight June 3
+    # WCF: SAS def OKC 4-3 | ECF: NYK def CLE 4-0
     HARDCODED_BRACKET = {
-        "stage": "second_round",
+        "stage": "finals",
         "east": [
-            # NYK swept PHI — advancing
-            {"home":"NYK","away":"PHI","home_wins":4,"away_wins":0,"winner":"NYK","status":"complete","round":1,"conference":"East"},
-            # DET vs CLE tied 2-2, Game 5 tonight
-            {"home":"DET","away":"CLE","home_wins":2,"away_wins":2,"winner":None,"status":"in_progress","round":1,"conference":"East"},
+            {"home":"DET","away":"ORL","home_wins":4,"away_wins":3,"winner":"DET","status":"complete","round":1,"conference":"East"},
+            {"home":"BOS","away":"PHI","home_wins":3,"away_wins":4,"winner":"PHI","status":"complete","round":1,"conference":"East"},
+            {"home":"NYK","away":"ATL","home_wins":4,"away_wins":0,"winner":"NYK","status":"complete","round":1,"conference":"East"},
+            {"home":"CLE","away":"TOR","home_wins":4,"away_wins":3,"winner":"CLE","status":"complete","round":1,"conference":"East"},
+            {"home":"NYK","away":"PHI","home_wins":4,"away_wins":0,"winner":"NYK","status":"complete","round":2,"conference":"East"},
+            {"home":"DET","away":"CLE","home_wins":3,"away_wins":4,"winner":"CLE","status":"complete","round":2,"conference":"East"},
+            {"home":"NYK","away":"CLE","home_wins":4,"away_wins":0,"winner":"NYK","status":"complete","round":3,"conference":"East"},
         ],
         "west": [
-            # OKC swept LAL — advancing
-            {"home":"OKC","away":"LAL","home_wins":4,"away_wins":0,"winner":"OKC","status":"complete","round":1,"conference":"West"},
-            # SAS vs MIN tied 2-2, Game 5 tomorrow
-            {"home":"SAS","away":"MIN","home_wins":2,"away_wins":2,"winner":None,"status":"in_progress","round":1,"conference":"West"},
+            {"home":"OKC","away":"PHX","home_wins":4,"away_wins":0,"winner":"OKC","status":"complete","round":1,"conference":"West"},
+            {"home":"SAS","away":"POR","home_wins":4,"away_wins":1,"winner":"SAS","status":"complete","round":1,"conference":"West"},
+            {"home":"DEN","away":"MIN","home_wins":2,"away_wins":4,"winner":"MIN","status":"complete","round":1,"conference":"West"},
+            {"home":"LAL","away":"HOU","home_wins":4,"away_wins":2,"winner":"LAL","status":"complete","round":1,"conference":"West"},
+            {"home":"OKC","away":"LAL","home_wins":4,"away_wins":0,"winner":"OKC","status":"complete","round":2,"conference":"West"},
+            {"home":"SAS","away":"MIN","home_wins":4,"away_wins":2,"winner":"SAS","status":"complete","round":2,"conference":"West"},
+            {"home":"OKC","away":"SAS","home_wins":3,"away_wins":4,"winner":"SAS","status":"complete","round":3,"conference":"West"},
         ],
-        "finals": None,
+        "finals": {
+            "home":"SAS","away":"NYK",
+            "home_wins":0,"away_wins":0,
+            "winner":None,"status":"in_progress",
+            "round":4,"conference":"Finals",
+            "note":"2026 NBA Finals - Game 1 tonight June 3"
+        },
     }
     bracket_data = HARDCODED_BRACKET
-    stage = "second_round"
+    stage = "finals"
 
     # If playoffs haven't started, simulate remaining regular season first
     if stage == "regular_season":
