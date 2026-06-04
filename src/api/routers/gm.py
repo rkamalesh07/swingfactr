@@ -130,21 +130,34 @@ def derive_attributes(row: dict) -> dict:
     elif ppg >= 15: overall = max(overall, 57)
     elif ppg >= 10: overall = max(overall, 44)
 
+    # MPG ceiling — low-minute players are capped regardless of per-36 rates
+    # A player averaging 8 min/g has not proven they can sustain that production
+    if mpg < 10: overall = min(overall, 48)
+    elif mpg < 15: overall = min(overall, 58)
+    elif mpg < 20: overall = min(overall, 68)
+    elif mpg < 25: overall = min(overall, 78)
+
     ast_rate = safe_div(apg, mpg)
     fg3_rate = float(row.get("fg3_pct_est") or 0)
+    pos = str(row.get("position") or "G").upper()
+    is_big = pos in ("C", "F", "PF", "C-F", "F-C")
 
-    if ast_rate > 0.38 and ppg >= 15:       archetype = "Primary Ball Handler"
-    elif ast_rate > 0.30 and fg3_rate < 25: archetype = "Floor General"
-    elif fg3m >= 2.5 and spg >= 1.2:        archetype = "3-and-D"
-    elif rpg > 9 and bpg > 1.5:             archetype = "Rim Protector"
-    elif rpg > 7 and bpg > 1.0:             archetype = "Defensive Big"
-    elif fg3_rate > 38 and rpg > 6:         archetype = "Stretch Four"
-    elif ast_rate > 0.25 and rpg > 6:       archetype = "Playmaking Big"
-    elif ppg >= 20 and fg3m >= 2.0:         archetype = "Wing Scorer"
-    elif ppg >= 18:                          archetype = "Scoring Wing"
-    elif fg3m >= 2.0:                        archetype = "Spot-Up Shooter"
-    elif rpg > 5 and ppg < 10:              archetype = "Energy Big"
-    else:                                    archetype = "Two-Way Wing"
+    if ast_rate > 0.38 and ppg >= 15:           archetype = "Primary Ball Handler"
+    elif ast_rate > 0.28 and ppg >= 12:         archetype = "Floor General"
+    elif fg3m >= 2.5 and spg >= 1.2:            archetype = "3-and-D"
+    elif rpg > 9 and bpg > 1.5:                archetype = "Rim Protector"
+    elif rpg > 8 and bpg > 0.8 and ppg < 12:   archetype = "Defensive Big"
+    elif is_big and fg3m >= 1.5 and rpg > 5:    archetype = "Stretch Four"
+    elif is_big and ast_rate > 0.20 and rpg > 5: archetype = "Playmaking Big"
+    elif is_big and rpg > 6:                    archetype = "Traditional Big"
+    elif ppg >= 20 and fg3m >= 2.5:             archetype = "Shot Creator"
+    elif ppg >= 18 and fg3m >= 1.5:             archetype = "Wing Scorer"
+    elif fg3m >= 2.5 and ppg < 15:             archetype = "Spot-Up Shooter"
+    elif spg >= 1.5 and ppg < 14:              archetype = "Perimeter Defender"
+    elif ppg >= 15:                             archetype = "Scoring Wing"
+    elif rpg > 5 and ppg < 10:                 archetype = "Energy Big"
+    elif ast_rate > 0.20:                       archetype = "Secondary Playmaker"
+    else:                                       archetype = "Role Player"
 
     return {
         "scoring":    round(scoring),
