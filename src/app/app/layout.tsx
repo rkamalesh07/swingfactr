@@ -111,6 +111,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/profiles" className="nav-link">Profiles</Link>
               <Link href="/compare"  className="nav-link">Compare</Link>
               <Link href="/matchup"  className="nav-link">Matchup</Link>
+              <Link href="/gm" className="nav-link">GM</Link>
             </div>
             <div className="nav-more">
               <button className="nav-more-btn">More</button>

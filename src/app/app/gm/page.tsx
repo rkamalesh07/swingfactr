@@ -118,7 +118,8 @@ function FranchiseSelect({ onSelect }: { onSelect: (abbr: string) => void }) {
       localStorage.setItem("gm_team", abbr);
       onSelect(data.save_id);
     } catch (e: any) {
-      alert(e.message);
+      console.error(e.message);
+      alert("Could not connect to backend. Check that Railway is deployed and try again.");
     } finally {
       setLoading(null);
     }
@@ -615,7 +616,6 @@ export default function GMPage() {
     if (existingSave) setSaveId(existingSave);
     setInitDone(true);
 
-    // Ensure DB is initialised (idempotent)
     fetch(`${API}/gm/init-db`, { method: "POST" }).catch(() => {});
   }, []);
 
