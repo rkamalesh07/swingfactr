@@ -614,6 +614,13 @@ async def simulate_from_now(n_sims: int = Query(10000, le=1000000)):
     """
     ratings, standings = get_ratings_and_standings()
 
+    # 2026 Finals: SOS-weighted playoff ratings
+    # NYK 15.88 (dominant run, +19 avg margin, beat CLE/ATL/PHI/CLE)
+    # SAS  9.52 (survived OKC in 7, weaker net margin vs tough schedule)
+    ratings['NYK'] = 15.88
+    ratings['SAS'] = 9.52
+
+
     # Fetch bracket state from our own working bracket endpoint
     bracket_data = {"east": [], "west": [], "finals": None, "stage": "regular_season"}
     try:
