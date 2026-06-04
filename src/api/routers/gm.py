@@ -58,7 +58,11 @@ CONFERENCE = {
 # ─── Attribute Derivation ─────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
-    return a / b if b and b > 0 else default
+    try:
+        a, b = float(a), float(b)
+    except (TypeError, ValueError):
+        return default
+    return a / b if b > 0 else default
 
 def clamp(v, lo=0, hi=100):
     return max(lo, min(hi, v))
@@ -74,14 +78,16 @@ def derive_attributes(row: dict) -> dict:
     row must have: ppg, rpg, apg, spg, bpg, fg3m, tov, mpg, gp,
                    fg_pct, efg_pct, fg3_pct_est
     """
-    mpg  = row.get("mpg") or 1
-    ppg  = row.get("ppg") or 0
-    rpg  = row.get("rpg") or 0
-    apg  = row.get("apg") or 0
-    spg  = row.get("spg") or 0
-    bpg  = row.get("bpg") or 0
-    tov  = row.get("tov") or 0
-    fg3m = row.get("fg3m") or 0
+    mpg  = float(row.get("mpg") or 1)
+    ppg  = float(row.get("ppg") or 0)
+    rpg  = float(row.get("rpg") or 0)
+    apg  = float(row.get("apg") or 0)
+    spg  = float(row.get("spg") or 0)
+    bpg  = float(row.get("bpg") or 0)
+    tov  = float(row.get("tov") or 0)
+    fg3m = float(row.get("fg3m") or 0)
+    efg  = float(row.get("efg_pct") or 0)
+    gp   = float(row.get("gp") or 1)
     efg  = row.get("efg_pct") or 0
     gp   = row.get("gp") or 1
 
