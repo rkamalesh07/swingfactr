@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from src.api.routers.gm import router as gm_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -70,3 +71,5 @@ async def global_exception_handler(request, exc):
     tb = traceback.format_exc()
     print(f"UNHANDLED ERROR on {request.url}: {tb}")
     return JSONResponse({"error": str(exc), "trace": tb}, status_code=500)
+
+app.include_router(gm_router)
