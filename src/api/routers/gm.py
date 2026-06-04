@@ -172,10 +172,16 @@ def contract_years(overall: int, age: int) -> int:
 
 # ─── DB Helpers ───────────────────────────────────────────────────────────────
 
+# Standard NBA abbr -> ESPN abbr normalization
+ABBR_TO_ESPN = {
+    "GSW": "GS", "SAS": "SA", "NOP": "NO", "NYK": "NY",
+    "UTA": "UTAH", "WAS": "WSH", "PHO": "PHX",
+}
+
 def fetch_all_players(conn) -> list[dict]:
     """
-    Fetch players with season stats + most recent team assignment.
-    Uses a subquery to get each player's last team from their most recent game log.
+    Fetch players with season stats + most recent team from game logs.
+    Falls back to players table team assignment for teams with no recent logs (injuries etc).
     """
     cur = conn.cursor()
     cur.execute("""
@@ -215,11 +221,11 @@ def fetch_all_players(conn) -> list[dict]:
             s.player_name        AS full_name,
             COALESCE(p.position, 'G') AS position,
             COALESCE(pa.age, 26) AS age,
-            lt.team_abbr,
+            COALESCE(lt.team_abbr, p.team_id::text, 'FA') AS team_abbr,
             s.gp, s.ppg, s.rpg, s.apg, s.spg, s.bpg,
             s.fg3m, s.tov, s.mpg, s.fg_pct, s.efg_pct, s.fg3_pct_est
         FROM season_stats s
-        JOIN latest_team lt ON lt.player_name = s.player_name
+        LEFT JOIN latest_team lt ON lt.player_name = s.player_name
         LEFT JOIN players p ON p.full_name = s.player_name
         LEFT JOIN player_ages pa ON pa.full_name = s.player_name
         ORDER BY s.ppg DESC
@@ -227,6 +233,12 @@ def fetch_all_players(conn) -> list[dict]:
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close()
+
+    # Normalize standard abbrs to ESPN abbrs
+    for row in rows:
+        abbr = row.get("team_abbr") or "FA"
+        row["team_abbr"] = ABBR_TO_ESPN.get(str(abbr).upper(), str(abbr).upper())
+
     return rows
 
 def get_save(conn, save_id: str) -> dict:
