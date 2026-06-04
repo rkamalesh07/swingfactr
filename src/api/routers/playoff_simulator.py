@@ -254,6 +254,18 @@ def compute_sos(remaining: list, ratings: dict) -> dict:
 @router.get("/simulate")
 async def run_simulation(n_sims: int = Query(10000, le=1000000)):
     ratings, standings = get_ratings_and_standings()
+
+    # Override with actual 2026 playoff net ratings (computed from real box scores)
+    # NYK: 14 games, 12-2, +19.36 avg margin
+    # SAS: 18 games, 12-6, +10.28 avg margin
+    # Blend: 70% playoff performance, 30% regular season
+    PLAYOFF_MARGINS = {
+        "NYK": 19.36,
+        "SAS": 10.28,
+    }
+    for team, playoff_rtg in PLAYOFF_MARGINS.items():
+        reg_rtg = ratings.get(team, 0)
+        ratings[team] = round(playoff_rtg * 0.70 + reg_rtg * 0.30, 2)
     remaining = await fetch_remaining_schedule()
 
     # Filter to known teams only
