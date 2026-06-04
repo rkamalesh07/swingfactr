@@ -35,7 +35,9 @@ CORS_ORIGINS = os.environ.get(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # open during dev
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
