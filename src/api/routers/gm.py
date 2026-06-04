@@ -67,18 +67,14 @@ def safe_div(a, b, default=0.0):
 def clamp(v, lo=0, hi=100):
     return max(lo, min(hi, v))
 
-def normalize_to_100(val, lo, hi):
-    if hi == lo:
-        return 50
-    return clamp((val - lo) / (hi - lo) * 100)
+def scale(val, p10, p90, lo=30, hi=95):
+    if p90 == p10:
+        return (lo + hi) / 2
+    normalized = (val - p10) / (p90 - p10)
+    return clamp(lo + normalized * (hi - lo))
 
 def derive_attributes(row: dict) -> dict:
-    """
-    Derive 6 player attributes (0-100) from real game log aggregates.
-    row must have: ppg, rpg, apg, spg, bpg, fg3m, tov, mpg, gp,
-                   fg_pct, efg_pct, fg3_pct_est
-    """
-    mpg  = float(row.get("mpg") or 1)
+    mpg  = max(float(row.get("mpg") or 1), 1.0)
     ppg  = float(row.get("ppg") or 0)
     rpg  = float(row.get("rpg") or 0)
     apg  = float(row.get("apg") or 0)
@@ -86,69 +82,79 @@ def derive_attributes(row: dict) -> dict:
     bpg  = float(row.get("bpg") or 0)
     tov  = float(row.get("tov") or 0)
     fg3m = float(row.get("fg3m") or 0)
-    efg  = float(row.get("efg_pct") or 0)
+    efg  = float(row.get("efg_pct") or 50)
     gp   = float(row.get("gp") or 1)
-    efg  = row.get("efg_pct") or 0
-    gp   = row.get("gp") or 1
 
-    # Per-36 rates
     pts36 = safe_div(ppg, mpg) * 36
     ast36 = safe_div(apg, mpg) * 36
     reb36 = safe_div(rpg, mpg) * 36
     def36 = safe_div(spg + bpg, mpg) * 36
     tov36 = safe_div(tov, mpg) * 36
 
-    # Scoring (pts per 36, scaled 0-40 → 0-100)
-    scoring = clamp(normalize_to_100(pts36, 0, 40))
+    # Scoring: p10=8, p50=18, p90=28 pts/36
+    scoring = scale(pts36, p10=8, p90=28, lo=25, hi=90)
+    if pts36 >= 30: scoring = min(99, scoring + (pts36 - 30) * 2.5)
 
-    # Efficiency (eFG%, scaled 40-70 → 0-100)
-    efficiency = clamp(normalize_to_100(efg, 40, 70))
+    # Efficiency: p10=44, p90=63 eFG%
+    efficiency = scale(efg, p10=44, p90=63, lo=25, hi=90)
 
-    # Playmaking (ast per 36, penalised by TOV, scaled 0-15)
-    pm_raw = ast36 - tov36 * 0.5
-    playmaking = clamp(normalize_to_100(pm_raw, -2, 15))
+    # Playmaking: p10=1, p90=8 ast/36 net of tov
+    pm_raw = ast36 - tov36 * 0.4
+    playmaking = scale(pm_raw, p10=1.0, p90=8.0, lo=20, hi=90)
+    if ast36 >= 10: playmaking = min(99, playmaking + (ast36 - 10) * 2)
 
-    # Rebounding (reb per 36, scaled 0-18)
-    rebounding = clamp(normalize_to_100(reb36, 0, 18))
+    # Rebounding: p10=1.5, p90=10 reb/36
+    rebounding = scale(reb36, p10=1.5, p90=10.0, lo=20, hi=90)
+    if reb36 >= 13: rebounding = min(99, rebounding + (reb36 - 13) * 2)
 
-    # Defense (spg+blk per 36, scaled 0-6)
-    defense = clamp(normalize_to_100(def36, 0, 6))
+    # Defense: p10=0.5, p90=4 (stl+blk)/36
+    defense = scale(def36, p10=0.5, p90=4.0, lo=20, hi=88)
+    if def36 >= 5: defense = min(99, defense + (def36 - 5) * 2.5)
 
-    # Composure: inverse of scoring variance — we approximate with games played
-    # More games + higher scoring = more reliable (proxy only)
-    composure = clamp(normalize_to_100(gp, 5, 82))
+    # Composure: reliability proxy from minutes x games
+    reliability = (mpg / 36) * (gp / 82) * 100
+    composure = scale(reliability, p10=5, p90=75, lo=20, hi=85)
 
-    # Overall (weighted)
     overall = clamp(
-        0.25 * scoring +
-        0.20 * efficiency +
-        0.15 * playmaking +
-        0.15 * rebounding +
-        0.15 * defense +
-        0.10 * composure
+        0.28 * scoring +
+        0.22 * efficiency +
+        0.18 * playmaking +
+        0.14 * rebounding +
+        0.12 * defense +
+        0.06 * composure
     )
 
-    # Archetype
+    # PPG floor — stars should never rate low
+    if ppg >= 25: overall = max(overall, 80)
+    elif ppg >= 20: overall = max(overall, 70)
+    elif ppg >= 15: overall = max(overall, 57)
+    elif ppg >= 10: overall = max(overall, 44)
+
     ast_rate = safe_div(apg, mpg)
-    fg3_rate = row.get("fg3_pct_est") or 0
-    archetype = "Two-Way Wing"
-    if ast_rate > 0.35 and fg3_rate < 25:        archetype = "Floor General"
-    elif fg3_rate > 40 and spg > 1.0:            archetype = "3-and-D"
-    elif rpg > 8 and bpg > 1.5:                  archetype = "Rim Protector"
-    elif fg3_rate > 35 and rpg > 6:              archetype = "Stretch Four"
-    elif ast_rate > 0.25 and rpg > 6:            archetype = "Playmaking Big"
-    elif ppg > 20 and fg3_rate > 30:             archetype = "Wing Scorer"
-    elif safe_div(apg, mpg) < 0.15 and rpg < 5: archetype = "Slasher"
+    fg3_rate = float(row.get("fg3_pct_est") or 0)
+
+    if ast_rate > 0.38 and ppg >= 15:       archetype = "Primary Ball Handler"
+    elif ast_rate > 0.30 and fg3_rate < 25: archetype = "Floor General"
+    elif fg3m >= 2.5 and spg >= 1.2:        archetype = "3-and-D"
+    elif rpg > 9 and bpg > 1.5:             archetype = "Rim Protector"
+    elif rpg > 7 and bpg > 1.0:             archetype = "Defensive Big"
+    elif fg3_rate > 38 and rpg > 6:         archetype = "Stretch Four"
+    elif ast_rate > 0.25 and rpg > 6:       archetype = "Playmaking Big"
+    elif ppg >= 20 and fg3m >= 2.0:         archetype = "Wing Scorer"
+    elif ppg >= 18:                          archetype = "Scoring Wing"
+    elif fg3m >= 2.0:                        archetype = "Spot-Up Shooter"
+    elif rpg > 5 and ppg < 10:              archetype = "Energy Big"
+    else:                                    archetype = "Two-Way Wing"
 
     return {
-        "scoring":     round(scoring),
-        "efficiency":  round(efficiency),
-        "playmaking":  round(playmaking),
-        "rebounding":  round(rebounding),
-        "defense":     round(defense),
-        "composure":   round(composure),
-        "overall":     round(overall),
-        "archetype":   archetype,
+        "scoring":    round(scoring),
+        "efficiency": round(efficiency),
+        "playmaking": round(playmaking),
+        "rebounding": round(rebounding),
+        "defense":    round(defense),
+        "composure":  round(composure),
+        "overall":    round(clamp(overall)),
+        "archetype":  archetype,
     }
 
 def estimate_salary(overall: int, age: int) -> int:
