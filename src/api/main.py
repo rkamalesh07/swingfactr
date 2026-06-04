@@ -39,8 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["*"],
 )
 
 app.include_router(games.router, prefix="/games", tags=["games"])
