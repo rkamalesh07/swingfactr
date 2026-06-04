@@ -173,37 +173,56 @@ def contract_years(overall: int, age: int) -> int:
 # ─── DB Helpers ───────────────────────────────────────────────────────────────
 
 def fetch_all_players(conn) -> list[dict]:
-    """Fetch 574 players with derived stats from real game logs."""
+    """
+    Fetch players with season stats + most recent team assignment.
+    Uses a subquery to get each player's last team from their most recent game log.
+    """
     cur = conn.cursor()
     cur.execute("""
+        WITH season_stats AS (
+            SELECT
+                gl.player_name,
+                COUNT(*)                         AS gp,
+                AVG(gl.pts)                      AS ppg,
+                AVG(gl.reb)                      AS rpg,
+                AVG(gl.ast)                      AS apg,
+                AVG(gl.stl)                      AS spg,
+                AVG(gl.blk)                      AS bpg,
+                AVG(gl.fg3m)                     AS fg3m,
+                AVG(gl.tov)                      AS tov,
+                AVG(gl.minutes)                  AS mpg,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN gl.fg_made::float / gl.fga * 100 END) AS fg_pct,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN (gl.fg_made + 0.5*gl.fg3m)::float / gl.fga * 100 END) AS efg_pct,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN gl.fg3m::float / (gl.fga * 0.38) * 100 END) AS fg3_pct_est
+            FROM player_game_logs gl
+            WHERE gl.season_id = '2025-26'
+            GROUP BY gl.player_name
+            HAVING COUNT(*) >= 5 AND AVG(gl.minutes) >= 5
+        ),
+        latest_team AS (
+            SELECT DISTINCT ON (player_name)
+                player_name,
+                team_abbr,
+                game_date
+            FROM player_game_logs
+            WHERE season_id = '2025-26'
+            ORDER BY player_name, game_date DESC
+        )
         SELECT
-            p.full_name,
-            p.position,
+            s.player_name        AS full_name,
+            COALESCE(p.position, 'G') AS position,
             COALESCE(pa.age, 26) AS age,
-            gl.team_abbr,
-            COUNT(*)                         AS gp,
-            AVG(gl.pts)                      AS ppg,
-            AVG(gl.reb)                      AS rpg,
-            AVG(gl.ast)                      AS apg,
-            AVG(gl.stl)                      AS spg,
-            AVG(gl.blk)                      AS bpg,
-            AVG(gl.fg3m)                     AS fg3m,
-            AVG(gl.tov)                      AS tov,
-            AVG(gl.minutes)                  AS mpg,
-            AVG(CASE WHEN gl.fga > 0
-                THEN gl.fg_made::float / gl.fga * 100 END) AS fg_pct,
-            AVG(CASE WHEN gl.fga > 0
-                THEN (gl.fg_made + 0.5*gl.fg3m)::float / gl.fga * 100 END) AS efg_pct,
-            AVG(CASE WHEN gl.fga > 0
-                THEN gl.fg3m::float / (gl.fga * 0.38) * 100 END) AS fg3_pct_est
-        FROM player_game_logs gl
-        JOIN players p ON p.full_name = gl.player_name
-        LEFT JOIN player_ages pa ON pa.full_name = gl.player_name
-        WHERE gl.season_id = '2025-26'
-          AND gl.minutes >= 5
-        GROUP BY p.full_name, p.position, pa.age, gl.team_abbr
-        HAVING COUNT(*) >= 5
-        ORDER BY AVG(gl.pts) DESC
+            lt.team_abbr,
+            s.gp, s.ppg, s.rpg, s.apg, s.spg, s.bpg,
+            s.fg3m, s.tov, s.mpg, s.fg_pct, s.efg_pct, s.fg3_pct_est
+        FROM season_stats s
+        JOIN latest_team lt ON lt.player_name = s.player_name
+        LEFT JOIN players p ON p.full_name = s.player_name
+        LEFT JOIN player_ages pa ON pa.full_name = s.player_name
+        ORDER BY s.ppg DESC
     """)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
