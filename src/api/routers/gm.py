@@ -211,7 +211,8 @@ def get_save(conn, save_id: str) -> dict:
     cur.close()
     if not row:
         raise HTTPException(404, f"Save not found: {save_id}")
-    return row[0]
+    val = row[0]
+    return val if isinstance(val, dict) else json.loads(val)
 
 def put_save(conn, save_id: str, state: dict):
     cur = conn.cursor()
@@ -219,7 +220,6 @@ def put_save(conn, save_id: str, state: dict):
         UPDATE gm_saves SET state = %s, updated_at = NOW()
         WHERE save_id = %s
     """, (json.dumps(state), save_id))
-    conn.commit()
     cur.close()
 
 # ─── League Initialisation ────────────────────────────────────────────────────
@@ -356,20 +356,18 @@ def standings_sorted(teams: dict) -> dict:
 @router.post("/init-db")
 def init_db():
     """Create GM tables. Run once."""
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS gm_saves (
-            save_id    TEXT PRIMARY KEY,
-            team_abbr  TEXT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW(),
-            state      JSONB NOT NULL
-        );
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS gm_saves (
+                save_id    TEXT PRIMARY KEY,
+                team_abbr  TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                state      JSONB NOT NULL
+            );
+        """)
+        cur.close()
     return {"ok": True, "message": "gm_saves table ready"}
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -396,23 +394,18 @@ def new_game(body: NewGameBody):
     if abbr not in NBA_TEAMS:
         raise HTTPException(400, f"Unknown team: {abbr}")
 
-    conn = get_conn()
-    players = fetch_all_players(conn)
-    league  = build_league(players)
-
-    # Mark the user's team
-    league["teams"][abbr]["gm_team"] = True
-    league["gm_team"] = abbr
-
     save_id = str(uuid.uuid4())
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO gm_saves (save_id, team_abbr, state)
-        VALUES (%s, %s, %s)
-    """, (save_id, abbr, json.dumps(league)))
-    conn.commit()
-    cur.close()
-    conn.close()
+    with get_conn() as conn:
+        players = fetch_all_players(conn)
+        league  = build_league(players)
+        league["teams"][abbr]["gm_team"] = True
+        league["gm_team"] = abbr
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO gm_saves (save_id, team_abbr, state)
+            VALUES (%s, %s, %s)
+        """, (save_id, abbr, json.dumps(league)))
+        cur.close()
 
     team = league["teams"][abbr]
     return {
@@ -428,9 +421,8 @@ def new_game(body: NewGameBody):
 @router.get("/state/{save_id}")
 def get_state(save_id: str):
     """Return top-level league state (day, season, standings summary)."""
-    conn = get_conn()
-    league = get_save(conn, save_id)
-    conn.close()
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
 
     abbr  = league["gm_team"]
     team  = league["teams"][abbr]
@@ -460,9 +452,8 @@ def get_state(save_id: str):
 @router.get("/roster/{save_id}")
 def get_roster(save_id: str):
     """Return your team's roster with all attributes."""
-    conn = get_conn()
-    league = get_save(conn, save_id)
-    conn.close()
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
 
     abbr   = league["gm_team"]
     team   = league["teams"][abbr]
@@ -482,9 +473,8 @@ def get_roster(save_id: str):
 @router.get("/standings/{save_id}")
 def get_standings(save_id: str):
     """Return East/West standings."""
-    conn = get_conn()
-    league = get_save(conn, save_id)
-    conn.close()
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
     return {
         "day":      league["day"],
         "season":   league["season"],
@@ -495,9 +485,8 @@ def get_standings(save_id: str):
 @router.get("/free-agents/{save_id}")
 def get_free_agents(save_id: str, limit: int = Query(50)):
     """Return FA pool sorted by overall."""
-    conn = get_conn()
-    league = get_save(conn, save_id)
-    conn.close()
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
 
     fa = sorted(league["fa_pool"], key=lambda x: -x["overall"])[:limit]
     return {"free_agents": fa, "total": len(league["fa_pool"])}
@@ -512,8 +501,8 @@ def simulate(save_id: str, body: SimBody):
     conn = get_conn()
     league = get_save(conn, save_id)
     league = simulate_days(league, days)
-    put_save(conn, save_id, league)
-    conn.close()
+    with get_conn() as conn:
+        put_save(conn, save_id, league)
 
     abbr = league["gm_team"]
     team = league["teams"][abbr]
@@ -537,26 +526,23 @@ def sign_player(save_id: str, body: SignBody):
     team = league["teams"][abbr]
 
     if len(team["roster"]) >= 15:
-        conn.close()
         raise HTTPException(400, "Roster full (15/15). Release a player first.")
 
     fa_pool = league["fa_pool"]
     player  = next((p for p in fa_pool if p["id"] == body.player_id), None)
     if not player:
-        conn.close()
         raise HTTPException(404, "Player not in FA pool")
 
     new_cap = team["cap_used"] + player["salary"]
     if new_cap > LUXURY_TAX:
-        conn.close()
         raise HTTPException(400, f"Signing would push you over luxury tax (${LUXURY_TAX:,})")
 
     team["roster"].append({**player, "team": abbr})
     team["cap_used"] = new_cap
     league["fa_pool"] = [p for p in fa_pool if p["id"] != body.player_id]
 
-    put_save(conn, save_id, league)
-    conn.close()
+    with get_conn() as conn:
+        put_save(conn, save_id, league)
 
     return {
         "signed":    player["name"],
@@ -581,15 +567,14 @@ def release_player(save_id: str, body: ReleaseBody):
 
     player = next((p for p in roster if p["id"] == body.player_id), None)
     if not player:
-        conn.close()
         raise HTTPException(404, "Player not on your roster")
 
     team["roster"]   = [p for p in roster if p["id"] != body.player_id]
     team["cap_used"] -= player["salary"]
     league["fa_pool"].append({**player, "team": "FA"})
 
-    put_save(conn, save_id, league)
-    conn.close()
+    with get_conn() as conn:
+        put_save(conn, save_id, league)
 
     return {
         "released":  player["name"],
