@@ -612,13 +612,17 @@ def build_player_ratings(players: list[dict]) -> list[dict]:
     """
     # Pass 1: raw stats
     all_raw = []
+    errors_p1 = []
     for p in players:
         try:
             raw = extract_raw_stats(p)
-            raw["_row"] = p   # keep reference
+            raw["_row"] = p
             all_raw.append(raw)
-        except Exception:
+        except Exception as e:
+            errors_p1.append(str(e))
             continue
+    if errors_p1:
+        print(f"Pass1 errors ({len(errors_p1)}): {errors_p1[:3]}")
 
     if not all_raw:
         return []
@@ -648,9 +652,13 @@ def build_player_ratings(players: list[dict]) -> list[dict]:
                 "gp":       int(p.get("gp") or 0),
                 **ratings,
             })
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"Pass2 error for {p.get('full_name','?')}: {e}")
+            traceback.print_exc()
             continue
 
+    print(f"build_player_ratings: {len(all_raw)} raw, {len(rated)} rated")
     return rated
 
 
