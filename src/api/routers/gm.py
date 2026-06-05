@@ -957,6 +957,8 @@ def new_game(body: NewGameBody):
         cur.close()
 
     team = league["teams"][abbr]
+    total_players = sum(len(t["roster"]) for t in league["teams"].values())
+    fa_count = len(league.get("fa_pool", []))
     return {
         "save_id":   save_id,
         "team":      abbr,
@@ -965,6 +967,8 @@ def new_game(body: NewGameBody):
         "cap_used":  team["cap_used"],
         "cap_space": SALARY_CAP - team["cap_used"],
         "message":   f"GM save created for {TEAM_FULL_NAMES[abbr]}",
+        "debug_total_players": total_players,
+        "debug_fa_count": fa_count,
     }
 
 @router.get("/state/{save_id}")
