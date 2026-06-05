@@ -55,7 +55,50 @@ CONFERENCE = {
     "PHX":"West","POR":"West","SA":"West","SAC":"West","UTAH":"West"
 }
 
-# ─── Attribute Derivation ─────────────────────────────────────────────────────
+
+# ─── Rating Engine ──────────────────────────────────────────────────────────
+"""
+SwingFactr GM Rating Engine
+============================
+
+Three-number system, no external dependencies:
+
+  current_ability  — how good right now (0-99), shown in UI
+  trade_value      — market worth (0-99), drives AI decisions
+  potential        — hidden ceiling (0-99), revealed through simulation
+
+All ratings derived from percentile rank within the actual player pool,
+so the distribution is self-correcting regardless of era or inflation.
+"""
+
+import math
+import random
+import uuid
+
+
+# ─── Core Math ────────────────────────────────────────────────────────────────
+
+# ─── Rating Engine ──────────────────────────────────────────────────────────
+"""
+SwingFactr GM Rating Engine
+============================
+
+Three-number system, no external dependencies:
+
+  current_ability  — how good right now (0-99), shown in UI
+  trade_value      — market worth (0-99), drives AI decisions
+  potential        — hidden ceiling (0-99), revealed through simulation
+
+All ratings derived from percentile rank within the actual player pool,
+so the distribution is self-correcting regardless of era or inflation.
+"""
+
+import math
+import random
+import uuid
+
+
+# ─── Core Math ────────────────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
     try:
@@ -64,17 +107,26 @@ def safe_div(a, b, default=0.0):
         return default
     return a / b if b > 0 else default
 
-def clamp(v, lo=0, hi=100):
-    return max(lo, min(hi, v))
+def clamp(v, lo=0.0, hi=99.0):
+    return max(lo, min(hi, float(v)))
 
-def scale(val, p10, p90, lo=30, hi=95):
-    if p90 == p10:
-        return (lo + hi) / 2
-    normalized = (val - p10) / (p90 - p10)
-    return clamp(lo + normalized * (hi - lo))
+def percentile_rank(value: float, distribution: list[float]) -> float:
+    """Return percentile of value within distribution (0-100)."""
+    if not distribution:
+        return 50.0
+    below = sum(1 for x in distribution if x < value)
+    return (below / len(distribution)) * 100.0
 
-def derive_attributes(row: dict) -> dict:
-    mpg  = max(float(row.get("mpg") or 1), 1.0)
+def percentile_to_rating(pct: float, lo: float = 25.0, hi: float = 95.0) -> float:
+    """Convert 0-100 percentile to a rating in [lo, hi]."""
+    return clamp(lo + (pct / 100.0) * (hi - lo), lo, hi)
+
+
+# ─── Stat Derivation (per-36, percentile-independent) ─────────────────────────
+
+def extract_raw_stats(row: dict) -> dict:
+    """Pull and type-cast all raw stats from a player row."""
+    mpg  = max(float(row.get("mpg") or 1), 0.5)
     ppg  = float(row.get("ppg") or 0)
     rpg  = float(row.get("rpg") or 0)
     apg  = float(row.get("apg") or 0)
@@ -84,181 +136,529 @@ def derive_attributes(row: dict) -> dict:
     fg3m = float(row.get("fg3m") or 0)
     efg  = float(row.get("efg_pct") or 50)
     gp   = float(row.get("gp") or 1)
+    age  = int(row.get("age") or 26)
+    pos  = str(row.get("position") or "G").upper()
 
     pts36 = safe_div(ppg, mpg) * 36
     ast36 = safe_div(apg, mpg) * 36
     reb36 = safe_div(rpg, mpg) * 36
-    def36 = safe_div(spg + bpg, mpg) * 36
+    stk36 = safe_div(spg + bpg, mpg) * 36   # stocks (stl+blk) per 36
     tov36 = safe_div(tov, mpg) * 36
+    fg3_36 = safe_div(fg3m, mpg) * 36
+    pm_net = ast36 - tov36 * 0.5             # playmaking net
 
-    # Scoring: p10=8, p50=18, p90=28 pts/36
-    scoring = scale(pts36, p10=8, p90=28, lo=25, hi=90)
-    if pts36 >= 30: scoring = min(99, scoring + (pts36 - 30) * 2.5)
-
-    # Efficiency: p10=44, p90=63 eFG%
-    efficiency = scale(efg, p10=44, p90=63, lo=25, hi=90)
-
-    # Playmaking: p10=1, p90=8 ast/36 net of tov
-    pm_raw = ast36 - tov36 * 0.4
-    playmaking = scale(pm_raw, p10=1.0, p90=8.0, lo=20, hi=90)
-    if ast36 >= 10: playmaking = min(99, playmaking + (ast36 - 10) * 2)
-
-    # Rebounding: p10=1.5, p90=10 reb/36
-    rebounding = scale(reb36, p10=1.5, p90=10.0, lo=20, hi=90)
-    if reb36 >= 13: rebounding = min(99, rebounding + (reb36 - 13) * 2)
-
-    # Defense: p10=0.5, p90=4 (stl+blk)/36
-    defense = scale(def36, p10=0.5, p90=4.0, lo=20, hi=88)
-    if def36 >= 5: defense = min(99, defense + (def36 - 5) * 2.5)
-
-    # Composure: reliability proxy from minutes x games
-    reliability = (mpg / 36) * (gp / 82) * 100
-    composure = scale(reliability, p10=5, p90=75, lo=20, hi=85)
-
-    overall = clamp(
-        0.28 * scoring +
-        0.22 * efficiency +
-        0.18 * playmaking +
-        0.14 * rebounding +
-        0.12 * defense +
-        0.06 * composure
-    )
-
-    # PPG floor — stars should never rate low
-    if ppg >= 25: overall = max(overall, 80)
-    elif ppg >= 20: overall = max(overall, 70)
-    elif ppg >= 15: overall = max(overall, 57)
-    elif ppg >= 10: overall = max(overall, 44)
-
-    # MPG ceiling — low-minute players are capped regardless of per-36 rates
-    # A player averaging 8 min/g has not proven they can sustain that production
-    if mpg < 10: overall = min(overall, 48)
-    elif mpg < 15: overall = min(overall, 58)
-    elif mpg < 20: overall = min(overall, 68)
-    elif mpg < 25: overall = min(overall, 78)
-
-    ast_rate = safe_div(apg, mpg)
-    fg3_rate = float(row.get("fg3_pct_est") or 0)
-    pos = str(row.get("position") or "G").upper()
-    is_big = pos in ("C", "F", "PF", "C-F", "F-C")
-
-    if ast_rate > 0.38 and ppg >= 15:           archetype = "Primary Ball Handler"
-    elif ast_rate > 0.28 and ppg >= 12:         archetype = "Floor General"
-    elif fg3m >= 2.5 and spg >= 1.2:            archetype = "3-and-D"
-    elif rpg > 9 and bpg > 1.5:                archetype = "Rim Protector"
-    elif rpg > 8 and bpg > 0.8 and ppg < 12:   archetype = "Defensive Big"
-    elif is_big and fg3m >= 1.5 and rpg > 5:    archetype = "Stretch Four"
-    elif is_big and ast_rate > 0.20 and rpg > 5: archetype = "Playmaking Big"
-    elif is_big and rpg > 6:                    archetype = "Traditional Big"
-    elif ppg >= 20 and fg3m >= 2.5:             archetype = "Shot Creator"
-    elif ppg >= 18 and fg3m >= 1.5:             archetype = "Wing Scorer"
-    elif fg3m >= 2.5 and ppg < 15:             archetype = "Spot-Up Shooter"
-    elif spg >= 1.5 and ppg < 14:              archetype = "Perimeter Defender"
-    elif ppg >= 15:                             archetype = "Scoring Wing"
-    elif rpg > 5 and ppg < 10:                 archetype = "Energy Big"
-    elif ast_rate > 0.20:                       archetype = "Secondary Playmaker"
-    else:                                       archetype = "Role Player"
+    # Availability: fraction of full season at full minutes
+    availability = (gp / 82.0) * (mpg / 36.0)
 
     return {
-        "scoring":    round(scoring),
-        "efficiency": round(efficiency),
-        "playmaking": round(playmaking),
-        "rebounding": round(rebounding),
-        "defense":    round(defense),
-        "composure":  round(composure),
-        "overall":    round(clamp(overall)),
-        "archetype":  archetype,
+        "mpg": mpg, "ppg": ppg, "rpg": rpg, "apg": apg,
+        "spg": spg, "bpg": bpg, "tov": tov, "fg3m": fg3m,
+        "efg": efg, "gp": gp, "age": age, "pos": pos,
+        "pts36": pts36, "ast36": ast36, "reb36": reb36,
+        "stk36": stk36, "tov36": tov36, "fg3_36": fg3_36,
+        "pm_net": pm_net, "availability": availability,
     }
 
-def estimate_salary(overall: int, age: int) -> int:
-    """Estimate contract salary from overall rating and age."""
-    base = (overall / 100) ** 2 * SALARY_CAP * 0.35
-    age_mult = (
-        0.85 if age <= 22 else
-        1.00 if age <= 25 else
-        1.10 if age <= 28 else
-        0.90 if age <= 30 else
-        0.75 if age <= 33 else
-        0.55
+
+# ─── Percentile Distributions (computed once over full player pool) ───────────
+
+def build_distributions(all_raw: list[dict]) -> dict:
+    """
+    Compute per-stat distributions across all players.
+    Called once at league init. Returns dict of sorted lists.
+    """
+    keys = ["pts36", "ast36", "reb36", "stk36", "pm_net",
+            "fg3_36", "efg", "availability", "mpg"]
+    return {k: sorted(r[k] for r in all_raw) for k in keys}
+
+
+# ─── Component Scores (0-100 each) ────────────────────────────────────────────
+
+def offensive_score(raw: dict, dist: dict) -> float:
+    """
+    Offensive impact score.
+    Scoring + Efficiency + Playmaking + Spacing
+    """
+    scoring_pct    = percentile_rank(raw["pts36"],  dist["pts36"])
+    efficiency_pct = percentile_rank(raw["efg"],    dist["efg"])
+    playmaking_pct = percentile_rank(raw["pm_net"], dist["pm_net"])
+    spacing_pct    = percentile_rank(raw["fg3_36"], dist["fg3_36"])
+
+    # Convert to ratings: scoring and efficiency get wider range
+    scoring    = percentile_to_rating(scoring_pct,    lo=20, hi=98)
+    efficiency = percentile_to_rating(efficiency_pct, lo=25, hi=90)
+    playmaking = percentile_to_rating(playmaking_pct, lo=15, hi=92)
+    spacing    = percentile_to_rating(spacing_pct,    lo=10, hi=85)
+
+    return clamp(
+        0.38 * scoring +
+        0.30 * efficiency +
+        0.22 * playmaking +
+        0.10 * spacing,
+        lo=10, hi=99
     )
-    salary = int(base * age_mult)
-    return max(VET_MIN, min(int(SALARY_CAP * 0.35), salary))
+
+def defensive_score(raw: dict, dist: dict) -> float:
+    """
+    Defensive impact score.
+    Stocks + Rebounding + Positional versatility proxy
+    """
+    stocks_pct = percentile_rank(raw["stk36"],   dist["stk36"])
+    reb_pct    = percentile_rank(raw["reb36"],    dist["reb36"])
+
+    stocks = percentile_to_rating(stocks_pct, lo=15, hi=95)
+    reb    = percentile_to_rating(reb_pct,    lo=15, hi=90)
+
+    return clamp(
+        0.55 * stocks +
+        0.45 * reb,
+        lo=10, hi=99
+    )
+
+def availability_score(raw: dict, dist: dict) -> float:
+    """Reliability: how much of a full season a player actually plays."""
+    avail_pct = percentile_rank(raw["availability"], dist["availability"])
+    return percentile_to_rating(avail_pct, lo=20, hi=90)
+
+
+# ─── Current Ability ──────────────────────────────────────────────────────────
+
+def compute_current_ability(raw: dict, dist: dict) -> float:
+    """
+    Primary visible rating.
+    Offense(55%) + Defense(35%) + Availability(10%)
+    Then apply MPG gate so bench players can't inflate.
+    """
+    off = offensive_score(raw, dist)
+    dfn = defensive_score(raw, dist)
+    avl = availability_score(raw, dist)
+
+    base = clamp(
+        0.55 * off +
+        0.35 * dfn +
+        0.10 * avl,
+        lo=15, hi=99
+    )
+
+    # MPG gate: low-minute players haven't proven sustained production
+    mpg = raw["mpg"]
+    if   mpg < 8:  base = min(base, 44)
+    elif mpg < 13: base = min(base, 54)
+    elif mpg < 18: base = min(base, 64)
+    elif mpg < 22: base = min(base, 74)
+    elif mpg < 26: base = min(base, 82)
+
+    # PPG floor: high scorers get a floor regardless of other metrics
+    ppg = raw["ppg"]
+    if   ppg >= 28: base = max(base, 84)
+    elif ppg >= 23: base = max(base, 76)
+    elif ppg >= 18: base = max(base, 64)
+    elif ppg >= 13: base = max(base, 52)
+
+    return round(clamp(base))
+
+
+# ─── Future Ability (age curve projection) ────────────────────────────────────
+
+AGE_TRAJECTORY = {
+    # age: (expected_delta, variance)
+    19: (+6.0, 5.0),
+    20: (+5.0, 5.0),
+    21: (+4.5, 4.5),
+    22: (+3.5, 4.0),
+    23: (+2.5, 3.5),
+    24: (+1.5, 3.0),
+    25: (+0.8, 2.5),
+    26: (+0.2, 2.0),
+    27: (-0.3, 2.0),
+    28: (-0.8, 2.0),
+    29: (-1.5, 2.5),
+    30: (-2.5, 3.0),
+    31: (-3.5, 3.0),
+    32: (-5.0, 3.5),
+    33: (-6.5, 4.0),
+    34: (-8.0, 4.0),
+}
+
+def compute_future_ability(current: float, age: int) -> float:
+    """Expected ability at peak (ages 26-28 target window)."""
+    if age >= 35:
+        return max(current - 15, 25)
+
+    traj = AGE_TRAJECTORY.get(age, (-2.0, 3.0))
+    years_to_peak = max(0, 27 - age)   # target peak age = 27
+    expected_delta = traj[0] * min(years_to_peak, 4)
+
+    future = current + expected_delta
+    return round(clamp(future, lo=max(15, current - 20), hi=99))
+
+
+# ─── Potential + Outcome Tree ─────────────────────────────────────────────────
+
+def build_outcome_tree(current: float, age: int) -> dict:
+    """
+    Hidden outcome tree. Never shown to user directly.
+    Revealed through simulation paths.
+
+    Returns:
+        ceiling: max possible career rating
+        floor: minimum realistic outcome
+        bust_risk: probability (0-1) of significant decline
+        trajectory: "rising" | "peak" | "declining"
+        outcomes: probability distribution of career paths
+    """
+    # Base ceiling = current + age-dependent upside
+    if age <= 21:
+        upside_range = (8, 25)
+        bust_risk = random.uniform(0.10, 0.35)
+        trajectory = "rising"
+    elif age <= 23:
+        upside_range = (5, 18)
+        bust_risk = random.uniform(0.05, 0.20)
+        trajectory = "rising"
+    elif age <= 25:
+        upside_range = (3, 12)
+        bust_risk = random.uniform(0.03, 0.12)
+        trajectory = "rising"
+    elif age <= 28:
+        upside_range = (0, 5)
+        bust_risk = random.uniform(0.02, 0.08)
+        trajectory = "peak"
+    elif age <= 31:
+        upside_range = (0, 2)
+        bust_risk = random.uniform(0.05, 0.15)
+        trajectory = "declining"
+    else:
+        upside_range = (0, 0)
+        bust_risk = random.uniform(0.15, 0.40)
+        trajectory = "declining"
+
+    upside = random.uniform(*upside_range)
+    ceiling = round(clamp(current + upside, lo=current, hi=99))
+    floor   = round(clamp(current - bust_risk * 20, lo=25, hi=current))
+
+    # Outcome probability distribution (career path)
+    if current >= 82:
+        outcomes = {"superstar": 0.70, "all_star": 0.22, "starter": 0.06, "role_player": 0.02, "bust": 0.00}
+    elif current >= 72:
+        outcomes = {"superstar": 0.15, "all_star": 0.45, "starter": 0.30, "role_player": 0.08, "bust": 0.02}
+    elif current >= 60:
+        outcomes = {"superstar": 0.04, "all_star": 0.18, "starter": 0.42, "role_player": 0.28, "bust": 0.08}
+    elif current >= 48:
+        outcomes = {"superstar": 0.01, "all_star": 0.05, "starter": 0.25, "role_player": 0.50, "bust": 0.19}
+    else:
+        outcomes = {"superstar": 0.00, "all_star": 0.01, "starter": 0.10, "role_player": 0.45, "bust": 0.44}
+
+    # Young players get upside boost
+    if age <= 22 and current >= 55:
+        outcomes["superstar"] = min(0.35, outcomes["superstar"] * 2.5)
+        outcomes["all_star"]  = min(0.45, outcomes["all_star"]  * 1.5)
+        outcomes["bust"]      = min(0.30, outcomes["bust"] * 1.8)
+
+    return {
+        "ceiling":    ceiling,
+        "floor":      floor,
+        "bust_risk":  round(bust_risk, 3),
+        "trajectory": trajectory,
+        "outcomes":   outcomes,
+        "revealed":   False,
+    }
+
+
+# ─── Contract Value ───────────────────────────────────────────────────────────
+
+# Market rate lookup: what a player of this ability "should" earn
+# Based on 2025-26 CBA max scales and market data
+def market_salary(current_ability: float, age: int) -> int:
+    """Expected annual salary based on ability and age."""
+    # Base salary as fraction of cap
+    if current_ability >= 88:   base_frac = 0.35     # supermax
+    elif current_ability >= 80: base_frac = 0.28     # max
+    elif current_ability >= 72: base_frac = 0.20     # near-max
+    elif current_ability >= 64: base_frac = 0.13     # mid-tier
+    elif current_ability >= 55: base_frac = 0.08     # starter
+    elif current_ability >= 45: base_frac = 0.04     # rotation
+    else:                        base_frac = 0.015   # vet min range
+
+    CAP = 140_000_000
+    base = base_frac * CAP
+
+    # Age adjustment on market value
+    if age <= 22:   age_mult = 0.80   # rookie/young: cheaper
+    elif age <= 25: age_mult = 0.95
+    elif age <= 28: age_mult = 1.10   # prime: premium
+    elif age <= 30: age_mult = 1.00
+    elif age <= 32: age_mult = 0.85
+    else:           age_mult = 0.65
+
+    result = int(base * age_mult)
+    VET_MIN = 1_200_000
+    MAX_SAL = int(CAP * 0.35)
+    return max(VET_MIN, min(MAX_SAL, result))
+
+def contract_years_for(current_ability: float, age: int) -> int:
+    """Realistic contract length."""
+    if current_ability >= 80:
+        return random.choice([4, 4, 5]) if age <= 30 else random.choice([2, 3])
+    elif current_ability >= 65:
+        return random.choice([3, 3, 4]) if age <= 28 else random.choice([2, 3])
+    elif current_ability >= 50:
+        return random.choice([2, 2, 3])
+    else:
+        return random.choice([1, 2])
+
+def contract_value_score(current_ability: float, salary: int, age: int) -> float:
+    """
+    How good is this contract? 0-100.
+    100 = massive underpay (rookie deal superstar)
+    50  = fair market value
+    0   = terrible overpay
+    """
+    expected = market_salary(current_ability, age)
+    ratio = expected / max(salary, 1)
+    # ratio > 1 means player earns less than market (good deal)
+    # ratio < 1 means player earns more than market (bad deal)
+    score = 50 + (ratio - 1.0) * 40
+    return round(clamp(score, lo=0, hi=99))
+
+
+# ─── Position Scarcity ────────────────────────────────────────────────────────
+
+POSITION_SCARCITY = {
+    # How scarce/valuable elite players at this position are
+    "primary_ball_handler": 1.15,
+    "floor_general": 1.10,
+    "shot_creator": 1.12,
+    "rim_protector": 1.08,
+    "3-and-D": 1.06,
+    "wing_scorer": 1.05,
+    "scoring_wing": 1.04,
+    "stretch_four": 1.03,
+    "playmaking_big": 1.03,
+    "perimeter_defender": 1.02,
+    "spot-up_shooter": 1.01,
+    "defensive_big": 1.00,
+    "traditional_big": 0.98,
+    "energy_big": 0.96,
+    "secondary_playmaker": 0.98,
+    "role_player": 0.95,
+}
+
+
+# ─── Trade Value ──────────────────────────────────────────────────────────────
+
+def compute_trade_value(
+    current: float,
+    future: float,
+    salary: int,
+    age: int,
+    archetype: str,
+    years_left: int,
+) -> float:
+    """
+    Market trade value (0-99). What AI GMs will evaluate.
+
+    Components:
+      Current Impact   40% — how much does player help win today
+      Future Impact    25% — expected value over contract window
+      Contract Value   20% — production per dollar
+      Age Curve        10% — years of prime remaining
+      Position Scarcity 5% — how replaceable is this role
+    """
+    # Contract value score
+    cv = contract_value_score(current, salary, age)
+
+    # Age curve: prime window value
+    years_of_prime = max(0, min(years_left, 30 - age))  # years left in prime (pre-30)
+    age_score = clamp(years_of_prime / 6.0 * 80 + 20, lo=10, hi=90)
+
+    # Position scarcity multiplier
+    arch_key = archetype.lower().replace(" ", "_").replace("-", "-")
+    scarcity_mult = POSITION_SCARCITY.get(arch_key, 1.00)
+
+    raw_value = (
+        0.40 * current +
+        0.25 * future +
+        0.20 * cv +
+        0.10 * age_score +
+        0.05 * 60   # placeholder for scarcity (applied as multiplier below)
+    )
+
+    trade_val = raw_value * scarcity_mult
+    return round(clamp(trade_val, lo=5, hi=99))
+
+
+# ─── Archetype Detection ──────────────────────────────────────────────────────
+
+def detect_archetype(raw: dict) -> str:
+    ppg  = raw["ppg"]
+    apg  = raw["apg"]
+    rpg  = raw["rpg"]
+    spg  = raw["spg"]
+    bpg  = raw["bpg"]
+    fg3m = raw["fg3m"]
+    mpg  = raw["mpg"]
+    pos  = raw["pos"]
+
+    ast_rate = safe_div(apg, mpg)
+    is_big   = pos in ("C", "F", "PF", "C-F", "F-C", "PF-C", "C-PF")
+
+    if ast_rate > 0.38 and ppg >= 16:           return "Primary Ball Handler"
+    if ast_rate > 0.30 and ppg >= 12:           return "Floor General"
+    if fg3m >= 2.5 and spg >= 1.2:             return "3-and-D"
+    if rpg > 9.5 and bpg > 1.5:               return "Rim Protector"
+    if rpg > 8.0 and bpg > 1.0 and ppg < 12:  return "Defensive Big"
+    if is_big and fg3m >= 1.5 and rpg > 5:    return "Stretch Four"
+    if is_big and ast_rate > 0.20 and rpg > 5: return "Playmaking Big"
+    if is_big and rpg > 6.5:                   return "Traditional Big"
+    if ppg >= 22 and fg3m >= 2.5:             return "Shot Creator"
+    if ppg >= 18 and fg3m >= 1.5:             return "Wing Scorer"
+    if fg3m >= 2.5 and ppg < 15:              return "Spot-Up Shooter"
+    if spg >= 1.5 and ppg < 14:               return "Perimeter Defender"
+    if ppg >= 15:                              return "Scoring Wing"
+    if rpg > 5 and ppg < 10:                  return "Energy Big"
+    if ast_rate > 0.22:                        return "Secondary Playmaker"
+    return "Role Player"
+
+
+# ─── Full Player Rating (called per-player with league distributions) ──────────
+
+def rate_player(row: dict, dist: dict) -> dict:
+    """
+    Main entry point. Given a player row + league distributions,
+    return the full rating package.
+    """
+    raw = extract_raw_stats(row)
+    age = raw["age"]
+
+    # Component scores
+    off = offensive_score(raw, dist)
+    dfn = defensive_score(raw, dist)
+    avl = availability_score(raw, dist)
+
+    # Current ability
+    current = compute_current_ability(raw, dist)
+
+    # Future ability
+    future = compute_future_ability(current, age)
+
+    # Outcome tree (hidden)
+    outcome_tree = build_outcome_tree(current, age)
+
+    # Archetype
+    archetype = detect_archetype(raw)
+
+    # Salary estimate
+    salary = market_salary(current, age)
+    years  = contract_years_for(current, age)
+
+    # Contract value
+    cv = contract_value_score(current, salary, age)
+
+    # Trade value
+    trade_val = compute_trade_value(
+        current, future, salary, age, archetype, years
+    )
+
+    # Individual dimension ratings for UI display
+    return {
+        # Core three numbers
+        "overall":      current,                     # displayed as OVR
+        "future":       future,                      # shown as potential arrow
+        "trade_value":  trade_val,                   # shown in trade machine
+
+        # Dimension breakdowns (for expanded player card)
+        "scoring":      round(clamp(off * 0.6 + percentile_to_rating(
+                            percentile_rank(raw["pts36"], dist["pts36"]), 20, 98) * 0.4)),
+        "efficiency":   round(clamp(percentile_to_rating(
+                            percentile_rank(raw["efg"], dist["efg"]), 25, 90))),
+        "playmaking":   round(clamp(percentile_to_rating(
+                            percentile_rank(raw["pm_net"], dist["pm_net"]), 15, 92))),
+        "rebounding":   round(clamp(percentile_to_rating(
+                            percentile_rank(raw["reb36"], dist["reb36"]), 15, 90))),
+        "defense":      round(clamp(dfn)),
+        "composure":    round(clamp(avl)),
+
+        # Contract
+        "salary":       salary,
+        "years_left":   years,
+        "contract_value": round(cv),
+
+        # Archetype
+        "archetype":    archetype,
+
+        # Hidden (stored in save, not sent to frontend unless revealed)
+        "_outcome_tree": outcome_tree,
+    }
+
+
+# ─── League Init (called once, computes distributions then rates everyone) ─────
+
+def build_player_ratings(players: list[dict]) -> list[dict]:
+    """
+    Two-pass system:
+    Pass 1: extract raw stats for all players
+    Pass 2: compute percentile distributions, then rate each player
+    """
+    # Pass 1: raw stats
+    all_raw = []
+    for p in players:
+        try:
+            raw = extract_raw_stats(p)
+            raw["_row"] = p   # keep reference
+            all_raw.append(raw)
+        except Exception:
+            continue
+
+    if not all_raw:
+        return []
+
+    # Build distributions across full player pool
+    dist = build_distributions(all_raw)
+
+    # Pass 2: rate each player using population distributions
+    rated = []
+    for raw in all_raw:
+        p = raw["_row"]
+        try:
+            ratings = rate_player(p, dist)
+            rated.append({
+                "id":       str(uuid.uuid4())[:8],
+                "name":     p.get("full_name") or p.get("player_name") or "Unknown",
+                "position": p.get("position") or "G",
+                "age":      int(p.get("age") or 26),
+                "team":     p.get("team_abbr") or "FA",
+                "ppg":      round(float(p.get("ppg") or 0), 1),
+                "rpg":      round(float(p.get("rpg") or 0), 1),
+                "apg":      round(float(p.get("apg") or 0), 1),
+                "spg":      round(float(p.get("spg") or 0), 1),
+                "bpg":      round(float(p.get("bpg") or 0), 1),
+                "fg3m":     round(float(p.get("fg3m") or 0), 1),
+                "mpg":      round(float(p.get("mpg") or 0), 1),
+                "gp":       int(p.get("gp") or 0),
+                **ratings,
+            })
+        except Exception:
+            continue
+
+    return rated
+
+
+# ─── Salary + Contract helpers (wrappers around engine functions) ─────────────
+
+def estimate_salary(overall: int, age: int) -> int:
+    return market_salary(float(overall), age)
 
 def contract_years(overall: int, age: int) -> int:
-    if overall >= 75: return random.choice([3, 4, 4, 5])
-    if overall >= 55: return random.choice([2, 3, 3])
-    return random.choice([1, 2])
+    return contract_years_for(float(overall), age)
 
-# ─── DB Helpers ───────────────────────────────────────────────────────────────
+# ─── Abbr Normalisation ───────────────────────────────────────────────────────
 
-# Standard NBA abbr -> ESPN abbr normalization
 ABBR_TO_ESPN = {
     "GSW": "GS", "SAS": "SA", "NOP": "NO", "NYK": "NY",
     "UTA": "UTAH", "WAS": "WSH", "PHO": "PHX",
 }
 
-def fetch_all_players(conn) -> list[dict]:
-    """
-    Fetch players with season stats + most recent team from game logs.
-    Falls back to players table team assignment for teams with no recent logs (injuries etc).
-    """
-    cur = conn.cursor()
-    cur.execute("""
-        WITH season_stats AS (
-            SELECT
-                gl.player_name,
-                COUNT(*)                         AS gp,
-                AVG(gl.pts)                      AS ppg,
-                AVG(gl.reb)                      AS rpg,
-                AVG(gl.ast)                      AS apg,
-                AVG(gl.stl)                      AS spg,
-                AVG(gl.blk)                      AS bpg,
-                AVG(gl.fg3m)                     AS fg3m,
-                AVG(gl.tov)                      AS tov,
-                AVG(gl.minutes)                  AS mpg,
-                AVG(CASE WHEN gl.fga > 0
-                    THEN gl.fg_made::float / gl.fga * 100 END) AS fg_pct,
-                AVG(CASE WHEN gl.fga > 0
-                    THEN (gl.fg_made + 0.5*gl.fg3m)::float / gl.fga * 100 END) AS efg_pct,
-                AVG(CASE WHEN gl.fga > 0
-                    THEN gl.fg3m::float / (gl.fga * 0.38) * 100 END) AS fg3_pct_est
-            FROM player_game_logs gl
-            WHERE gl.season_id = '2025-26'
-            GROUP BY gl.player_name
-            HAVING COUNT(*) >= 5 AND AVG(gl.minutes) >= 5
-        ),
-        latest_team AS (
-            SELECT DISTINCT ON (player_name)
-                player_name,
-                team_abbr,
-                game_date
-            FROM player_game_logs
-            WHERE season_id = '2025-26'
-            ORDER BY player_name, game_date DESC
-        )
-        SELECT
-            s.player_name        AS full_name,
-            COALESCE(p.position, 'G') AS position,
-            COALESCE(pa.age, 26) AS age,
-            COALESCE(lt.team_abbr, p.team_id::text, 'FA') AS team_abbr,
-            s.gp, s.ppg, s.rpg, s.apg, s.spg, s.bpg,
-            s.fg3m, s.tov, s.mpg, s.fg_pct, s.efg_pct, s.fg3_pct_est
-        FROM season_stats s
-        LEFT JOIN latest_team lt ON lt.player_name = s.player_name
-        LEFT JOIN players p ON p.full_name = s.player_name
-        LEFT JOIN player_ages pa ON pa.full_name = s.player_name
-        ORDER BY s.ppg DESC
-    """)
-    cols = [d[0] for d in cur.description]
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    cur.close()
-
-    # Normalize standard abbrs to ESPN abbrs
-    for row in rows:
-        abbr = row.get("team_abbr") or "FA"
-        row["team_abbr"] = ABBR_TO_ESPN.get(str(abbr).upper(), str(abbr).upper())
-
-    return rows
 
 def get_save(conn, save_id: str) -> dict:
     cur = conn.cursor()
@@ -283,29 +683,41 @@ def put_save(conn, save_id: str, state: dict):
 def build_league(players: list[dict]) -> dict:
     """
     Distribute real players across 30 teams.
-    Each player gets derived attributes + estimated contract.
-    Returns league dict: {team_abbr: {roster, cap_used, wins, losses}}
+    Uses two-pass percentile rating engine so all ratings are
+    relative to the actual player pool, not hardcoded ranges.
     """
-    # Enrich every player
+    # Rate all players in one pass (builds distributions first)
+    rated_players = build_player_ratings(players)
+
     enriched = []
-    for p in players:
-        attrs = derive_attributes(p)
-        sal = estimate_salary(attrs["overall"], int(p.get("age") or 26))
-        yrs = contract_years(attrs["overall"], int(p.get("age") or 26))
+    for p in rated_players:
         enriched.append({
-            "id":          str(uuid.uuid4())[:8],
-            "name":        p["full_name"],
-            "position":    p.get("position") or "G",
-            "age":         int(p.get("age") or 26),
-            "team":        p.get("team_abbr") or "FA",
-            "ppg":         round(float(p.get("ppg") or 0), 1),
-            "rpg":         round(float(p.get("rpg") or 0), 1),
-            "apg":         round(float(p.get("apg") or 0), 1),
-            "mpg":         round(float(p.get("mpg") or 0), 1),
-            "gp":          int(p.get("gp") or 0),
-            **attrs,
-            "salary":      sal,
-            "years_left":  yrs,
+            "id":          p["id"],
+            "name":        p["name"],
+            "position":    p["position"],
+            "age":         p["age"],
+            "team":        p["team"],
+            "ppg":         p["ppg"],
+            "rpg":         p["rpg"],
+            "apg":         p["apg"],
+            "spg":         p.get("spg", 0.0),
+            "bpg":         p.get("bpg", 0.0),
+            "fg3m":        p.get("fg3m", 0.0),
+            "mpg":         p["mpg"],
+            "gp":          p["gp"],
+            "overall":     p["overall"],
+            "future":      p["future"],
+            "trade_value": p["trade_value"],
+            "scoring":     p["scoring"],
+            "efficiency":  p["efficiency"],
+            "playmaking":  p["playmaking"],
+            "rebounding":  p["rebounding"],
+            "defense":     p["defense"],
+            "composure":   p["composure"],
+            "archetype":   p["archetype"],
+            "contract_value": p["contract_value"],
+            "salary":      p["salary"],
+            "years_left":  p["years_left"],
         })
 
     # Build team rosters from real team assignments
