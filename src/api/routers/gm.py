@@ -630,10 +630,12 @@ def build_player_ratings(players: list[dict]) -> list[dict]:
             raw["_row"] = p
             all_raw.append(raw)
         except Exception as e:
-            errors_p1.append(str(e))
+            import traceback
+            errors_p1.append(f"{p.get('full_name','?')}: {e} | {traceback.format_exc()[-200:]}")
             continue
     if errors_p1:
-        print(f"Pass1 errors ({len(errors_p1)}): {errors_p1[:3]}")
+        # Return first error in exception so it shows in API response
+        raise RuntimeError(f"Pass1 failed on {len(errors_p1)} players. First: {errors_p1[0][:500]}")
 
     if not all_raw:
         return []
