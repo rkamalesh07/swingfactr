@@ -660,6 +660,69 @@ ABBR_TO_ESPN = {
 }
 
 
+
+def fetch_all_players(conn) -> list[dict]:
+    """
+    Fetch players with season stats + most recent team from game logs.
+    Falls back to players table for teams with no recent logs (injuries etc).
+    """
+    cur = conn.cursor()
+    cur.execute("""
+        WITH season_stats AS (
+            SELECT
+                gl.player_name,
+                COUNT(*)                         AS gp,
+                AVG(gl.pts)                      AS ppg,
+                AVG(gl.reb)                      AS rpg,
+                AVG(gl.ast)                      AS apg,
+                AVG(gl.stl)                      AS spg,
+                AVG(gl.blk)                      AS bpg,
+                AVG(gl.fg3m)                     AS fg3m,
+                AVG(gl.tov)                      AS tov,
+                AVG(gl.minutes)                  AS mpg,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN gl.fg_made::float / gl.fga * 100 END) AS fg_pct,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN (gl.fg_made + 0.5*gl.fg3m)::float / gl.fga * 100 END) AS efg_pct,
+                AVG(CASE WHEN gl.fga > 0
+                    THEN gl.fg3m::float / (gl.fga * 0.38) * 100 END) AS fg3_pct_est
+            FROM player_game_logs gl
+            WHERE gl.season_id = '2025-26'
+            GROUP BY gl.player_name
+            HAVING COUNT(*) >= 5 AND AVG(gl.minutes) >= 5
+        ),
+        latest_team AS (
+            SELECT DISTINCT ON (player_name)
+                player_name,
+                team_abbr,
+                game_date
+            FROM player_game_logs
+            WHERE season_id = '2025-26'
+            ORDER BY player_name, game_date DESC
+        )
+        SELECT
+            s.player_name        AS full_name,
+            COALESCE(p.position, 'G') AS position,
+            COALESCE(pa.age, 26) AS age,
+            COALESCE(lt.team_abbr, p.team_id::text, 'FA') AS team_abbr,
+            s.gp, s.ppg, s.rpg, s.apg, s.spg, s.bpg,
+            s.fg3m, s.tov, s.mpg, s.fg_pct, s.efg_pct, s.fg3_pct_est
+        FROM season_stats s
+        LEFT JOIN latest_team lt ON lt.player_name = s.player_name
+        LEFT JOIN players p ON p.full_name = s.player_name
+        LEFT JOIN player_ages pa ON pa.full_name = s.player_name
+        ORDER BY s.ppg DESC
+    """)
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    cur.close()
+
+    for row in rows:
+        abbr = row.get("team_abbr") or "FA"
+        row["team_abbr"] = ABBR_TO_ESPN.get(str(abbr).upper(), str(abbr).upper())
+
+    return rows
+
 def get_save(conn, save_id: str) -> dict:
     cur = conn.cursor()
     cur.execute("SELECT state FROM gm_saves WHERE save_id = %s", (save_id,))
