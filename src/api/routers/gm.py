@@ -245,15 +245,16 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
     if   mpg < 8:  base = min(base, 44)
     elif mpg < 13: base = min(base, 54)
     elif mpg < 18: base = min(base, 64)
-    elif mpg < 22: base = min(base, 74)
-    elif mpg < 26: base = min(base, 82)
+    elif mpg < 22: base = min(base, 76)
+    elif mpg < 26: base = min(base, 85)
 
     # PPG floor: high scorers get a floor regardless of other metrics
     ppg = raw["ppg"]
-    if   ppg >= 28: base = max(base, 84)
-    elif ppg >= 23: base = max(base, 76)
-    elif ppg >= 18: base = max(base, 64)
-    elif ppg >= 13: base = max(base, 52)
+    if   ppg >= 30: base = max(base, 88)
+    elif ppg >= 25: base = max(base, 82)
+    elif ppg >= 20: base = max(base, 74)
+    elif ppg >= 16: base = max(base, 64)
+    elif ppg >= 12: base = max(base, 52)
 
     return round(clamp(base))
 
@@ -503,15 +504,15 @@ def detect_archetype(raw: dict) -> str:
     ast_rate = safe_div(apg, mpg)
     is_big   = pos in ("C", "F", "PF", "C-F", "F-C", "PF-C", "C-PF")
 
-    if ast_rate > 0.38 and ppg >= 16:           return "Primary Ball Handler"
+    if ast_rate > 0.32 and ppg >= 14:           return "Primary Ball Handler"
     if ast_rate > 0.30 and ppg >= 12:           return "Floor General"
     if fg3m >= 2.5 and spg >= 1.2:             return "3-and-D"
-    if rpg > 9.5 and bpg > 1.5:               return "Rim Protector"
+    if rpg > 7.5 and bpg > 1.2:               return "Rim Protector"
     if rpg > 8.0 and bpg > 1.0 and ppg < 12:  return "Defensive Big"
     if is_big and fg3m >= 1.5 and rpg > 5:    return "Stretch Four"
     if is_big and ast_rate > 0.20 and rpg > 5: return "Playmaking Big"
     if is_big and rpg > 6.5:                   return "Traditional Big"
-    if ppg >= 22 and fg3m >= 2.5:             return "Shot Creator"
+    if ppg >= 20 and fg3m >= 2.0:             return "Shot Creator"
     if ppg >= 18 and fg3m >= 1.5:             return "Wing Scorer"
     if fg3m >= 2.5 and ppg < 15:              return "Spot-Up Shooter"
     if spg >= 1.5 and ppg < 14:               return "Perimeter Defender"
