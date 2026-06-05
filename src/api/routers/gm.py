@@ -638,10 +638,13 @@ def build_player_ratings(players: list[dict]) -> list[dict]:
         raise RuntimeError(f"Pass1 failed on {len(errors_p1)} players. First: {errors_p1[0][:500]}")
 
     if not all_raw:
-        return []
+        raise RuntimeError(f"all_raw is empty! players input had {len(players)} rows")
 
     # Build distributions across full player pool
-    dist = build_distributions(all_raw)
+    try:
+        dist = build_distributions(all_raw)
+    except Exception as e:
+        raise RuntimeError(f"build_distributions failed: {e} | all_raw[0] keys: {list(all_raw[0].keys()) if all_raw else 'empty'}")
 
     # Pass 2: rate each player using population distributions
     rated = []
