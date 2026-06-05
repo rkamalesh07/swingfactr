@@ -780,42 +780,64 @@ def put_save(conn, save_id: str, state: dict):
 def build_league(players: list[dict]) -> dict:
     """
     Distribute real players across 30 teams.
-    Uses two-pass percentile rating engine so all ratings are
-    relative to the actual player pool, not hardcoded ranges.
+    Two-pass: compute distributions first, then rate all players.
     """
-    # Rate all players in one pass (builds distributions first)
-    rated_players = build_player_ratings(players)
+    # Pass 1: extract raw stats
+    all_raw = []
+    for p in players:
+        try:
+            raw = extract_raw_stats(p)
+            raw["_row"] = p
+            all_raw.append(raw)
+        except Exception:
+            continue
+
+    # Pass 2: build distributions and rate
+    dist = build_distributions(all_raw) if all_raw else {}
 
     enriched = []
-    for p in rated_players:
-        enriched.append({
-            "id":          p["id"],
-            "name":        p["name"],
-            "position":    p["position"],
-            "age":         p["age"],
-            "team":        p["team"],
-            "ppg":         p["ppg"],
-            "rpg":         p["rpg"],
-            "apg":         p["apg"],
-            "spg":         p.get("spg", 0.0),
-            "bpg":         p.get("bpg", 0.0),
-            "fg3m":        p.get("fg3m", 0.0),
-            "mpg":         p["mpg"],
-            "gp":          p["gp"],
-            "overall":     p["overall"],
-            "future":      p["future"],
-            "trade_value": p["trade_value"],
-            "scoring":     p["scoring"],
-            "efficiency":  p["efficiency"],
-            "playmaking":  p["playmaking"],
-            "rebounding":  p["rebounding"],
-            "defense":     p["defense"],
-            "composure":   p["composure"],
-            "archetype":   p["archetype"],
-            "contract_value": p["contract_value"],
-            "salary":      p["salary"],
-            "years_left":  p["years_left"],
-        })
+    for raw in all_raw:
+        p = raw["_row"]
+        try:
+            if dist:
+                ratings = rate_player(p, dist)
+            else:
+                continue
+            age = int(p.get("age") or 26)
+            sal = market_salary(float(ratings["overall"]), age)
+            yrs = contract_years_for(float(ratings["overall"]), age)
+            enriched.append({
+                "id":          str(uuid.uuid4())[:8],
+                "name":        p.get("full_name") or "Unknown",
+                "position":    p.get("position") or "G",
+                "age":         age,
+                "team":        p.get("team_abbr") or "FA",
+                "ppg":         round(float(p.get("ppg") or 0), 1),
+                "rpg":         round(float(p.get("rpg") or 0), 1),
+                "apg":         round(float(p.get("apg") or 0), 1),
+                "spg":         round(float(p.get("spg") or 0), 1),
+                "bpg":         round(float(p.get("bpg") or 0), 1),
+                "fg3m":        round(float(p.get("fg3m") or 0), 1),
+                "mpg":         round(float(p.get("mpg") or 0), 1),
+                "gp":          int(p.get("gp") or 0),
+                "overall":     ratings["overall"],
+                "future":      ratings["future"],
+                "trade_value": ratings["trade_value"],
+                "scoring":     ratings["scoring"],
+                "efficiency":  ratings["efficiency"],
+                "playmaking":  ratings["playmaking"],
+                "rebounding":  ratings["rebounding"],
+                "defense":     ratings["defense"],
+                "composure":   ratings["composure"],
+                "archetype":   ratings["archetype"],
+                "contract_value": ratings["contract_value"],
+                "salary":      sal,
+                "years_left":  yrs,
+            })
+        except Exception as e:
+            import traceback as tb
+            err = tb.format_exc()[-300:]
+            raise RuntimeError(f"rate_player failed for {p.get('full_name','?')}: {e} | {err}")
 
     # Build team rosters from real team assignments
     teams = {}
