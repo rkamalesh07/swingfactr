@@ -242,11 +242,13 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
 
     # MPG gate: low-minute players haven't proven sustained production
     mpg = raw["mpg"]
-    if   mpg < 8:  base = min(base, 44)
-    elif mpg < 13: base = min(base, 54)
-    elif mpg < 18: base = min(base, 64)
-    elif mpg < 22: base = min(base, 76)
-    elif mpg < 26: base = min(base, 85)
+    # MPG gate -- but give relief for proven scorers
+    ppg_relief = 8 if ppg >= 16 else (4 if ppg >= 12 else 0)
+    if   mpg < 8:  base = min(base, 44 + ppg_relief)
+    elif mpg < 13: base = min(base, 54 + ppg_relief)
+    elif mpg < 18: base = min(base, 64 + ppg_relief)
+    elif mpg < 22: base = min(base, 76 + ppg_relief)
+    elif mpg < 26: base = min(base, 85 + ppg_relief)
 
     # PPG floor: high scorers get a floor regardless of other metrics
     ppg = raw["ppg"]
@@ -291,7 +293,10 @@ def compute_future_ability(current: float, age: int) -> float:
     expected_delta = traj[0] * min(years_to_peak, 4)
 
     future = current + expected_delta
-    return round(clamp(future, lo=max(15, current - 20), hi=99))
+    # Future ceiling: low-current players can't project to stars
+    # A 45 OVR player can realistically reach ~65 max, not 90
+    future_ceiling = current + (99 - current) * 0.35 + (5 if age <= 22 else 0)
+    return round(clamp(future, lo=max(15, current - 20), hi=min(99, future_ceiling)))
 
 
 # ─── Potential + Outcome Tree ─────────────────────────────────────────────────
@@ -504,7 +509,7 @@ def detect_archetype(raw: dict) -> str:
     ast_rate = safe_div(apg, mpg)
     is_big   = pos in ("C", "F", "PF", "C-F", "F-C", "PF-C", "C-PF")
 
-    if ast_rate > 0.32 and ppg >= 14:           return "Primary Ball Handler"
+    if (ast_rate > 0.32 and ppg >= 14) or (apg >= 6.0 and ppg >= 25): return "Primary Ball Handler"
     if ast_rate > 0.30 and ppg >= 12:           return "Floor General"
     if fg3m >= 2.5 and spg >= 1.2:             return "3-and-D"
     if rpg > 7.5 and bpg > 1.2:               return "Rim Protector"
