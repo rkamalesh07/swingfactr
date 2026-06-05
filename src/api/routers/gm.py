@@ -258,6 +258,10 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
     elif ppg >= 16: base = max(base, 64)
     elif ppg >= 12: base = max(base, 52)
 
+    # Non-scorer cap: role bigs inflated by rebounding/defense alone
+    if   ppg < 8:  base = min(base, 62)
+    elif ppg < 12: base = min(base, 71)
+
     return round(clamp(base))
 
 
@@ -509,7 +513,7 @@ def detect_archetype(raw: dict) -> str:
     ast_rate = safe_div(apg, mpg)
     is_big   = pos in ("C", "F", "PF", "C-F", "F-C", "PF-C", "C-PF")
 
-    if (ast_rate > 0.32 and ppg >= 14) or (apg >= 6.0 and ppg >= 25): return "Primary Ball Handler"
+    if (ast_rate > 0.32 and ppg >= 14) or (raw["apg"] >= 6.0 and ppg >= 25): return "Primary Ball Handler"
     if ast_rate > 0.30 and ppg >= 12:           return "Floor General"
     if fg3m >= 2.5 and spg >= 1.2:             return "3-and-D"
     if rpg > 7.5 and bpg > 1.2:               return "Rim Protector"
