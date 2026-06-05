@@ -126,17 +126,28 @@ def percentile_to_rating(pct: float, lo: float = 25.0, hi: float = 95.0) -> floa
 
 def extract_raw_stats(row: dict) -> dict:
     """Pull and type-cast all raw stats from a player row."""
-    mpg  = max(float(row.get("mpg") or 1), 0.5)
-    ppg  = float(row.get("ppg") or 0)
-    rpg  = float(row.get("rpg") or 0)
-    apg  = float(row.get("apg") or 0)
-    spg  = float(row.get("spg") or 0)
-    bpg  = float(row.get("bpg") or 0)
-    tov  = float(row.get("tov") or 0)
-    fg3m = float(row.get("fg3m") or 0)
-    efg  = float(row.get("efg_pct") or 50)
-    gp   = float(row.get("gp") or 1)
-    age  = int(row.get("age") or 26)
+    def f(v, default=0.0):
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+    def i(v, default=0):
+        try:
+            return int(float(v)) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    mpg  = max(f(row.get("mpg"), 1.0), 0.5)
+    ppg  = f(row.get("ppg"))
+    rpg  = f(row.get("rpg"))
+    apg  = f(row.get("apg"))
+    spg  = f(row.get("spg"))
+    bpg  = f(row.get("bpg"))
+    tov  = f(row.get("tov"))
+    fg3m = f(row.get("fg3m"))
+    efg  = f(row.get("efg_pct"), 50.0)
+    gp   = f(row.get("gp"), 1.0)
+    age  = i(row.get("age"), 26)
     pos  = str(row.get("position") or "G").upper()
 
     pts36 = safe_div(ppg, mpg) * 36
