@@ -12,6 +12,7 @@ Usage:
 
 import time
 import re
+import unicodedata
 import requests
 from bs4 import BeautifulSoup
 from src.etl.db import get_conn
@@ -92,6 +93,9 @@ def scrape_advanced() -> list[dict]:
             continue
 
         name = name.replace("*", "").strip()
+        # Normalize unicode accents to ASCII (Jokić → Jokic, Dončić → Doncic)
+        name = unicodedata.normalize("NFKD", name)
+        name = "".join(c for c in name if not unicodedata.combining(c))
 
         team = BREF_TO_ESPN.get(cell("team_name_abbr"), cell("team_name_abbr"))
         g    = safe_float(cell("games"))
