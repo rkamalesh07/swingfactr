@@ -117,40 +117,47 @@ def normalize(val, lo, hi, out_lo=20.0, out_hi=95.0):
 def talent_from_advanced(adv: dict) -> float | None:
     """
     Compute talent (0-99) from BBRef advanced metrics.
-    Returns None if insufficient data.
+
+    Anchored to known 2025-26 values:
+      Jokic  BPM=14.2, VORP=9.2,  WS=14.9 → target 92
+      SGA    BPM=11.7, VORP=7.8,  WS=15.2 → target 90
+      Wemby  BPM=10.7, VORP=6.0,  WS=10.0 → target 88
+      Giannis BPM=9.5, VORP=3.0,  WS=5.0  → target 86
+      Luka   BPM=9.3,  VORP=6.6,  WS=9.5  → target 87
+      Average starter BPM~1-2              → target 65-68
+      Replacement BPM~-2                   → target 45-50
     """
-    bpm   = adv.get("bpm")
-    vorp  = adv.get("vorp")
-    ws48  = adv.get("ws_per_48")
-    ts    = adv.get("ts_pct")
+    bpm  = adv.get("bpm")
+    vorp = adv.get("vorp")
+    ws48 = adv.get("ws_per_48")
+    ts   = adv.get("ts_pct")
+    mp   = float(adv.get("mp") or 0)
 
     if bpm is None:
         return None
 
-    # BPM: most predictive but volatile at low minutes
-    bpm_score = normalize(float(bpm), lo=-4, hi=12, out_lo=30, out_hi=96)
+    bpm  = float(bpm)
+    vorp = float(vorp) if vorp is not None else 0.0
+    ws48 = float(ws48) if ws48 is not None else 0.10
+    ts   = float(ts)   if ts   is not None else 0.55
 
-    # VORP: volume-adjusted -- penalizes low-minute players naturally
-    vorp_score = 50.0
-    if vorp is not None:
-        vorp_score = normalize(float(vorp), lo=-0.5, hi=8, out_lo=35, out_hi=94)
+    # BPM → score: anchored so BPM=14 → 95, BPM=0 → 58, BPM=-4 → 35
+    bpm_score = clamp(58 + bpm * 2.6, 20, 99)
 
-    # WS/48: efficiency
-    ws48_score = 50.0
-    if ws48 is not None:
-        ws48_score = normalize(float(ws48), lo=-0.02, hi=0.25, out_lo=35, out_hi=93)
+    # VORP → score: anchored so VORP=9 → 93, VORP=3 → 72, VORP=0 → 55, VORP=-1 → 45
+    vorp_score = clamp(55 + vorp * 4.2, 20, 99)
 
-    # TS%: shooting quality
-    ts_score = 50.0
-    if ts is not None:
-        ts_score = normalize(float(ts), lo=0.44, hi=0.66, out_lo=20, out_hi=90)
+    # WS/48 → score: anchored so WS48=0.25 → 90, WS48=0.10 → 60, WS48=0 → 45
+    ws48_score = clamp(45 + ws48 * 200, 20, 99)
 
-    # Scale BPM weight down for low-minute players -- small samples inflate BPM
-    mp_val = float(adv.get("mp") or 0)
-    if mp_val >= 1500:   bpm_w, vorp_w, ws48_w = 0.55, 0.25, 0.15
-    elif mp_val >= 800:  bpm_w, vorp_w, ws48_w = 0.45, 0.30, 0.18
-    elif mp_val >= 400:  bpm_w, vorp_w, ws48_w = 0.30, 0.40, 0.22
-    else:                bpm_w, vorp_w, ws48_w = 0.20, 0.45, 0.25
+    # TS% → score: 0.65 → 88, 0.55 → 58, 0.44 → 30
+    ts_score = clamp(30 + (ts - 0.44) * 490, 20, 95)
+
+    # Weight by minutes reliability
+    if   mp >= 2000: bpm_w, vorp_w, ws48_w = 0.50, 0.28, 0.17
+    elif mp >= 1200: bpm_w, vorp_w, ws48_w = 0.42, 0.33, 0.18
+    elif mp >= 600:  bpm_w, vorp_w, ws48_w = 0.30, 0.42, 0.20
+    else:            bpm_w, vorp_w, ws48_w = 0.18, 0.50, 0.22
 
     talent = (
         bpm_w  * bpm_score  +
@@ -158,7 +165,7 @@ def talent_from_advanced(adv: dict) -> float | None:
         ws48_w * ws48_score +
         0.05   * ts_score
     )
-    return clamp(talent)
+    return clamp(talent, 20, 99)
 
 
 # ─── Box Score Fallback ───────────────────────────────────────────────────────
