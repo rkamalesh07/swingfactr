@@ -619,7 +619,7 @@ def fetch_advanced_metrics(conn) -> dict:
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT player_name, bpm, vorp, ws, ws_per_48, ts_pct, per
+            SELECT player_name, bpm, vorp, ws, ws_per_48, ts_pct, per, mp
             FROM player_advanced_metrics
             WHERE season_id = '2025-26'
         """)
@@ -628,7 +628,7 @@ def fetch_advanced_metrics(conn) -> dict:
         return {
             r[0]: {
                 "bpm": r[1], "vorp": r[2], "ws": r[3],
-                "ws_per_48": r[4], "ts_pct": r[5], "per": r[6],
+                "ws_per_48": r[4], "ts_pct": r[5], "per": r[6], "mp": r[7],
             }
             for r in rows
         }
