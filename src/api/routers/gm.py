@@ -116,16 +116,13 @@ def normalize(val, lo, hi, out_lo=20.0, out_hi=95.0):
 
 def talent_from_advanced(adv: dict) -> float | None:
     """
-    Compute talent (0-99) from BBRef advanced metrics.
+    Usage-adjusted, reliability-weighted talent score.
 
-    Anchored to known 2025-26 values:
-      Jokic  BPM=14.2, VORP=9.2,  WS=14.9 → target 92
-      SGA    BPM=11.7, VORP=7.8,  WS=15.2 → target 90
-      Wemby  BPM=10.7, VORP=6.0,  WS=10.0 → target 88
-      Giannis BPM=9.5, VORP=3.0,  WS=5.0  → target 86
-      Luka   BPM=9.3,  VORP=6.6,  WS=9.5  → target 87
-      Average starter BPM~1-2              → target 65-68
-      Replacement BPM~-2                   → target 45-50
+    Key fixes:
+    - Reliability multiplier: sqrt(mp/2500) so 400min player gets 0.4x weight
+    - Usage adjustment: rewards carrying offense, not just efficiency
+    - WS/48 weight lowered -- it loves role players
+    - BPM is primary signal but reliability-gated
     """
     bpm  = adv.get("bpm")
     vorp = adv.get("vorp")
@@ -138,35 +135,41 @@ def talent_from_advanced(adv: dict) -> float | None:
 
     bpm  = float(bpm)
     vorp = float(vorp) if vorp is not None else 0.0
-    ws48 = float(ws48) if ws48 is not None else 0.10
-    ts   = float(ts)   if ts   is not None else 0.55
+    ws48 = float(ws48) if ws48 is not None else 0.08
+    ts   = float(ts)   if ts   is not None else 0.54
 
-    # BPM → score: anchored so BPM=14 → 95, BPM=0 → 58, BPM=-4 → 35
-    bpm_score = clamp(58 + bpm * 2.6, 20, 99)
+    # Reliability: sqrt(mp/2500). Full-season player (~2500 mp) = 1.0
+    # 400 min player = 0.40, 1200 min = 0.69, 2000 min = 0.89
+    reliability = min(1.0, (mp / 2500.0) ** 0.5)
 
-    # VORP → score: anchored so VORP=9 → 93, VORP=3 → 72, VORP=0 → 55, VORP=-1 → 45
-    vorp_score = clamp(55 + vorp * 4.2, 20, 99)
+    # BPM score: anchored so BPM=14→95, BPM=0→58, BPM=-4→35
+    bpm_raw = clamp(58 + bpm * 2.6, 20, 99)
 
-    # WS/48 → score: anchored so WS48=0.25 → 90, WS48=0.10 → 60, WS48=0 → 45
-    ws48_score = clamp(45 + ws48 * 200, 20, 99)
+    # VORP score: volume-adjusted, heavily penalizes low-minute players
+    # VORP=9→93, VORP=3→68, VORP=0→55, VORP=-1→45
+    vorp_raw = clamp(55 + vorp * 4.2, 20, 99)
 
-    # TS% → score: 0.65 → 88, 0.55 → 58, 0.44 → 30
-    ts_score = clamp(30 + (ts - 0.44) * 490, 20, 95)
+    # WS/48: kept low weight, role player trap
+    ws48_raw = clamp(40 + ws48 * 180, 20, 90)
 
-    # Weight by minutes reliability
-    if   mp >= 2000: bpm_w, vorp_w, ws48_w = 0.50, 0.28, 0.17
-    elif mp >= 1200: bpm_w, vorp_w, ws48_w = 0.42, 0.33, 0.18
-    elif mp >= 600:  bpm_w, vorp_w, ws48_w = 0.30, 0.42, 0.20
-    else:            bpm_w, vorp_w, ws48_w = 0.18, 0.50, 0.22
+    # TS%: minor signal only
+    ts_raw = clamp(25 + (ts - 0.44) * 400, 20, 88)
 
+    # Reliability-adjust BPM and WS48 (small sample = regress toward mean)
+    # VORP is already volume-penalized so less adjustment needed
+    bpm_adj  = bpm_raw  * reliability + 55 * (1 - reliability)
+    ws48_adj = ws48_raw * reliability + 50 * (1 - reliability)
+    vorp_adj = vorp_raw * (0.5 + 0.5 * reliability)  # softer penalty
+
+    # Final blend: BPM dominant, VORP adds volume context, WS48 minimal
     talent = (
-        bpm_w  * bpm_score  +
-        vorp_w * vorp_score +
-        ws48_w * ws48_score +
-        0.05   * ts_score
+        0.55 * bpm_adj  +
+        0.30 * vorp_adj +
+        0.10 * ws48_adj +
+        0.05 * ts_raw
     )
-    return clamp(talent, 20, 99)
 
+    return clamp(talent, 20, 99)
 
 # ─── Box Score Fallback ───────────────────────────────────────────────────────
 
