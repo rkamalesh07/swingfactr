@@ -254,6 +254,7 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
     # MPG gate: low-minute players haven't proven sustained production
     mpg = raw["mpg"]
     # MPG gate -- but give relief for proven scorers
+    ppg = raw["ppg"]
     ppg_relief = 8 if ppg >= 16 else (4 if ppg >= 12 else 0)
     if   mpg < 8:  base = min(base, 44 + ppg_relief)
     elif mpg < 13: base = min(base, 54 + ppg_relief)
@@ -262,7 +263,6 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
     elif mpg < 26: base = min(base, 85 + ppg_relief)
 
     # PPG floor: high scorers get a floor regardless of other metrics
-    ppg = raw["ppg"]
     if   ppg >= 30: base = max(base, 88)
     elif ppg >= 25: base = max(base, 82)
     elif ppg >= 20: base = max(base, 74)
