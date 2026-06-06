@@ -138,9 +138,9 @@ def talent_from_advanced(adv: dict) -> float | None:
     ws48 = float(ws48) if ws48 is not None else 0.08
     ts   = float(ts)   if ts   is not None else 0.54
 
-    # Reliability: sqrt(mp/2500). Full-season player (~2500 mp) = 1.0
-    # 400 min player = 0.40, 1200 min = 0.69, 2000 min = 0.89
-    reliability = min(1.0, (mp / 2500.0) ** 0.5)
+    # Reliability: softer curve so injured stars keep most of their rating
+    # Full season (2500mp) = 1.0, 1000mp = 0.80, 400mp = 0.63, 200mp = 0.50
+    reliability = min(1.0, 0.50 + 0.50 * (mp / 2500.0) ** 0.5)
 
     # BPM score: anchored so BPM=14→95, BPM=0→58, BPM=-4→35
     bpm_raw = clamp(58 + bpm * 2.6, 20, 99)
@@ -756,7 +756,7 @@ def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
         roster = sorted(team["roster"], key=lambda x: -x["overall"])
         if len(roster) > 15:
             fa_pool.extend(roster[15:])
-            team["roster"] = roster[:15]
+            roster = roster[:15]
         team["roster"] = roster
         team["cap_used"] = sum(p["salary"] for p in team["roster"])
 
