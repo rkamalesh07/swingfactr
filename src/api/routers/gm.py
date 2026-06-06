@@ -140,7 +140,13 @@ def talent_from_advanced(adv: dict) -> float | None:
 
     # Reliability: softer curve so injured stars keep most of their rating
     # Full season (2500mp) = 1.0, 1000mp = 0.80, 400mp = 0.63, 200mp = 0.50
-    reliability = min(1.0, 0.50 + 0.50 * (mp / 2500.0) ** 0.5)
+    # Softer curve for injured stars, harder floor for tiny samples
+    if mp < 300:
+        reliability = 0.30   # essentially noise, regress hard
+    elif mp < 600:
+        reliability = 0.45
+    else:
+        reliability = min(1.0, 0.50 + 0.50 * (mp / 2500.0) ** 0.5)
 
     # BPM score: anchored so BPM=14→95, BPM=0→58, BPM=-4→35
     bpm_raw = clamp(58 + bpm * 2.6, 20, 99)
