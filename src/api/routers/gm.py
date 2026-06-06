@@ -511,8 +511,7 @@ def build_player_ratings(players: list[dict], adv_lookup: dict | None = None) ->
     return rated
 
 
-# ─── Salary + Contract helpers
- (wrappers around engine functions) ─────────────
+# ─── Salary + Contract helpers (wrappers around engine functions) ───────────
 
 def estimate_salary(overall: int, age: int) -> int:
     return market_salary(float(overall), age)
