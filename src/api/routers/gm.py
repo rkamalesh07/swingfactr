@@ -875,7 +875,10 @@ def new_game(body: NewGameBody):
         players    = fetch_all_players(conn)
         adv_lookup = fetch_advanced_metrics(conn)
         print(f"Advanced metrics loaded for {len(adv_lookup)} players")
+        if len(adv_lookup) == 0:
+            raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
         league  = build_league(players, adv_lookup=adv_lookup)
+        adv_count = len(adv_lookup)
         league["teams"][abbr]["gm_team"] = True
         league["gm_team"] = abbr
         cur = conn.cursor()
@@ -898,6 +901,7 @@ def new_game(body: NewGameBody):
         "message":   f"GM save created for {TEAM_FULL_NAMES[abbr]}",
         "debug_total_players": total_players,
         "debug_fa_count": fa_count,
+        "debug_adv_metrics": adv_count if "adv_count" in dir() else -1,
     }
 
 @router.get("/state/{save_id}")
