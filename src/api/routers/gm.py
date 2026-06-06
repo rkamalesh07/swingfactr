@@ -1046,3 +1046,15 @@ def release_player(save_id: str, body: ReleaseBody):
         "cap_used":  team["cap_used"],
         "cap_space": SALARY_CAP - team["cap_used"],
     }
+
+@router.get("/league-players/{save_id}")
+def league_players(save_id: str, limit: int = Query(600)):
+    """Return all players across all 30 teams + FA, sorted by overall."""
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
+    all_players = []
+    for team in league["teams"].values():
+        all_players.extend(team["roster"])
+    all_players.extend(league.get("fa_pool", []))
+    all_players.sort(key=lambda x: -x.get("overall", 0))
+    return {"players": all_players[:limit], "total": len(all_players)}
