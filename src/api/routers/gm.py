@@ -128,17 +128,17 @@ def talent_from_advanced(adv: dict) -> float | None:
         return None
 
     # BPM: most predictive but volatile at low minutes
-    bpm_score = normalize(float(bpm), lo=-5, hi=15, out_lo=15, out_hi=99)
+    bpm_score = normalize(float(bpm), lo=-4, hi=12, out_lo=30, out_hi=96)
 
     # VORP: volume-adjusted -- penalizes low-minute players naturally
     vorp_score = 50.0
     if vorp is not None:
-        vorp_score = normalize(float(vorp), lo=-1, hi=10, out_lo=20, out_hi=99)
+        vorp_score = normalize(float(vorp), lo=-0.5, hi=8, out_lo=35, out_hi=94)
 
     # WS/48: efficiency
     ws48_score = 50.0
     if ws48 is not None:
-        ws48_score = normalize(float(ws48), lo=-0.05, hi=0.28, out_lo=20, out_hi=95)
+        ws48_score = normalize(float(ws48), lo=-0.02, hi=0.25, out_lo=35, out_hi=93)
 
     # TS%: shooting quality
     ts_score = 50.0
@@ -247,11 +247,11 @@ def talent_from_boxscore(raw: dict, dist: dict) -> float:
     elif mpg < 26: base = min(base, 85 + ppg_relief)
 
     # PPG floors
-    if   ppg >= 30: base = max(base, 80)
-    elif ppg >= 25: base = max(base, 72)
-    elif ppg >= 20: base = max(base, 65)
-    elif ppg >= 14: base = max(base, 52)
-    elif ppg >= 11: base = max(base, 44)
+    if   ppg >= 30: base = max(base, 83)
+    elif ppg >= 25: base = max(base, 76)
+    elif ppg >= 20: base = max(base, 68)
+    elif ppg >= 14: base = max(base, 54)
+    elif ppg >= 11: base = max(base, 46)
 
     # Non-scorer cap
     if   ppg < 8:  base = min(base, 58)
