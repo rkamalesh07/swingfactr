@@ -657,14 +657,14 @@ def put_save(conn, save_id: str, state: dict):
 
 # ─── League Initialisation ────────────────────────────────────────────────────
 
-def build_league(players: list[dict]) -> dict:
+def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
     """
     Distribute real players across 30 teams.
     Two-pass: compute distributions first, then rate all players.
     """
-    # Load advanced metrics from DB (BBRef BPM/VORP/WS/TS)
-    # We need conn here -- pass it in via a module-level variable set by new_game
-    adv_lookup = getattr(build_league, "_adv_lookup", {})
+    # Use passed-in advanced metrics lookup
+    if adv_lookup is None:
+        adv_lookup = {}
 
     # Pass 1: extract raw stats
     all_raw = []
@@ -871,9 +871,8 @@ def new_game(body: NewGameBody):
     with get_conn() as conn:
         players    = fetch_all_players(conn)
         adv_lookup = fetch_advanced_metrics(conn)
-        build_league._adv_lookup = adv_lookup
         print(f"Advanced metrics loaded for {len(adv_lookup)} players")
-        league  = build_league(players)
+        league  = build_league(players, adv_lookup=adv_lookup)
         league["teams"][abbr]["gm_team"] = True
         league["gm_team"] = abbr
         cur = conn.cursor()
