@@ -264,10 +264,11 @@ def compute_current_ability(raw: dict, dist: dict) -> float:
 
     # PPG floor: high scorers get a floor regardless of other metrics
     if   ppg >= 30: base = max(base, 88)
-    elif ppg >= 25: base = max(base, 82)
-    elif ppg >= 20: base = max(base, 74)
-    elif ppg >= 16: base = max(base, 64)
-    elif ppg >= 12: base = max(base, 52)
+    elif ppg >= 25: base = max(base, 84)
+    elif ppg >= 20: base = max(base, 76)
+    elif ppg >= 17: base = max(base, 70)
+    elif ppg >= 14: base = max(base, 62)
+    elif ppg >= 11: base = max(base, 52)
 
     # Non-scorer cap: role bigs inflated by rebounding/defense alone
     if   ppg < 8:  base = min(base, 62)
