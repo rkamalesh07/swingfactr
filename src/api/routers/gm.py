@@ -432,9 +432,11 @@ def rate_player(row: dict, dist: dict, adv_metrics: dict | None = None) -> dict:
     # Fallback: box score percentile engine
     talent_box = talent_from_boxscore(raw, dist)
 
-    # Blend: if we have advanced metrics, trust them 75%
+    # Blend: if we have advanced metrics, use them as primary signal
+    # Do NOT apply PPG floor when we have real advanced metrics --
+    # BPM/VORP already capture scoring contribution properly
     if talent_adv is not None:
-        talent = round(clamp(0.75 * talent_adv + 0.25 * talent_box))
+        talent = round(clamp(0.90 * talent_adv + 0.10 * talent_box))
     else:
         talent = talent_box
 
