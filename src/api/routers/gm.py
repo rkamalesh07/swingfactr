@@ -127,29 +127,36 @@ def talent_from_advanced(adv: dict) -> float | None:
     if bpm is None:
         return None
 
-    # BPM: most predictive single metric (60% weight)
+    # BPM: most predictive but volatile at low minutes
     bpm_score = normalize(float(bpm), lo=-6, hi=9, out_lo=15, out_hi=97)
 
-    # VORP: volume-adjusted value (20% weight)
+    # VORP: volume-adjusted -- penalizes low-minute players naturally
     vorp_score = 50.0
     if vorp is not None:
         vorp_score = normalize(float(vorp), lo=-1, hi=7, out_lo=20, out_hi=95)
 
-    # WS/48: efficiency (15% weight)
+    # WS/48: efficiency
     ws48_score = 50.0
     if ws48 is not None:
         ws48_score = normalize(float(ws48), lo=-0.05, hi=0.28, out_lo=20, out_hi=95)
 
-    # TS%: shooting quality (5% weight)
+    # TS%: shooting quality
     ts_score = 50.0
     if ts is not None:
         ts_score = normalize(float(ts), lo=0.44, hi=0.66, out_lo=20, out_hi=90)
 
+    # Scale BPM weight down for low-minute players -- small samples inflate BPM
+    mp_val = float(adv.get("mp") or 0)
+    if mp_val >= 1500:   bpm_w, vorp_w, ws48_w = 0.55, 0.25, 0.15
+    elif mp_val >= 800:  bpm_w, vorp_w, ws48_w = 0.45, 0.30, 0.18
+    elif mp_val >= 400:  bpm_w, vorp_w, ws48_w = 0.30, 0.40, 0.22
+    else:                bpm_w, vorp_w, ws48_w = 0.20, 0.45, 0.25
+
     talent = (
-        0.60 * bpm_score  +
-        0.20 * vorp_score +
-        0.15 * ws48_score +
-        0.05 * ts_score
+        bpm_w  * bpm_score  +
+        vorp_w * vorp_score +
+        ws48_w * ws48_score +
+        0.05   * ts_score
     )
     return clamp(talent)
 
