@@ -928,10 +928,11 @@ def new_game(body: NewGameBody):
     with get_conn() as conn:
         players    = fetch_all_players(conn)
         adv_lookup = fetch_advanced_metrics(conn)
-        print(f"Advanced metrics loaded for {len(adv_lookup)} players")
+        contracts  = fetch_contracts(conn)
+        print(f"Advanced metrics: {len(adv_lookup)}, contracts: {len(contracts)}")
         if len(adv_lookup) == 0:
             raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
-        league  = build_league(players, adv_lookup=adv_lookup)
+        league  = build_league(players, adv_lookup=adv_lookup, contracts=contracts)
         adv_count = len(adv_lookup)
         league["teams"][abbr]["gm_team"] = True
         league["gm_team"] = abbr
