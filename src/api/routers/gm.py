@@ -179,12 +179,11 @@ def talent_from_advanced(adv: dict) -> float | None:
         elif usage_pts >= 7.5:  base = max(base, 83)
         elif usage_pts >= 6.5:  base = max(base, 81)
         elif usage_pts >= 5.5:  base = max(base, 78)
-        elif usage_pts >= 4.0:  base = max(base, 72)
-    elif bpm >= -2:
-        if   usage_pts >= 11.0: base = max(base, 82)
-        elif usage_pts >= 9.0:  base = max(base, 80)
-        elif usage_pts >= 7.5:  base = max(base, 78)
-        elif usage_pts >= 5.5:  base = max(base, 74)
+        elif usage_pts >= 5.0:  base = max(base, 72)
+    elif bpm >= -1:
+        if   usage_pts >= 11.0: base = max(base, 80)
+        elif usage_pts >= 9.0:  base = max(base, 78)
+        elif usage_pts >= 7.5:  base = max(base, 76)
 
     # Small sample cap
     if mp < 400:   base = min(base, 65)
