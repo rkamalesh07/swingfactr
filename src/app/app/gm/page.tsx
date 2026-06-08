@@ -481,7 +481,7 @@ function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:stri
         ))}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
-        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555"}}>{fmt$(state.cap_used)} / $140M</span>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555"}}>{fmt$(state.cap_used)} / $154.6M</span>
         <button onClick={onNewGame} style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",background:"transparent",border:"none",cursor:"pointer",textTransform:"uppercase"}}>NEW GAME</button>
       </div>
     </div>
@@ -535,8 +535,8 @@ function HomeSection({state, roster, onNav}: {state:GMState; roster:Player[]; on
           <div style={{height:"100%",width:`${capPct}%`,background:capPct>90?"#ff8800":"#666",borderRadius:1,transition:"width 0.5s"}} />
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#888"}}>$140M cap</span>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#888"}}>$170M luxury tax</span>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#888"}}>$154.6M cap</span>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#888"}}>$187.9M luxury tax</span>
         </div>
       </div>
 
@@ -1157,8 +1157,8 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
 
   const otherTeams = NBA_TEAMS.filter(t => t.abbr !== state.gm_team);
   const myPicks    = TEAM_PICKS[state.gm_team] || [];
-  const SALARY_CAP   = 140_000_000;
-  const LUXURY_TAX   = 170_000_000;
+  const SALARY_CAP   = 154_647_000;
+  const LUXURY_TAX   = 187_876_000;
 
   const givingCap  = giving.reduce((s,p)=>s+p.salary,0);
   const gettingCap = getting.reduce((s,p)=>s+p.salary,0);
