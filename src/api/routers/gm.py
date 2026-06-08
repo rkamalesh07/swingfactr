@@ -191,7 +191,6 @@ def talent_from_advanced(adv: dict) -> float | None:
     elif mp < 600: base = min(base, 70)
 
     base = min(base, 90)  # Jokic outlier cap
-    base = min(base, 90)  # Jokic historically outlier cap
     overall = round(clamp(base, 20, 99))
 
     # Talent rating: injury-corrected for AI use
