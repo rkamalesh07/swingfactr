@@ -170,15 +170,27 @@ def talent_from_advanced(adv: dict) -> float | None:
         20, 99
     )
 
-    # Usage*PPG floors -- primary scorers never underrated due to team depth
+    # Usage*PPG floors -- only apply for players with positive BPM
+    # Negative BPM = bad player on bad team inflating stats, no floor boost
     usage_pts = usage * ppg
-    if   usage_pts >= 11.0: base = max(base, 86)
-    elif usage_pts >= 9.0:  base = max(base, 84)
-    elif usage_pts >= 7.5:  base = max(base, 83)
-    elif usage_pts >= 6.5:  base = max(base, 81)
-    elif usage_pts >= 5.5:  base = max(base, 78)
-    elif usage_pts >= 4.0:  base = max(base, 72)
+    if bpm >= 0:
+        if   usage_pts >= 11.0: base = max(base, 86)
+        elif usage_pts >= 9.0:  base = max(base, 84)
+        elif usage_pts >= 7.5:  base = max(base, 83)
+        elif usage_pts >= 6.5:  base = max(base, 81)
+        elif usage_pts >= 5.5:  base = max(base, 78)
+        elif usage_pts >= 4.0:  base = max(base, 72)
+    elif bpm >= -2:
+        if   usage_pts >= 11.0: base = max(base, 82)
+        elif usage_pts >= 9.0:  base = max(base, 80)
+        elif usage_pts >= 7.5:  base = max(base, 78)
+        elif usage_pts >= 5.5:  base = max(base, 74)
 
+    # Small sample cap
+    if mp < 400:   base = min(base, 65)
+    elif mp < 600: base = min(base, 70)
+
+    base = min(base, 90)  # Jokic outlier cap
     base = min(base, 90)  # Jokic historically outlier cap
     overall = round(clamp(base, 20, 99))
 
