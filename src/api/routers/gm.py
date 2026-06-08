@@ -650,9 +650,17 @@ def fetch_advanced_metrics(conn) -> dict:
 def fetch_contracts(conn) -> dict:
     """
     Load real 2025-26 salaries from player_contracts table.
-    Returns dict keyed by player_name.
-    Falls back gracefully if table does not exist.
+    Returns dict with multiple key aliases for fuzzy name matching.
     """
+    import unicodedata
+    def norm(s):
+        s = unicodedata.normalize("NFKD", str(s))
+        s = "".join(c for c in s if not unicodedata.combining(c))
+        # Remove suffixes like III, Jr., Sr.
+        for suffix in [" III", " II", " IV", " Jr.", " Sr.", " Jr", " Sr"]:
+            s = s.replace(suffix, "")
+        return s.strip()
+
     try:
         cur = conn.cursor()
         cur.execute("""
@@ -662,8 +670,9 @@ def fetch_contracts(conn) -> dict:
         """)
         rows = cur.fetchall()
         cur.close()
-        return {
-            r[0]: {
+        result = {}
+        for r in rows:
+            entry = {
                 "salary":        int(r[1]) if r[1] else None,
                 "salary_2627":   int(r[2]) if r[2] else None,
                 "salary_2728":   int(r[3]) if r[3] else None,
@@ -672,8 +681,10 @@ def fetch_contracts(conn) -> dict:
                 "guaranteed":    int(r[6]) if r[6] else None,
                 "contract_type": r[7] or "guaranteed",
             }
-            for r in rows
-        }
+            # Store under original name and normalized name
+            result[r[0]] = entry
+            result[norm(r[0])] = entry
+        return result
     except Exception as e:
         print(f"Warning: could not load contracts: {e}")
         try:
@@ -739,7 +750,14 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
             age = int(p.get("age") or 26)
             # Use real contract if available, else estimate
             name = p.get("full_name") or p.get("player_name") or ""
-            real_contract = contracts.get(name) or {}
+            import unicodedata as _ud
+            def _norm(s):
+                s = _ud.normalize("NFKD", str(s))
+                s = "".join(c for c in s if not _ud.combining(c))
+                for sfx in [" III", " II", " IV", " Jr.", " Sr.", " Jr", " Sr"]:
+                    s = s.replace(sfx, "")
+                return s.strip()
+            real_contract = contracts.get(name) or contracts.get(_norm(name)) or {}
             if real_contract.get("salary"):
                 sal = real_contract["salary"]
                 yrs = sum(1 for k in ["salary_2627","salary_2728","salary_2829","salary_2930"] if real_contract.get(k))
