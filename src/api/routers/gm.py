@@ -116,19 +116,21 @@ def normalize(val, lo, hi, out_lo=20.0, out_hi=95.0):
 
 def talent_from_advanced(adv: dict) -> float | None:
     """
-    Usage-adjusted, reliability-weighted talent score.
+    Two-rating system:
+      overall = current impact (injury-penalized, what user sees)
+      talent  = true ability (injury-corrected, what AI uses for trades)
 
-    Key fixes:
-    - Reliability multiplier: sqrt(mp/2500) so 400min player gets 0.4x weight
-    - Usage adjustment: rewards carrying offense, not just efficiency
-    - WS/48 weight lowered -- it loves role players
-    - BPM is primary signal but reliability-gated
+    Calibrated against: SGA=87, Jokic=88, Giannis=86, Wemby=85, Luka=87,
+    Ant/Brunson/Cade=83, Curry/Kawhi=81, KD=80, Tatum=74 (injured)
     """
     bpm  = adv.get("bpm")
     vorp = adv.get("vorp")
     ws48 = adv.get("ws_per_48")
     ts   = adv.get("ts_pct")
     mp   = float(adv.get("mp") or 0)
+    ppg  = float(adv.get("ppg") or adv.get("pts_per_g") or 0)
+    usage = float(adv.get("usg_pct") or adv.get("usage") or 0.20)
+    age  = float(adv.get("age") or 26)
 
     if bpm is None:
         return None
@@ -138,44 +140,73 @@ def talent_from_advanced(adv: dict) -> float | None:
     ws48 = float(ws48) if ws48 is not None else 0.08
     ts   = float(ts)   if ts   is not None else 0.54
 
-    # Reliability: softer curve so injured stars keep most of their rating
-    # Full season (2500mp) = 1.0, 1000mp = 0.80, 400mp = 0.63, 200mp = 0.50
-    # Softer curve for injured stars, harder floor for tiny samples
     if mp < 300:
-        reliability = 0.30   # essentially noise, regress hard
+        rel = 0.30
     elif mp < 600:
-        reliability = 0.45
+        rel = 0.45
     else:
-        reliability = min(1.0, 0.50 + 0.50 * (mp / 2500.0) ** 0.5)
+        rel = min(1.0, 0.50 + 0.50 * (mp / 2500.0) ** 0.5)
 
-    # BPM score: anchored so BPM=14→95, BPM=0→58, BPM=-4→35
-    bpm_raw = clamp(58 + bpm * 2.6, 20, 99)
+    games_frac = max(0.3, min(1.0, mp / 2500.0))
+    vorp_pg    = vorp / games_frac  # per-full-season VORP
 
-    # VORP score: volume-adjusted, heavily penalizes low-minute players
-    # VORP=9→93, VORP=3→68, VORP=0→55, VORP=-1→45
-    vorp_raw = clamp(55 + vorp * 4.2, 20, 99)
+    # Component scores
+    bpm_raw  = clamp(58 + bpm * 2.5,       20, 96)   # cap 96 so Jokic doesn't break scale
+    vorp_raw = clamp(56 + vorp_pg * 3.8,   20, 99)
+    ws48_raw = clamp(40 + ws48 * 180,      20, 90)
+    ts_raw   = clamp(25 + (ts - 0.44) * 350, 20, 88)
+    cr_raw   = clamp(50 + (usage * 100 - 20) * 1.8 + (ppg / 30) * 15, 20, 95)
 
-    # WS/48: kept low weight, role player trap
-    ws48_raw = clamp(40 + ws48 * 180, 20, 90)
+    bpm_adj  = bpm_raw  * rel + 55 * (1 - rel)
+    ws48_adj = ws48_raw * rel + 50 * (1 - rel)
+    vorp_adj = vorp_raw * (0.6 + 0.4 * rel)
 
-    # TS%: minor signal only
-    ts_raw = clamp(25 + (ts - 0.44) * 400, 20, 88)
-
-    # Reliability-adjust BPM and WS48 (small sample = regress toward mean)
-    # VORP is already volume-penalized so less adjustment needed
-    bpm_adj  = bpm_raw  * reliability + 55 * (1 - reliability)
-    ws48_adj = ws48_raw * reliability + 50 * (1 - reliability)
-    vorp_adj = vorp_raw * (0.5 + 0.5 * reliability)  # softer penalty
-
-    # Final blend: BPM dominant, VORP adds volume context, WS48 minimal
-    talent = (
-        0.55 * bpm_adj  +
-        0.30 * vorp_adj +
-        0.10 * ws48_adj +
-        0.05 * ts_raw
+    base = clamp(
+        0.52 * bpm_adj +
+        0.18 * vorp_adj +
+        0.09 * ws48_adj +
+        0.16 * cr_raw +
+        0.05 * ts_raw,
+        20, 99
     )
 
-    return clamp(talent, 20, 99)
+    # Usage*PPG floors -- primary scorers never underrated due to team depth
+    usage_pts = usage * ppg
+    if   usage_pts >= 11.0: base = max(base, 86)
+    elif usage_pts >= 9.0:  base = max(base, 84)
+    elif usage_pts >= 7.5:  base = max(base, 83)
+    elif usage_pts >= 6.5:  base = max(base, 81)
+    elif usage_pts >= 5.5:  base = max(base, 78)
+    elif usage_pts >= 4.0:  base = max(base, 72)
+
+    base = min(base, 90)  # Jokic historically outlier cap
+    overall = round(clamp(base, 20, 99))
+
+    # Talent rating: injury-corrected for AI use
+    if rel < 0.75 and bpm > 5.0:
+        full = clamp(
+            0.52 * bpm_raw + 0.18 * vorp_raw + 0.09 * ws48_raw + 0.16 * cr_raw + 0.05 * ts_raw,
+            20, 90
+        )
+        # Apply same usage floors to full-season projection
+        if   usage_pts >= 11.0: full = max(full, 86)
+        elif usage_pts >= 9.0:  full = max(full, 84)
+        elif usage_pts >= 7.5:  full = max(full, 83)
+        elif usage_pts >= 6.5:  full = max(full, 81)
+        talent = round(clamp((overall + full) / 2, 20, 99))
+    else:
+        talent = overall
+
+    # Age adjustment on talent
+    if   age <= 24: talent = min(talent + 3, 99)
+    elif age <= 27: talent = min(talent + 1, 99)
+    elif age >= 36: talent = max(talent - 3, 20)
+    elif age >= 33: talent = max(talent - 1, 20)
+
+    talent_from_advanced._last_talent = int(talent)
+    return float(overall)
+
+talent_from_advanced._last_talent = 0
 
 # ─── Box Score Fallback ───────────────────────────────────────────────────────
 
@@ -781,6 +812,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 "mpg":         round(float(p.get("mpg") or 0), 1),
                 "gp":          int(p.get("gp") or 0),
                 "overall":     ratings["overall"],
+                "talent":      talent_from_advanced._last_talent,
                 "future":      ratings["future"],
                 "trade_value": ratings["trade_value"],
                 "scoring":     ratings["scoring"],
