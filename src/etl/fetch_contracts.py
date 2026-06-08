@@ -34,6 +34,8 @@ def scrape_contracts():
     resp.raise_for_status()
     print(f"Status: {resp.status_code}, size: {len(resp.content)}")
 
+    resp.encoding = "utf-8"
+    resp.encoding = "utf-8"
     tables = pd.read_html(StringIO(resp.text))
     df = tables[0]
 
@@ -60,7 +62,10 @@ def scrape_contracts():
     seen = set()
 
     for _, row in df.iterrows():
-        name = normalize(row.get("player",""))
+        raw_name = normalize(row.get("player",""))
+        # Strip accents so names match game log names (Jokic not Jokic with accent)
+        import unicodedata as _ud
+        name = "".join(c for c in _ud.normalize("NFKD", raw_name) if not _ud.combining(c))
         if not name or name == "Player" or name == "nan":
             continue
         if name in seen:
