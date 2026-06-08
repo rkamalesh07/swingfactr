@@ -986,23 +986,26 @@ def new_game(body: NewGameBody):
         # Enrich adv_lookup with PPG and usage from box score data
         # so talent_from_advanced can apply usage*ppg floors correctly
         import unicodedata as _ud
-        def _norm(s):
+        def _norm_adv(s):
             s = _ud.normalize("NFKD", str(s))
-            return "".join(c for c in s if not _ud.combining(c)).strip()
+            s = "".join(c for c in s if not _ud.combining(c))
+            for sfx in [" III", " II", " IV", " Jr.", " Sr.", " Jr", " Sr"]:
+                s = s.replace(sfx, "")
+            return s.strip()
 
         for p in players:
-            name = _norm(p.get("full_name") or p.get("player_name") or "")
+            # players use "name" key, not "full_name"
+            name = _norm_adv(p.get("name") or p.get("full_name") or p.get("player_name") or "")
             ppg  = float(p.get("ppg") or 0)
             mpg  = float(p.get("mpg") or 1)
-            apg  = float(p.get("apg") or 0)
-            fga  = float(p.get("fga_per_g") or 0)
-            fta  = float(p.get("fta_per_g") or 0)
-            # Approximate usage: (FGA + 0.44*FTA + TOV) / team_poss_proxy
-            # Simple proxy: usage ~ (fga + 0.44*fta) / (mpg/48 * 100)
-            poss = max(1.0, mpg / 48.0 * 100.0)
-            usage_approx = min(0.45, (fga + 0.44 * fta) / poss)
-            for key in [name, name + " III", name + " Jr."]:
-                if key in adv_lookup:
+            # Use ppg-based usage approximation:
+            # Stars carrying offense: 27ppg in 30mpg = high usage
+            # Simple: usage_approx = ppg / (mpg * 2.0) capped at 0.40
+            usage_approx = min(0.40, ppg / max(1.0, mpg * 2.0))
+
+            # Try matching against adv_lookup keys
+            for key in list(adv_lookup.keys()):
+                if _norm_adv(key) == name:
                     adv_lookup[key]["ppg"]     = ppg
                     adv_lookup[key]["usg_pct"] = usage_approx
                     break
