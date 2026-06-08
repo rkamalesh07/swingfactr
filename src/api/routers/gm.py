@@ -646,6 +646,42 @@ def fetch_advanced_metrics(conn) -> dict:
             pass
         return {}
 
+
+def fetch_contracts(conn) -> dict:
+    """
+    Load real 2025-26 salaries from player_contracts table.
+    Returns dict keyed by player_name.
+    Falls back gracefully if table does not exist.
+    """
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT player_name, salary_2526, salary_2627, salary_2728,
+                   salary_2829, salary_2930, guaranteed, contract_type
+            FROM player_contracts
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        return {
+            r[0]: {
+                "salary":        int(r[1]) if r[1] else None,
+                "salary_2627":   int(r[2]) if r[2] else None,
+                "salary_2728":   int(r[3]) if r[3] else None,
+                "salary_2829":   int(r[4]) if r[4] else None,
+                "salary_2930":   int(r[5]) if r[5] else None,
+                "guaranteed":    int(r[6]) if r[6] else None,
+                "contract_type": r[7] or "guaranteed",
+            }
+            for r in rows
+        }
+    except Exception as e:
+        print(f"Warning: could not load contracts: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {}
+
 def get_save(conn, save_id: str) -> dict:
     cur = conn.cursor()
     cur.execute("SELECT state FROM gm_saves WHERE save_id = %s", (save_id,))
@@ -666,7 +702,7 @@ def put_save(conn, save_id: str, state: dict):
 
 # ─── League Initialisation ────────────────────────────────────────────────────
 
-def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
+def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict = None) -> dict:
     """
     Distribute real players across 30 teams.
     Two-pass: compute distributions first, then rate all players.
@@ -674,6 +710,8 @@ def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
     # Use passed-in advanced metrics lookup
     if adv_lookup is None:
         adv_lookup = {}
+    if contracts is None:
+        contracts = {}
 
     # Pass 1: extract raw stats
     all_raw = []
@@ -699,8 +737,17 @@ def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
             else:
                 continue
             age = int(p.get("age") or 26)
-            sal = market_salary(float(ratings["overall"]), age)
-            yrs = contract_years_for(float(ratings["overall"]), age)
+            # Use real contract if available, else estimate
+            name = p.get("full_name") or p.get("player_name") or ""
+            real_contract = contracts.get(name) or {}
+            if real_contract.get("salary"):
+                sal = real_contract["salary"]
+                yrs = sum(1 for k in ["salary_2627","salary_2728","salary_2829","salary_2930"] if real_contract.get(k))
+                contract_type = real_contract.get("contract_type", "guaranteed")
+            else:
+                sal = market_salary(float(ratings["overall"]), age)
+                yrs = contract_years_for(float(ratings["overall"]), age)
+                contract_type = "guaranteed"
             enriched.append({
                 "id":          str(uuid.uuid4())[:8],
                 "name":        p.get("full_name") or "Unknown",
@@ -728,6 +775,7 @@ def build_league(players: list[dict], adv_lookup: dict = None) -> dict:
                 "contract_value": ratings["contract_value"],
                 "salary":      sal,
                 "years_left":  yrs,
+                "contract_type": contract_type,
             })
         except Exception as e:
             import traceback as tb

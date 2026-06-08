@@ -1,0 +1,21 @@
+name: Fetch Contracts (BBRef)
+
+on:
+  schedule:
+    - cron: "30 8 * * *"   # 8:30am UTC daily
+  workflow_dispatch:
+
+jobs:
+  fetch-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 psycopg2-binary
+      - name: Run contract ETL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: PYTHONPATH=. python3 src/etl/fetch_contracts.py
