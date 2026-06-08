@@ -293,17 +293,19 @@ def talent_from_boxscore(raw: dict, dist: dict) -> float:
     elif mpg < 22: base = min(base, 76 + ppg_relief)
     elif mpg < 26: base = min(base, 85 + ppg_relief)
 
-    # PPG floors
+    # PPG floors (only for high efficiency -- volume scorers on bad teams shouldn't rate high)
     if   ppg >= 30: base = max(base, 83)
     elif ppg >= 25: base = max(base, 76)
     elif ppg >= 20: base = max(base, 68)
-    elif ppg >= 14: base = max(base, 54)
-    elif ppg >= 11: base = max(base, 46)
+    elif ppg >= 16: base = max(base, 58)  # lowered from 14->54 to 16->58
+    elif ppg >= 12: base = max(base, 50)
+    elif ppg >= 9:  base = max(base, 44)
 
-    # Non-scorer cap
-    if   ppg < 8:  base = min(base, 58)
-    elif ppg < 10: base = min(base, 63)
-    elif ppg < 13: base = min(base, 68)
+    # Non-scorer cap (tightened -- high ppg without BPM signal = inefficient volume)
+    if   ppg < 8:  base = min(base, 56)
+    elif ppg < 10: base = min(base, 61)
+    elif ppg < 13: base = min(base, 66)
+    elif ppg < 16: base = min(base, 70)  # new: 13-16ppg caps at 70
 
     # Injury soft boost
     gp = raw.get("gp", 82)
