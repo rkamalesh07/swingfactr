@@ -982,6 +982,31 @@ def new_game(body: NewGameBody):
         print(f"Advanced metrics: {len(adv_lookup)}, contracts: {len(contracts)}")
         if len(adv_lookup) == 0:
             raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
+
+        # Enrich adv_lookup with PPG and usage from box score data
+        # so talent_from_advanced can apply usage*ppg floors correctly
+        import unicodedata as _ud
+        def _norm(s):
+            s = _ud.normalize("NFKD", str(s))
+            return "".join(c for c in s if not _ud.combining(c)).strip()
+
+        for p in players:
+            name = _norm(p.get("full_name") or p.get("player_name") or "")
+            ppg  = float(p.get("ppg") or 0)
+            mpg  = float(p.get("mpg") or 1)
+            apg  = float(p.get("apg") or 0)
+            fga  = float(p.get("fga_per_g") or 0)
+            fta  = float(p.get("fta_per_g") or 0)
+            # Approximate usage: (FGA + 0.44*FTA + TOV) / team_poss_proxy
+            # Simple proxy: usage ~ (fga + 0.44*fta) / (mpg/48 * 100)
+            poss = max(1.0, mpg / 48.0 * 100.0)
+            usage_approx = min(0.45, (fga + 0.44 * fta) / poss)
+            for key in [name, name + " III", name + " Jr."]:
+                if key in adv_lookup:
+                    adv_lookup[key]["ppg"]     = ppg
+                    adv_lookup[key]["usg_pct"] = usage_approx
+                    break
+
         league  = build_league(players, adv_lookup=adv_lookup, contracts=contracts)
         adv_count = len(adv_lookup)
         league["teams"][abbr]["gm_team"] = True
