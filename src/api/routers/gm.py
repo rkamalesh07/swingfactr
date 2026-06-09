@@ -1029,6 +1029,11 @@ def new_game(body: NewGameBody):
         adv_count = len(adv_lookup)
         league["teams"][abbr]["gm_team"] = True
         league["gm_team"] = abbr
+        # Initialize pick registry from real futures -- stored in save so trades mutate it
+        league["picks"] = {
+            team: [dict(p) for p in picks]
+            for team, picks in REAL_PICK_REGISTRY.items()
+        }
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO gm_saves (save_id, team_abbr, state)
@@ -1490,6 +1495,29 @@ async def propose_trade(save_id: str, body: dict):
             p for p in target_roster if p["id"] not in getting_ids
         ] + give_players
 
+        # Move picks between teams
+        if picks_offered or picks_requested:
+            if "picks" not in league:
+                league["picks"] = {t: list(p) for t, p in REAL_PICK_REGISTRY.items()}
+            my_team_picks  = league["picks"].get(gm_team, [])
+            opp_team_picks = league["picks"].get(target_team, [])
+
+            # Picks offered by GM go to target team
+            new_my_picks  = [p for p in my_team_picks  if p.get("note") not in picks_offered]
+            given_picks   = [p for p in my_team_picks  if p.get("note") in picks_offered]
+            opp_team_picks += given_picks
+
+            # Picks requested from target team come to GM
+            new_opp_picks  = [p for p in opp_team_picks if p.get("note") not in picks_requested]
+            received_picks = [p for p in opp_team_picks if p.get("note") in picks_requested]
+            # Update original_owner to reflect new ownership
+            for pk in received_picks:
+                pk["acquired_from"] = target_team
+            new_my_picks += received_picks
+
+            league["picks"][gm_team]    = new_my_picks
+            league["picks"][target_team] = new_opp_picks
+
         # Recalculate cap
         for team in [gm_team, target_team]:
             roster = league["teams"][team]["roster"]
@@ -1932,8 +1960,9 @@ async def get_team_picks(save_id: str, team: str = None):
     gm_team = league.get("gm_team", "")
     target = team or gm_team
 
-    picks = league.get("picks", {})
-    team_picks = picks.get(target, REAL_PICK_REGISTRY.get(target, []))
+    # Picks live in the save state -- if not there yet (old save), fall back to registry
+    picks = league.get("picks") or {}
+    team_picks = picks.get(target) if picks.get(target) is not None else REAL_PICK_REGISTRY.get(target, [])
     return {"team": target, "picks": team_picks}
 
 
