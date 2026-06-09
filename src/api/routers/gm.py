@@ -261,11 +261,12 @@ def extract_raw_stats(row: dict) -> dict:
         "pts36": pts36, "ast36": ast36, "reb36": reb36,
         "stk36": stk36, "tov36": tov36, "fg3_36": fg3_36,
         "pm_net": pm_net, "availability": availability,
+        "bh_score": apg * 2.0 - tov,
     }
 
 def build_distributions(all_raw: list[dict]) -> dict:
     keys = ["pts36", "ast36", "reb36", "stk36", "pm_net",
-            "fg3_36", "efg", "availability", "mpg"]
+            "fg3_36", "efg", "availability", "mpg", "bh_score"]
     return {k: sorted(r[k] for r in all_raw) for k in keys}
 
 def talent_from_boxscore(raw: dict, dist: dict) -> float:
@@ -513,6 +514,7 @@ def rate_player(row: dict, dist: dict, adv_metrics: dict | None = None) -> dict:
         "playmaking":    dim("pm_net", 15, 92),
         "rebounding":    dim("reb36", 15, 90),
         "defense":       dim("stk36", 15, 88),
+        "ball_handling":  dim("bh_score", 10, 96),
         "composure":     round(clamp(normalize(raw["availability"], 0.05, 0.75, 20, 88))),
         "contract_value": round(clamp(50 + (market_salary(float(talent), age) / max(salary, 1) - 1) * 40, 0, 99)),
         "archetype":     archetype,
@@ -832,6 +834,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 "playmaking":  ratings["playmaking"],
                 "rebounding":  ratings["rebounding"],
                 "defense":     ratings["defense"],
+                "ball_handling": ratings.get("ball_handling", 50),
                 "composure":   ratings["composure"],
                 "archetype":   ratings["archetype"],
                 "contract_value": ratings["contract_value"],
