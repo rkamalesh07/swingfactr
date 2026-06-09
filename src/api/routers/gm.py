@@ -1228,3 +1228,314 @@ def league_players(save_id: str, limit: int = Query(600)):
     all_players.extend(league.get("fa_pool", []))
     all_players.sort(key=lambda x: -x.get("overall", 0))
     return {"players": all_players[:limit], "total": len(all_players)}
+
+# ─── Trade Evaluation ────────────────────────────────────────────────────────
+
+TEAM_STATUS_MAP = {
+    "OKC":"Dynasty","BOS":"Contender","CLE":"Contender","NY":"Contender",
+    "SA":"Contender","DEN":"Contender","MIN":"Contender","MEM":"Rising",
+    "HOU":"Rising","ATL":"Rising","NO":"Rising","IND":"Retooling",
+    "DAL":"Retooling","LAL":"Retooling","MIL":"Retooling","PHX":"Retooling",
+    "SAC":"Retooling","GS":"Retooling","MIA":"Retooling","LAC":"Retooling",
+    "POR":"Rebuilding","DET":"Rebuilding","CHA":"Rebuilding","WSH":"Rebuilding",
+    "UTAH":"Rebuilding","BKN":"Rebuilding","TOR":"Rebuilding","CHI":"Rebuilding",
+    "ORL":"Rebuilding","PHI":"Rebuilding",
+}
+
+def ai_trade_decision(
+    give_players: list, get_players: list, give_picks: list, get_picks: list,
+    target_team: str, state: dict, league: dict
+) -> dict:
+    """
+    AI evaluates a trade proposal from the player's perspective.
+    Returns decision with reasoning.
+    """
+    import random
+
+    gm_team     = state.get("gm_team", "")
+    target_status = TEAM_STATUS_MAP.get(target_team, "Retooling")
+    gm_status     = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+
+    give_tv  = sum(p.get("trade_value", 50) for p in give_players)
+    get_tv   = sum(p.get("trade_value", 50) for p in get_players)
+    give_sal = sum(p.get("salary", 0) for p in give_players)
+    get_sal  = sum(p.get("salary", 0) for p in get_players)
+
+    # Pick value: R1 = 12pts, R2 = 4pts
+    give_pick_val = sum(12 if "Round 1" in p or "R1" in p else 4 for p in give_picks)
+    get_pick_val  = sum(12 if "Round 1" in p or "R1" in p else 4 for p in get_picks)
+
+    give_total = give_tv + give_pick_val
+    get_total  = get_tv  + get_pick_val
+
+    # CBA check
+    SALARY_CAP   = 154_647_000
+    FIRST_APRON  = 178_132_000
+    SECOND_APRON = 188_931_000
+    target_payroll = sum(
+        p.get("salary", 0)
+        for p in league.get("teams", {}).get(target_team, {}).get("roster", [])
+    )
+    if target_payroll > SECOND_APRON:
+        max_incoming = give_sal
+    elif target_payroll > FIRST_APRON:
+        max_incoming = give_sal * 1.10
+    else:
+        max_incoming = give_sal + 7_500_000
+
+    if give_sal > max_incoming * 1.01:
+        return {
+            "result": "REJECTED",
+            "reason": f"{target_team} is over the second apron and can't take back more salary.",
+        }
+
+    # Value ratio -- how lopsided is the trade?
+    if give_total == 0:
+        return {"result": "REJECTED", "reason": "You're not offering anything."}
+
+    ratio = get_total / max(give_total, 1)
+
+    # Base acceptance thresholds by team status
+    # Rebuilding teams: want picks and young talent, not win-now pieces
+    # Contenders: want proven players, hate picks-only deals
+    rebuilding = target_status in ("Rebuilding", "Rising")
+    contending = target_status in ("Dynasty", "Contender")
+
+    # Check if we're offering picks to a rebuilding team (they love this)
+    picks_to_rebuilder = rebuilding and give_pick_val > 0
+
+    # Check if target team is receiving a player that fits their needs
+    target_roster = league.get("teams", {}).get(target_team, {}).get("roster", [])
+    target_avg_ovr = sum(p.get("overall", 50) for p in target_roster) / max(len(target_roster), 1)
+    getting_better = any(p.get("overall", 0) > target_avg_ovr + 5 for p in give_players)
+
+    # Decision logic
+    threshold = 0.85  # default: need to receive 85% of what you give
+    if rebuilding:
+        if give_pick_val >= 20:   threshold = 0.65  # rebuilders desperate for picks
+        elif give_pick_val >= 12: threshold = 0.75
+        else:                     threshold = 0.90  # rebuilders don't want bad contracts
+    elif contending:
+        if get_pick_val > 0 and get_tv < give_tv * 0.7:
+            return {
+                "result": "REJECTED",
+                "reason": f"{target_team} is competing now. They're not trading quality players for picks.",
+            }
+        threshold = 0.88  # contenders drive harder bargains
+
+    # Noise: AI isn't perfect
+    noise = random.uniform(-0.08, 0.08)
+    effective_ratio = ratio + noise
+
+    if effective_ratio >= 1.10:
+        return {
+            "result": "ACCEPTED",
+            "reason": f"{target_team} views this as a favorable deal." +
+                (" They're prioritizing picks to rebuild." if picks_to_rebuilder else ""),
+        }
+    elif effective_ratio >= threshold:
+        # Counter offer scenario
+        if random.random() < 0.35:
+            shortfall = round((1.0 - effective_ratio) * give_total)
+            return {
+                "result": "COUNTERED",
+                "reason": f"{target_team} likes the framework but wants more value. " +
+                    f"Add {shortfall} trade value (a pick or role player) to get this done.",
+            }
+        return {
+            "result": "ACCEPTED",
+            "reason": f"{target_team} accepts. The value works out." +
+                (" They needed to move this contract." if get_sal > 30_000_000 and rebuilding else ""),
+        }
+    else:
+        # Rejection reasons
+        if contending and give_pick_val > get_tv * 0.5:
+            reason = f"{target_team} doesn't need picks. They need players who can help now."
+        elif get_tv > give_tv * 1.3:
+            reason = f"{target_team} values their player too highly to move them for this."
+        elif rebuilding and get_tv < 40 and give_pick_val == 0:
+            reason = f"{target_team} is rebuilding. They want draft capital, not expiring veterans."
+        else:
+            reason = f"{target_team} doesn't see enough value here."
+        return {"result": "REJECTED", "reason": reason}
+
+
+@router.post("/trade/{save_id}")
+async def propose_trade(save_id: str, body: dict):
+    """
+    Evaluate a trade proposal. Applies real CBA rules + AI logic.
+    If accepted, updates the save state.
+    """
+    giving_ids     = body.get("giving", [])
+    getting_ids    = body.get("getting", [])
+    target_team    = body.get("target_team", "")
+    picks_offered  = body.get("picks_offered", [])
+    picks_requested= body.get("picks_requested", [])
+
+    if not target_team:
+        return {"result": "REJECTED", "reason": "No target team specified."}
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT state FROM gm_saves WHERE save_id=%s", (save_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Save not found")
+        cur.close()
+
+    league = row[0]
+    state  = league.get("state", league)
+    gm_team = league.get("gm_team") or state.get("gm_team", "")
+
+    my_roster     = league["teams"][gm_team]["roster"]
+    target_roster = league["teams"].get(target_team, {}).get("roster", [])
+
+    give_players = [p for p in my_roster     if p["id"] in giving_ids]
+    get_players  = [p for p in target_roster if p["id"] in getting_ids]
+
+    # CBA matching check (from user's side)
+    give_sal = sum(p.get("salary", 0) for p in give_players)
+    get_sal  = sum(p.get("salary", 0) for p in get_players)
+    cap_used = league["teams"][gm_team].get("cap_used",
+               sum(p.get("salary",0) for p in my_roster))
+
+    SALARY_CAP   = 154_647_000
+    FIRST_APRON  = 178_132_000
+    SECOND_APRON = 188_931_000
+
+    if cap_used > SECOND_APRON:
+        max_incoming = give_sal
+        apron = "second apron"
+    elif cap_used > FIRST_APRON:
+        max_incoming = give_sal * 1.10
+        apron = "first apron"
+    else:
+        max_incoming = give_sal + 7_500_000
+        apron = "over cap"
+
+    if get_sal > max_incoming * 1.01:
+        return {
+            "result": f"REJECTED — Salary mismatch ({apron}). "
+                      f"Sending ${give_sal/1e6:.1f}M, max you can receive: ${max_incoming/1e6:.1f}M"
+        }
+
+    # AI decision
+    decision = ai_trade_decision(
+        give_players, get_players, picks_offered, picks_requested,
+        target_team, {"gm_team": gm_team}, league
+    )
+
+    # If accepted, execute the trade in the save state
+    if decision["result"] == "ACCEPTED":
+        # Move players
+        league["teams"][gm_team]["roster"]  = [
+            p for p in my_roster if p["id"] not in giving_ids
+        ] + get_players
+
+        league["teams"][target_team]["roster"] = [
+            p for p in target_roster if p["id"] not in getting_ids
+        ] + give_players
+
+        # Recalculate cap
+        for team in [gm_team, target_team]:
+            roster = league["teams"][team]["roster"]
+            league["teams"][team]["cap_used"] = sum(p.get("salary",0) for p in roster)
+
+        # Save
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE gm_saves SET state=%s WHERE save_id=%s",
+                        (json.dumps(league), save_id))
+            conn.commit()
+            cur.close()
+
+    return {
+        "result": f"{decision['result']} — {decision['reason']}",
+        "accepted": decision["result"] == "ACCEPTED",
+    }
+
+
+@router.get("/ai-trade-offers/{save_id}")
+async def get_ai_trade_offers(save_id: str):
+    """
+    Generate 1-2 unsolicited trade offers from AI teams based on roster needs.
+    Rebuilding/retooling teams offer picks for your veterans.
+    Contending teams offer players for your stars.
+    """
+    import random
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT state FROM gm_saves WHERE save_id=%s", (save_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Save not found")
+        cur.close()
+
+    league  = row[0]
+    gm_team = league.get("gm_team", "")
+    my_roster = sorted(
+        league["teams"][gm_team]["roster"],
+        key=lambda p: -p.get("overall", 0)
+    )
+
+    if not my_roster:
+        return {"offers": []}
+
+    offers = []
+    teams  = [t for t in league["teams"] if t != gm_team]
+    random.shuffle(teams)
+
+    for target_team in teams[:8]:
+        status = TEAM_STATUS_MAP.get(target_team, "Retooling")
+        target_roster = league["teams"][target_team].get("roster", [])
+        if not target_roster:
+            continue
+
+        target_avg = sum(p.get("overall",50) for p in target_roster) / len(target_roster)
+
+        # Rebuilding/Rising teams: offer picks for your veterans/expirings
+        if status in ("Rebuilding", "Rising"):
+            # Find a tradeable veteran on your team (age 30+, OVR 60-75)
+            targets = [p for p in my_roster if p.get("age",25)>=30 and 58<=p.get("overall",0)<=76]
+            if not targets:
+                continue
+            target_player = random.choice(targets[:3])
+            offer = {
+                "from_team": target_team,
+                "from_team_status": status,
+                "type": "picks_for_veteran",
+                "they_want": [{"name": target_player["name"], "overall": target_player["overall"], "salary": target_player.get("salary",0), "id": target_player["id"]}],
+                "they_offer_picks": ["2027 1st Round Pick", "2028 2nd Round Pick"] if random.random() < 0.5 else ["2027 1st Round Pick"],
+                "they_offer_players": [],
+                "message": f"{target_team} is rebuilding and sees {target_player['name']} as a short-term piece. They're offering draft capital.",
+            }
+            offers.append(offer)
+
+        # Retooling teams: offer a decent player for a slight upgrade
+        elif status == "Retooling":
+            their_tradeable = [p for p in target_roster if 60<=p.get("overall",0)<=78]
+            my_targets = [p for p in my_roster if p.get("overall",0) >= 72]
+            if not their_tradeable or not my_targets:
+                continue
+            their_player = random.choice(their_tradeable[:4])
+            my_player = random.choice(my_targets[:3])
+            # Only offer if salaries are within CBA
+            sal_diff = abs(their_player.get("salary",0) - my_player.get("salary",0))
+            if sal_diff > 10_000_000:
+                continue
+            offer = {
+                "from_team": target_team,
+                "from_team_status": status,
+                "type": "player_swap",
+                "they_want": [{"name": my_player["name"], "overall": my_player["overall"], "salary": my_player.get("salary",0), "id": my_player["id"]}],
+                "they_offer_picks": [],
+                "they_offer_players": [{"name": their_player["name"], "overall": their_player["overall"], "salary": their_player.get("salary",0), "id": their_player["id"]}],
+                "message": f"{target_team} thinks {their_player['name']} fits your system. They want {my_player['name']} in return.",
+            }
+            offers.append(offer)
+
+        if len(offers) >= 2:
+            break
+
+    return {"offers": offers}
