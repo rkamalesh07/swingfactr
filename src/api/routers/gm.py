@@ -1624,3 +1624,335 @@ async def get_ai_trade_offers(save_id: str):
             break
 
     return {"offers": offers}
+
+# ─── Draft Pick Registry ──────────────────────────────────────────────────────
+
+# Real 2026-2032 draft pick ownership from NBA futures document
+# Format: {team: [{round, year, note, protection, original_owner}]}
+# Only includes picks the team currently OWNS (not traded away)
+REAL_PICK_REGISTRY: dict = {
+  "WSH": [
+    {"round":1,"year":2026,"note":"Own #1 (lottery)","original_owner":"WSH"},
+    {"round":2,"year":2026,"note":"via NYK-OKC","original_owner":"NYK"},
+    {"round":2,"year":2026,"note":"via MIN-DET","original_owner":"MIN"},
+    {"round":2,"year":2026,"note":"via MIA-SAN","original_owner":"OKC"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"WSH"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"WSH"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"WSH"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"WSH"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"WSH"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"WSH"},
+  ],
+  "UTAH": [
+    {"round":1,"year":2026,"note":"Own #2","original_owner":"UTAH"},
+    {"round":1,"year":2027,"note":"2nd-best of UTH/CLE/MIN","original_owner":"UTAH","protection":"complex swap"},
+    {"round":1,"year":2028,"note":"Own or swap CLE","original_owner":"UTAH"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"UTAH","protection":"complex swap w/CLE/MIN"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"UTAH"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"UTAH"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"UTAH"},
+  ],
+  "MEM": [
+    {"round":1,"year":2026,"note":"Own #3","original_owner":"MEM"},
+    {"round":1,"year":2026,"note":"PHX #16 (via swap)","original_owner":"PHX"},
+    {"round":2,"year":2026,"note":"IND via MIL","original_owner":"IND"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"MEM"},
+    {"round":1,"year":2027,"note":"LAL 5-30","original_owner":"LAL","protection":"top-4 protected"},
+    {"round":1,"year":2027,"note":"Best of UTH/CLE/MIN","original_owner":"UTAH"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"MEM"},
+    {"round":1,"year":2029,"note":"Own or swap ORL 3-30","original_owner":"MEM"},
+    {"round":1,"year":2030,"note":"Own or best w/PHX/WAS","original_owner":"MEM"},
+    {"round":1,"year":2031,"note":"Own + PHX via UTH","original_owner":"MEM"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"MEM"},
+  ],
+  "CHI": [
+    {"round":1,"year":2026,"note":"Own #4","original_owner":"CHI"},
+    {"round":1,"year":2026,"note":"POR #15","original_owner":"POR"},
+    {"round":2,"year":2026,"note":"NO via POR-DET-BOS","original_owner":"NO"},
+    {"round":2,"year":2026,"note":"DEN via PHX-CHA","original_owner":"DEN"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"CHI"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"CHI"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"CHI"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"CHI"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"CHI"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"CHI"},
+  ],
+  "LAC": [
+    {"round":1,"year":2026,"note":"IND #5","original_owner":"IND"},
+    {"round":2,"year":2026,"note":"MEM via UTAH-ATL","original_owner":"MEM"},
+    {"round":2,"year":2026,"note":"CLE","original_owner":"CLE"},
+    {"round":1,"year":2027,"note":"Own (swap w/DEN/OKC)","original_owner":"LAC","protection":"top-5 protected"},
+    {"round":1,"year":2029,"note":"Own 1-3; rest own or PHI swap","original_owner":"LAC"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"LAC"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"LAC"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"LAC"},
+  ],
+  "BKN": [
+    {"round":1,"year":2026,"note":"Own #6 (via HOU)","original_owner":"BKN"},
+    {"round":2,"year":2026,"note":"Own #33","original_owner":"BKN"},
+    {"round":2,"year":2026,"note":"LAC via HOU","original_owner":"LAC"},
+    {"round":1,"year":2027,"note":"Own or HOU swap","original_owner":"BKN"},
+    {"round":1,"year":2027,"note":"NYK","original_owner":"NYK"},
+    {"round":1,"year":2028,"note":"Own + complex PHX/NYK picks","original_owner":"BKN"},
+    {"round":1,"year":2029,"note":"Own + DAL/PHX/HOU picks","original_owner":"BKN"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"BKN"},
+    {"round":1,"year":2031,"note":"Own + NYK","original_owner":"BKN"},
+    {"round":1,"year":2032,"note":"Own + DEN","original_owner":"BKN"},
+  ],
+  "SAC": [
+    {"round":1,"year":2026,"note":"Own #7","original_owner":"SAC"},
+    {"round":2,"year":2026,"note":"Own #34","original_owner":"SAC"},
+    {"round":2,"year":2026,"note":"CHA via NYK-ATL-SAN","original_owner":"CHA"},
+    {"round":1,"year":2027,"note":"Own + SAN 1-16","original_owner":"SAC"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"SAC"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"SAC"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"SAC"},
+    {"round":1,"year":2031,"note":"Own or SAN swap","original_owner":"SAC"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"SAC"},
+  ],
+  "NO": [
+    {"round":2,"year":2026,"note":"DET via LAC-ORL-PHX-BRK-NYK","original_owner":"DET"},
+    {"round":1,"year":2027,"note":"Own (NOP or MIL better)","original_owner":"NO","protection":"top-4 to ATL"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"NO"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"NO"},
+    {"round":1,"year":2030,"note":"Own or ORL swap","original_owner":"NO"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"NO"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"NO"},
+  ],
+  "DAL": [
+    {"round":1,"year":2026,"note":"Own #9","original_owner":"DAL"},
+    {"round":1,"year":2026,"note":"OKC #30 via PHI-WAS","original_owner":"OKC"},
+    {"round":2,"year":2026,"note":"PHX via WAS","original_owner":"PHX"},
+    {"round":1,"year":2027,"note":"Own 1-2; 3-30 to CHA","original_owner":"DAL","protection":"top-2 protected"},
+    {"round":1,"year":2028,"note":"Own or OKC swap","original_owner":"DAL"},
+    {"round":1,"year":2030,"note":"Own or SAN swap","original_owner":"DAL"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"DAL"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"DAL"},
+  ],
+  "MIL": [
+    {"round":1,"year":2026,"note":"Own #10","original_owner":"MIL"},
+    {"round":1,"year":2028,"note":"Own (complex swap)","original_owner":"MIL"},
+    {"round":1,"year":2030,"note":"Own or POR swap","original_owner":"MIL"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"MIL"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"MIL"},
+  ],
+  "GS": [
+    {"round":1,"year":2026,"note":"Own #11","original_owner":"GS"},
+    {"round":2,"year":2026,"note":"LAL via CLE-MIA-TOR","original_owner":"LAL"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"GS"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"GS"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"GS"},
+    {"round":1,"year":2030,"note":"Own 1-20; 21-30 to DAL","original_owner":"GS","protection":"top-20 protected"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"GS"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"GS"},
+  ],
+  "OKC": [
+    {"round":1,"year":2026,"note":"LAC #12","original_owner":"LAC"},
+    {"round":1,"year":2026,"note":"PHI #17","original_owner":"PHI"},
+    {"round":2,"year":2026,"note":"DAL","original_owner":"DAL"},
+    {"round":2,"year":2026,"note":"WAS via MIA-SAN","original_owner":"WAS"},
+    {"round":1,"year":2027,"note":"Own + DEN 6-30","original_owner":"OKC"},
+    {"round":1,"year":2028,"note":"Own or swap DAL + DEN 6-30","original_owner":"OKC"},
+    {"round":1,"year":2029,"note":"Own + DEN 6-30","original_owner":"OKC"},
+    {"round":1,"year":2030,"note":"Own + DEN 6-30","original_owner":"OKC"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"OKC"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"OKC"},
+  ],
+  "MIA": [
+    {"round":1,"year":2026,"note":"Own #13","original_owner":"MIA"},
+    {"round":2,"year":2026,"note":"GS via ATL-OKC-NYK-CHA","original_owner":"GS"},
+    {"round":1,"year":2027,"note":"Own 1-14; 15-30 to CHA","original_owner":"MIA","protection":"top-14 protected"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"MIA"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"MIA"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"MIA"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"MIA"},
+  ],
+  "CHA": [
+    {"round":1,"year":2026,"note":"Own #14","original_owner":"CHA"},
+    {"round":1,"year":2026,"note":"ORL #18 (via MEM swap)","original_owner":"ORL"},
+    {"round":1,"year":2027,"note":"Own + DAL 3-30 + MIA 15-30","original_owner":"CHA"},
+    {"round":1,"year":2028,"note":"Own + MIA","original_owner":"CHA"},
+    {"round":1,"year":2029,"note":"Own + UTH/CLE/MIN picks","original_owner":"CHA"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"CHA"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"CHA"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"CHA"},
+  ],
+  "ATL": [
+    {"round":1,"year":2026,"note":"NO #8 via SAN swap","original_owner":"NO"},
+    {"round":1,"year":2026,"note":"CLE #23 via SAN swap","original_owner":"CLE"},
+    {"round":2,"year":2026,"note":"BOS #57","original_owner":"BOS"},
+    {"round":1,"year":2027,"note":"SAN (traded to SAN)","original_owner":"ATL"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"ATL"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"ATL"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"ATL"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"ATL"},
+  ],
+  "DET": [
+    {"round":1,"year":2026,"note":"MIN #21 (via DET swap)","original_owner":"MIN"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"DET"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"DET"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"DET"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"DET"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"DET"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"DET"},
+  ],
+  "PHI": [
+    {"round":2,"year":2026,"note":"HOU #22 via OKC","original_owner":"HOU"},
+    {"round":2,"year":2026,"note":"HOU #53","original_owner":"HOU"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"PHI"},
+    {"round":1,"year":2028,"note":"Own 1-8; complex 9-30","original_owner":"PHI","protection":"lottery protected complex"},
+    {"round":1,"year":2029,"note":"Own or swap LAC 4-30","original_owner":"PHI"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"PHI"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"PHI"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"PHI"},
+  ],
+  "DEN": [
+    {"round":1,"year":2026,"note":"Own #26","original_owner":"DEN"},
+    {"round":2,"year":2026,"note":"ATL via GOS-BRK","original_owner":"ATL"},
+    {"round":1,"year":2027,"note":"Own 1-5; 6-30 to OKC","original_owner":"DEN","protection":"top-5 protected"},
+    {"round":1,"year":2028,"note":"Own 1-5; 6-30 to OKC","original_owner":"DEN","protection":"top-5 protected"},
+    {"round":1,"year":2029,"note":"Own 1-5; 6-30 to OKC","original_owner":"DEN","protection":"top-5 protected"},
+    {"round":1,"year":2030,"note":"Own 1-5; 6-30 to OKC","original_owner":"DEN","protection":"top-5 protected"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"DEN"},
+  ],
+  "CLE": [
+    {"round":2,"year":2026,"note":"SAN #29 via SAN swap","original_owner":"SA"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"CLE"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"CLE"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"CLE"},
+  ],
+  "TOR": [
+    {"round":1,"year":2026,"note":"Own #19","original_owner":"TOR"},
+    {"round":2,"year":2026,"note":"Own #50","original_owner":"TOR"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"TOR"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"TOR"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"TOR"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"TOR"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"TOR"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"TOR"},
+  ],
+  "ORL": [
+    {"round":2,"year":2026,"note":"Own #46","original_owner":"ORL"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"ORL"},
+    {"round":1,"year":2029,"note":"Own 1-2; 3-30 complex","original_owner":"ORL","protection":"top-2 protected"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"ORL"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"ORL"},
+  ],
+  "SA": [
+    {"round":1,"year":2026,"note":"ATL #20 (via SAN swap)","original_owner":"ATL"},
+    {"round":2,"year":2026,"note":"UTAH #35 via MIN","original_owner":"UTAH"},
+    {"round":2,"year":2026,"note":"POR #42 via NO","original_owner":"POR"},
+    {"round":2,"year":2026,"note":"MIA #44 via MIA-IND","original_owner":"MIA"},
+    {"round":2,"year":2026,"note":"MIN #59 via MIA-IND","original_owner":"MIN"},
+    {"round":1,"year":2027,"note":"ATL (via SAN swap)","original_owner":"SA"},
+    {"round":1,"year":2028,"note":"Own or swap BOS 2-30","original_owner":"SA"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"SA"},
+    {"round":1,"year":2030,"note":"Best of SAN/DAL/MIN","original_owner":"SA"},
+    {"round":1,"year":2031,"note":"Own or swap SAC","original_owner":"SA"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"SA"},
+  ],
+  "HOU": [
+    {"round":2,"year":2026,"note":"CHI #39 via WAS","original_owner":"CHI"},
+    {"round":2,"year":2026,"note":"Own #53","original_owner":"HOU"},
+    {"round":1,"year":2027,"note":"Own or swap BRK + PHX","original_owner":"HOU"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"HOU"},
+    {"round":1,"year":2029,"note":"Own + best of HOU/DAL/PHX","original_owner":"HOU"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"HOU"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"HOU"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"HOU"},
+  ],
+  "NYK": [
+    {"round":1,"year":2026,"note":"Own #24","original_owner":"NYK"},
+    {"round":2,"year":2026,"note":"WAS #31 via HOU-OKC","original_owner":"WAS"},
+    {"round":2,"year":2026,"note":"Own #55","original_owner":"NYK"},
+    {"round":1,"year":2028,"note":"Own (complex swap)","original_owner":"NYK"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"NYK"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"NYK"},
+  ],
+  "LAL": [
+    {"round":1,"year":2026,"note":"Own #25","original_owner":"LAL"},
+    {"round":1,"year":2027,"note":"Own 1-4; 5-30 to MEM","original_owner":"LAL","protection":"top-4 protected"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"LAL"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"LAL"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"LAL"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"LAL"},
+  ],
+  "PHX": [
+    {"round":2,"year":2026,"note":"PHI #47 via OKC-HOU","original_owner":"PHI"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"PHX"},
+    {"round":1,"year":2032,"note":"Own (frozen thru 27-28)","original_owner":"PHX","protection":"frozen"},
+  ],
+  "MIN": [
+    {"round":1,"year":2026,"note":"DET #28 via DET swap","original_owner":"DET"},
+    {"round":2,"year":2026,"note":"SAN #59 via MIA-IND","original_owner":"SA"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"MIN"},
+    {"round":1,"year":2029,"note":"Own 1-5; 6-30 complex","original_owner":"MIN","protection":"top-5 protected"},
+    {"round":1,"year":2030,"note":"Own (complex SAN/DAL swap)","original_owner":"MIN"},
+    {"round":1,"year":2032,"note":"Own (frozen thru 27-28)","original_owner":"MIN","protection":"frozen"},
+  ],
+  "POR": [
+    {"round":1,"year":2027,"note":"Own","original_owner":"POR"},
+    {"round":1,"year":2028,"note":"Own or swap MIL","original_owner":"POR"},
+    {"round":1,"year":2029,"note":"Own","original_owner":"POR"},
+    {"round":1,"year":2030,"note":"Own or swap MIL","original_owner":"POR"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"POR"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"POR"},
+  ],
+  "IND": [
+    {"round":1,"year":2027,"note":"Own","original_owner":"IND"},
+    {"round":1,"year":2028,"note":"Own","original_owner":"IND"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"IND"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"IND"},
+    {"round":1,"year":2032,"note":"Own","original_owner":"IND"},
+  ],
+  "BOS": [
+    {"round":1,"year":2026,"note":"Own #27","original_owner":"BOS"},
+    {"round":2,"year":2026,"note":"MIL #40 via ORL","original_owner":"MIL"},
+    {"round":1,"year":2027,"note":"Own","original_owner":"BOS"},
+    {"round":1,"year":2028,"note":"Own 1 or swap SAN 2-30","original_owner":"BOS"},
+    {"round":1,"year":2030,"note":"Own","original_owner":"BOS"},
+    {"round":1,"year":2031,"note":"Own","original_owner":"BOS"},
+    {"round":1,"year":2032,"note":"Own (frozen thru 27-28)","original_owner":"BOS","protection":"frozen"},
+  ],
+}
+
+
+@router.get("/picks/{save_id}")
+async def get_team_picks(save_id: str, team: str = None):
+    """Get draft pick inventory for a team from the save state."""
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT state FROM gm_saves WHERE save_id=%s", (save_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Save not found")
+        cur.close()
+
+    league = row[0]
+    gm_team = league.get("gm_team", "")
+    target = team or gm_team
+
+    picks = league.get("picks", {})
+    team_picks = picks.get(target, REAL_PICK_REGISTRY.get(target, []))
+    return {"team": target, "picks": team_picks}
+
+
+@router.get("/all-picks/{save_id}")
+async def get_all_picks(save_id: str):
+    """Get pick inventory for all 30 teams."""
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT state FROM gm_saves WHERE save_id=%s", (save_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Save not found")
+        cur.close()
+
+    league = row[0]
+    saved_picks = league.get("picks", {})
+
+    all_picks = {}
+    for team in REAL_PICK_REGISTRY:
+        all_picks[team] = saved_picks.get(team, REAL_PICK_REGISTRY[team])
+
+    return {"picks": all_picks}
