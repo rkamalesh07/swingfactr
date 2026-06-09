@@ -1540,57 +1540,83 @@ async def get_ai_trade_offers(save_id: str):
     teams  = [t for t in league["teams"] if t != gm_team]
     random.shuffle(teams)
 
-    for target_team in teams[:8]:
+    gm_st = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+    gm_is_rebuilding = gm_st in ("Rebuilding", "Rising")
+    gm_is_contending = gm_st in ("Contender", "Dynasty")
+
+    for target_team in teams[:12]:
         status = TEAM_STATUS_MAP.get(target_team, "Retooling")
         target_roster = league["teams"][target_team].get("roster", [])
         if not target_roster:
             continue
 
-        target_avg = sum(p.get("overall",50) for p in target_roster) / len(target_roster)
-
-        # Rebuilding/Rising teams: offer picks for your veterans/expirings
-        if status in ("Rebuilding", "Rising"):
-            # Find a tradeable veteran on your team (age 30+, OVR 60-75, not untouchable)
-            gm_st = TEAM_STATUS_MAP.get(gm_team, "Retooling")
-            targets = [p for p in my_roster if p.get("age",25)>=30
-                       and 58<=p.get("overall",0)<=76
-                       and not is_untouchable(p, gm_st)]
-            if not targets:
+        # ── Case 1: Retooling/Rebuilding team wants to SELL a veteran ──────────
+        # They have aging expensive players they want off the books
+        # They offer that player + picks to YOUR team in exchange for matching salary
+        if status in ("Rebuilding", "Retooling", "Rising") and not gm_is_rebuilding:
+            # Their veteran they want to move: age 31+, OVR 58-74, expensive
+            their_for_sale = [
+                p for p in target_roster
+                if p.get("age", 25) >= 31
+                and 56 <= p.get("overall", 0) <= 74
+                and p.get("salary", 0) >= 10_000_000
+                and not is_untouchable(p, status)
+            ]
+            if not their_for_sale:
                 continue
-            target_player = random.choice(targets[:3])
+            their_player = random.choice(their_for_sale[:3])
+
+            # Find matching salary on YOUR team to take back
+            their_sal = their_player.get("salary", 0)
+            my_matches = [
+                p for p in my_roster
+                if abs(p.get("salary", 0) - their_sal) <= 8_000_000
+                and p.get("age", 25) >= 28
+                and not is_untouchable(p, gm_st)
+                and p.get("overall", 0) <= their_player.get("overall", 0) + 5
+            ]
+            if not my_matches:
+                continue
+            my_match = random.choice(my_matches[:3])
+
+            # They sweeten with a pick
+            pick_sweetener = ["2027 2nd Round Pick"] if random.random() < 0.6 else []
             offer = {
                 "from_team": target_team,
                 "from_team_status": status,
-                "type": "picks_for_veteran",
-                "they_want": [{"name": target_player["name"], "overall": target_player["overall"], "salary": target_player.get("salary",0), "id": target_player["id"]}],
-                "they_offer_picks": ["2027 1st Round Pick", "2028 2nd Round Pick"] if random.random() < 0.5 else ["2027 1st Round Pick"],
-                "they_offer_players": [],
-                "message": f"{target_team} is rebuilding and sees {target_player['name']} as a short-term piece. They're offering draft capital.",
+                "type": "sell_veteran",
+                "they_want": [{"name": my_match["name"], "overall": my_match["overall"],
+                               "salary": my_match.get("salary",0), "id": my_match["id"]}],
+                "they_offer_picks": pick_sweetener,
+                "they_offer_players": [{"name": their_player["name"], "overall": their_player["overall"],
+                                        "salary": their_player.get("salary",0), "id": their_player["id"]}],
+                "message": f"{target_team} is looking to move {their_player['name']} ({their_player.get('age')}yo, ${their_player.get('salary',0)/1e6:.1f}M). They want matching salary back.",
             }
             offers.append(offer)
 
-        # Retooling teams: offer a decent player for a slight upgrade
-        elif status == "Retooling":
-            their_tradeable = [p for p in target_roster if 60<=p.get("overall",0)<=78]
-            gm_st2 = TEAM_STATUS_MAP.get(gm_team, "Retooling")
-            my_targets = [p for p in my_roster if p.get("overall",0) >= 72
-                          and not is_untouchable(p, gm_st2)]
-            if not their_tradeable or not my_targets:
+        # ── Case 2: Rebuilding team offers picks for YOUR expiring veteran ──────
+        # Only targets non-untouchable players on expiring/short deals
+        elif status in ("Rebuilding", "Rising") and gm_is_contending:
+            my_expiring = [
+                p for p in my_roster
+                if p.get("age", 25) >= 30
+                and p.get("years_left", 2) <= 1
+                and 58 <= p.get("overall", 0) <= 76
+                and not is_untouchable(p, gm_st)
+            ]
+            if not my_expiring:
                 continue
-            their_player = random.choice(their_tradeable[:4])
-            my_player = random.choice(my_targets[:3])
-            # Only offer if salaries are within CBA
-            sal_diff = abs(their_player.get("salary",0) - my_player.get("salary",0))
-            if sal_diff > 10_000_000:
-                continue
+            target_player = random.choice(my_expiring[:3])
+            picks = ["2027 1st Round Pick"] if random.random() < 0.4 else ["2027 2nd Round Pick", "2028 2nd Round Pick"]
             offer = {
                 "from_team": target_team,
                 "from_team_status": status,
-                "type": "player_swap",
-                "they_want": [{"name": my_player["name"], "overall": my_player["overall"], "salary": my_player.get("salary",0), "id": my_player["id"]}],
-                "they_offer_picks": [],
-                "they_offer_players": [{"name": their_player["name"], "overall": their_player["overall"], "salary": their_player.get("salary",0), "id": their_player["id"]}],
-                "message": f"{target_team} thinks {their_player['name']} fits your system. They want {my_player['name']} in return.",
+                "type": "picks_for_expiring",
+                "they_want": [{"name": target_player["name"], "overall": target_player["overall"],
+                               "salary": target_player.get("salary",0), "id": target_player["id"]}],
+                "they_offer_picks": picks,
+                "they_offer_players": [],
+                "message": f"{target_team} wants {target_player['name']} for a playoff push. They're offering draft capital.",
             }
             offers.append(offer)
 
