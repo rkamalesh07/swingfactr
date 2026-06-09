@@ -1242,6 +1242,39 @@ TEAM_STATUS_MAP = {
     "ORL":"Rebuilding","PHI":"Rebuilding",
 }
 
+
+def is_untouchable(player: dict, team_status: str) -> bool:
+    """
+    A player is untouchable if they are a franchise cornerstone.
+    Based on overall rating, age, and trade value.
+    Contending/Dynasty teams protect more players.
+    """
+    ovr = player.get("overall", 0)
+    age = player.get("age", 28)
+    tv  = player.get("trade_value", 0)
+    sal = player.get("salary", 0)
+
+    # Always untouchable: elite young stars (Wemby, Flagg, Chet, JDub, Castle, Harper tier)
+    if ovr >= 80 and age <= 24:
+        return True
+
+    # Always untouchable: franchise stars in prime (SGA, Jokic, Giannis, Luka, Ant, Brunson tier)
+    if ovr >= 82 and age <= 30:
+        return True
+
+    # Untouchable for contending/dynasty teams: proven stars
+    if team_status in ("Contender", "Dynasty"):
+        if ovr >= 78 and age <= 32:
+            return True
+        if ovr >= 75 and tv >= 75:
+            return True
+
+    # High trade value young players (Amen Thompson, Paolo, Franz, Barnes tier)
+    if tv >= 78 and age <= 26:
+        return True
+
+    return False
+
 def ai_trade_decision(
     give_players: list, get_players: list, give_picks: list, get_picks: list,
     target_team: str, state: dict, league: dict
@@ -1255,6 +1288,27 @@ def ai_trade_decision(
     gm_team     = state.get("gm_team", "")
     target_status = TEAM_STATUS_MAP.get(target_team, "Retooling")
     gm_status     = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+
+    gm_status_local = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+    target_status_local = TEAM_STATUS_MAP.get(target_team, "Retooling")
+
+    # Check if user is requesting an untouchable from the target team
+    untouchable_requested = [
+        p for p in get_players
+        if is_untouchable(p, target_status_local)
+    ]
+
+    if untouchable_requested:
+        names = ", ".join(p["name"] for p in untouchable_requested)
+        # AI will only give up untouchables if receiving an untouchable back
+        untouchable_offered = [p for p in give_players if is_untouchable(p, gm_status_local)]
+        if not untouchable_offered:
+            return {
+                "result": "REJECTED",
+                "reason": f"{target_team} considers {names} untouchable. You need to offer a franchise-level player in return.",
+            }
+        # Both sides giving up untouchables -- evaluate normally but harder threshold
+        # Fall through to normal evaluation with tighter threshold
 
     give_tv  = sum(p.get("trade_value", 50) for p in give_players)
     get_tv   = sum(p.get("trade_value", 50) for p in get_players)
@@ -1496,8 +1550,11 @@ async def get_ai_trade_offers(save_id: str):
 
         # Rebuilding/Rising teams: offer picks for your veterans/expirings
         if status in ("Rebuilding", "Rising"):
-            # Find a tradeable veteran on your team (age 30+, OVR 60-75)
-            targets = [p for p in my_roster if p.get("age",25)>=30 and 58<=p.get("overall",0)<=76]
+            # Find a tradeable veteran on your team (age 30+, OVR 60-75, not untouchable)
+            gm_st = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+            targets = [p for p in my_roster if p.get("age",25)>=30
+                       and 58<=p.get("overall",0)<=76
+                       and not is_untouchable(p, gm_st)]
             if not targets:
                 continue
             target_player = random.choice(targets[:3])
@@ -1515,7 +1572,9 @@ async def get_ai_trade_offers(save_id: str):
         # Retooling teams: offer a decent player for a slight upgrade
         elif status == "Retooling":
             their_tradeable = [p for p in target_roster if 60<=p.get("overall",0)<=78]
-            my_targets = [p for p in my_roster if p.get("overall",0) >= 72]
+            gm_st2 = TEAM_STATUS_MAP.get(gm_team, "Retooling")
+            my_targets = [p for p in my_roster if p.get("overall",0) >= 72
+                          and not is_untouchable(p, gm_st2)]
             if not their_tradeable or not my_targets:
                 continue
             their_player = random.choice(their_tradeable[:4])
