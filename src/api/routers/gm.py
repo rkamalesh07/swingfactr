@@ -514,7 +514,7 @@ def rate_player(row: dict, dist: dict, adv_metrics: dict | None = None) -> dict:
         "playmaking":    dim("pm_net", 15, 92),
         "rebounding":    dim("reb36", 15, 90),
         "defense":       dim("stk36", 15, 88),
-        "ball_handling":  dim("bh_score", 10, 96),
+        "ball_handling":  dim("bh_score", 15, 88),
         "composure":     round(clamp(normalize(raw["availability"], 0.05, 0.75, 20, 88))),
         "contract_value": round(clamp(50 + (market_salary(float(talent), age) / max(salary, 1) - 1) * 40, 0, 99)),
         "archetype":     archetype,
