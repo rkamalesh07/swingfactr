@@ -772,7 +772,7 @@ function NBACalendar({onNav, currentGameDay, onSimToDay}: {onNav:(s:string)=>voi
                       </div>
                       {(ev as any).action&&(ev as any).action!=="done"&&(
                         <button
-                          onClick={()=>currentGameDay>=(ev as any).gameDay?onNav((ev as any).action):undefined}
+                          onClick={e=>{e.stopPropagation();if(currentGameDay>=(ev as any).gameDay) onNav((ev as any).action);}}
                           style={{fontFamily:MM,fontSize:6,background:"transparent",
                             border:`1px solid ${currentGameDay>=(ev as any).gameDay?TYPE_DOT[ev.type]+"88":"#222"}`,
                             borderRadius:2,padding:"2px 5px",
@@ -941,6 +941,8 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
   const result = SEASON_RESULTS[state.gm_team];
   const [offers, setOffers] = useState<any[]>([]);
   const [showAllOffers, setShowAllOffers] = useState(false);
+  const [simConfirm, setSimConfirm] = useState<{targetDay:number;days:number}|null>(null);
+  const [simming, setSimming] = useState(false);
   useEffect(()=>{
     if(!saveId) return;
     fetch(`${API}/gm/ai-trade-offers/${saveId}`)
@@ -1039,23 +1041,56 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       {/* Re-sign Window -- only after draft */}
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
-      {/* NBA Season Calendar */}
-      <NBACalendar onNav={onNav} currentGameDay={state.day} onSimToDay={async (targetDay)=>{
-                const daysToSim = targetDay - state.day;
-                if(daysToSim <= 0) return;
-                const confirm = daysToSim > 30 ? window.confirm(`Sim ${daysToSim} days forward? This will advance the season.`) : true;
-                if(!confirm) return;
-                // Sim in chunks of 30 days
-                let remaining = daysToSim;
+      {/* Sim Confirm Modal */}
+      {simConfirm && (
+        <div style={{position:"fixed" as const,inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{border:"1px solid #1a1a1a",borderRadius:4,background:"#080808",padding:"28px 32px",maxWidth:360,width:"90%"}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>ADVANCE SEASON</div>
+            <div style={{fontFamily:"Inter,sans-serif",fontSize:14,color:"#e0e0e0",marginBottom:6}}>
+              Sim {simConfirm.days} day{simConfirm.days!==1?"s":""} forward?
+            </div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#444",marginBottom:24}}>
+              {gameDayToDate(simConfirm.targetDay).month}/{gameDayToDate(simConfirm.targetDay).day}/{gameDayToDate(simConfirm.targetDay).year}
+            </div>
+            {simming && <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#888",marginBottom:16}}>Simming...</div>}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={async ()=>{
+                setSimming(true);
+                let remaining = simConfirm.days;
                 while(remaining > 0) {
-                  const chunk = Math.min(remaining, 30);
+                  const chunk = Math.min(remaining, 60);
                   await fetch(`${API}/gm/simulate/${saveId}`,{
                     method:"POST",headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({days:chunk})
                   });
                   remaining -= chunk;
                 }
+                setSimConfirm(null);
+                setSimming(false);
                 window.location.reload();
+              }} disabled={simming}
+                style={{flex:1,fontFamily:"'DM Mono',monospace",fontSize:9,textTransform:"uppercase" as const,
+                  letterSpacing:"0.08em",background:"#f0f0f0",color:"#000",border:"none",
+                  borderRadius:3,padding:"10px",cursor:simming?"not-allowed":"pointer"}}>
+                {simming?"SIMMING...":"SIM →"}
+              </button>
+              <button onClick={()=>setSimConfirm(null)} disabled={simming}
+                style={{fontFamily:"'DM Mono',monospace",fontSize:9,textTransform:"uppercase" as const,
+                  letterSpacing:"0.08em",background:"transparent",color:"#444",
+                  border:"1px solid #1a1a1a",borderRadius:3,padding:"10px 16px",cursor:"pointer"}}>
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NBA Season Calendar */}
+      <NBACalendar onNav={onNav} currentGameDay={state.day} onSimToDay={(targetDay)=>{
+                const daysToSim = targetDay - state.day;
+                if(daysToSim <= 0) return;
+                setSimConfirm({targetDay, days:daysToSim});
               }} />
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
@@ -2651,7 +2686,7 @@ export default function GMPage() {
         {section==="ROSTER"      && <RosterSection saveId={saveId} roster={roster} state={state} onRosterChange={()=>loadData(saveId)} />}
         {section==="STANDINGS"   && <StandingsSection saveId={saveId} gmTeam={state.gm_team} />}
         {section==="PROSPECTS"   && <ProspectsSection gmTeam={state.gm_team} currentGameDay={state.day} />}
-        {section==="DRAFT"       && state.day>=246 && <DraftSection gmTeam={state.gm_team} />}
+        {section==="DRAFT"       && state.day>=246 && <DraftSection gmTeam={state.gm_team} onViewProspect={(p)=>{setSection("PROSPECTS");}} />}
         {section==="DRAFT"       && state.day<246  && <div style={{padding:"40px",textAlign:"center" as const,fontFamily:"'DM Mono',monospace",fontSize:10,color:"#333"}}>Draft unlocks June 24</div>}
         {section==="TRADE"       && <TradeSection saveId={saveId} roster={roster} state={state} pendingOffer={pendingOffer} onOfferClear={()=>setPendingOffer(null)} />}
         {section==="FREE AGENTS" && <FASection saveId={saveId} state={state} onSign={()=>loadData(saveId)} />}
