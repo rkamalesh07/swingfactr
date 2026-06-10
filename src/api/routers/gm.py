@@ -891,7 +891,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
         team["roster"] = roster
         team["cap_used"] = sum(p["salary"] for p in team["roster"])
 
-    return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 0, "games_simmed": 0}
+    return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 245, "games_simmed": 0}
 
 # ─── Season Simulation ────────────────────────────────────────────────────────
 
