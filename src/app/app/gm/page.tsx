@@ -1485,7 +1485,7 @@ function ProspectsSection({gmTeam, currentGameDay}: {gmTeam:string; currentGameD
   );
 }
 
-function DraftSection({gmTeam}: {gmTeam:string}) {
+function DraftSection({gmTeam, onViewProspect}: {gmTeam:string; onViewProspect?:(p:any)=>void}) {
   const MM = "'DM Mono',monospace";
   const myPicks = TEAM_PICKS[gmTeam] || [];
   const mySlots = DRAFT_ORDER.filter(d => d.team === gmTeam).map(d => d.slot);
