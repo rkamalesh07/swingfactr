@@ -622,6 +622,153 @@ function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:stri
 
 // ─── Home Section ─────────────────────────────────────────────────────────────
 
+
+// ─── NBA Season Calendar ───────────────────────────────────────────────────────
+const NBA_CALENDAR_EVENTS = [
+  // Preseason
+  {month:10,day:2,year:2025,label:"Preseason Begins",type:"preseason",color:"#333"},
+  {month:10,day:17,year:2025,label:"Preseason Ends",type:"preseason",color:"#333"},
+  // Regular Season
+  {month:10,day:21,year:2025,label:"Regular Season Opens",type:"season",color:"#4bc87a"},
+  {month:4,day:12,year:2026,label:"Regular Season Ends",type:"season",color:"#4bc87a"},
+  // Play-In
+  {month:4,day:14,year:2026,label:"Play-In Tournament",type:"playin",color:"#6ab0e8"},
+  {month:4,day:17,year:2026,label:"Play-In Ends",type:"playin",color:"#6ab0e8"},
+  // Playoffs
+  {month:4,day:18,year:2026,label:"Playoffs R1 Game 1",type:"playoffs",color:"#c8a84b"},
+  {month:5,day:4,year:2026,label:"Second Round Begins",type:"playoffs",color:"#c8a84b"},
+  {month:5,day:18,year:2026,label:"Conference Finals G1",type:"playoffs",color:"#c8a84b"},
+  {month:5,day:30,year:2026,label:"Conf Finals G7 (if nec.)",type:"playoffs",color:"#c8a84b"},
+  // Finals
+  {month:6,day:3,year:2026,label:"NBA Finals Game 1",type:"finals",color:"#f0f0f0"},
+  {month:6,day:19,year:2026,label:"NBA Finals G7 (if nec.)",type:"finals",color:"#f0f0f0"},
+  // Offseason
+  {month:6,day:23,year:2026,label:"Draft Lottery",type:"draft",color:"#888"},
+  {month:6,day:24,year:2026,label:"NBA Draft",type:"draft",color:"#888"},
+  {month:6,day:30,year:2026,label:"Free Agency Opens",type:"fa",color:"#c86060"},
+  {month:7,day:6,year:2026,label:"Free Agency Frenzy Ends",type:"fa",color:"#c86060"},
+];
+
+const MONTH_NAMES = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
+  const MM = "'DM Mono',monospace";
+  const [viewMonth, setViewMonth] = useState(6); // Start at June (current)
+  const [viewYear, setViewYear] = useState(2026);
+
+  function prevMonth() {
+    if(viewMonth===1){setViewMonth(12);setViewYear(y=>y-1);}
+    else setViewMonth(m=>m-1);
+  }
+  function nextMonth() {
+    if(viewMonth===12){setViewMonth(1);setViewYear(y=>y+1);}
+    else setViewMonth(m=>m+1);
+  }
+
+  // Get days in month
+  const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const firstDay = new Date(viewYear, viewMonth-1, 1).getDay(); // 0=Sun
+
+  // Events for this month
+  const monthEvents = NBA_CALENDAR_EVENTS.filter(e=>e.month===viewMonth&&e.year===viewYear);
+
+  const TYPE_COLORS: Record<string,string> = {
+    preseason:"#222",season:"#1a3a1a",playin:"#0d2040",
+    playoffs:"#2a2000",finals:"#2a2a0d",draft:"#111",fa:"#2a0d0d",
+  };
+  const TYPE_DOT: Record<string,string> = {
+    preseason:"#333",season:"#4bc87a",playin:"#6ab0e8",
+    playoffs:"#c8a84b",finals:"#f0f0f0",draft:"#888",fa:"#c86060",
+  };
+
+  // Build day grid
+  const cells: (number|null)[] = [];
+  for(let i=0;i<firstDay;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++) cells.push(d);
+  while(cells.length%7!==0) cells.push(null);
+
+  const today = {m:6,d:10,y:2026}; // hardcoded current date
+
+  return (
+    <div style={{marginBottom:32,border:"1px solid #111",borderRadius:4,background:"#030303",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding:"12px 16px",borderBottom:"1px solid #0d0d0d"}}>
+        <button onClick={prevMonth} style={{fontFamily:MM,fontSize:10,background:"transparent",
+          border:"1px solid #1a1a1a",borderRadius:3,padding:"4px 10px",color:"#555",cursor:"pointer"}}>←</button>
+        <div style={{fontFamily:MM,fontSize:10,color:"#888",textTransform:"uppercase",letterSpacing:"0.1em"}}>
+          {MONTH_NAMES[viewMonth]} {viewYear}
+        </div>
+        <button onClick={nextMonth} style={{fontFamily:MM,fontSize:10,background:"transparent",
+          border:"1px solid #1a1a1a",borderRadius:3,padding:"4px 10px",color:"#555",cursor:"pointer"}}>→</button>
+      </div>
+
+      {/* Day headers */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #080808"}}>
+        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>(
+          <div key={d} style={{fontFamily:MM,fontSize:7,color:"#333",textAlign:"center" as const,padding:"6px 0",
+            textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>{d}</div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+        {cells.map((day,i)=>{
+          const events = day ? monthEvents.filter(e=>e.day===day) : [];
+          const isToday = day===today.d&&viewMonth===today.m&&viewYear===today.y;
+          return (
+            <div key={i} style={{
+              minHeight:72,borderRight:"1px solid #080808",borderBottom:"1px solid #080808",
+              padding:"6px",background:events.length>0?TYPE_COLORS[events[0].type]:"transparent",
+              opacity:day?1:0.3}}>
+              {day&&(
+                <>
+                  <div style={{fontFamily:MM,fontSize:8,color:isToday?"#f0f0f0":"#444",
+                    marginBottom:4,fontWeight:isToday?600:400,
+                    background:isToday?"#f0f0f0":undefined,color:isToday?"#000":"#444",
+                    borderRadius:isToday?2:0,padding:isToday?"1px 4px":undefined,display:"inline-block"}}>
+                    {day}
+                  </div>
+                  {events.map((ev,ei)=>(
+                    <div key={ei} style={{marginTop:2}}>
+                      <div style={{display:"flex",alignItems:"center",gap:3}}>
+                        <div style={{width:4,height:4,borderRadius:"50%",background:TYPE_DOT[ev.type],flexShrink:0}}/>
+                        <div style={{fontFamily:MM,fontSize:6.5,color:TYPE_DOT[ev.type],
+                          lineHeight:1.3,letterSpacing:"0.02em"}}>{ev.label}</div>
+                      </div>
+                      {(ev.type==="draft"||ev.type==="fa")&&(
+                        <button onClick={()=>onNav(ev.type==="draft"?"DRAFT":"FREE AGENTS")}
+                          style={{fontFamily:MM,fontSize:6,background:"transparent",
+                            border:`1px solid ${TYPE_DOT[ev.type]}33`,borderRadius:2,
+                            padding:"2px 5px",color:TYPE_DOT[ev.type],cursor:"pointer",
+                            marginTop:2,textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>
+                          {ev.type==="draft"?"GO →":"VIEW →"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,padding:"10px 16px",borderTop:"1px solid #080808",flexWrap:"wrap" as const}}>
+        {Object.entries(TYPE_DOT).map(([type,color])=>(
+          <div key={type} style={{display:"flex",alignItems:"center",gap:4}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:color}}/>
+            <span style={{fontFamily:MM,fontSize:7,color:"#333",textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>
+              {type==="fa"?"Free Agency":type==="playin"?"Play-In":type.charAt(0).toUpperCase()+type.slice(1)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ExpiringPlayersSection({saveId, state, onResign}: {saveId:string; state:GMState; onResign:()=>void}) {
   const MM = "'DM Mono',monospace";
   const [expiring, setExpiring] = useState<any[]>([]);
@@ -852,31 +999,8 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       {/* Re-sign Window -- only after draft */}
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
-      {/* Offseason Timeline */}
-      <div style={{marginBottom:40,padding:"16px 20px",border:"1px solid #111",borderRadius:4,background:"#030303"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:24}}>
-            {[
-              {id:"draft_lottery",label:"Lottery",date:"May 12"},
-              {id:"draft",label:"Draft Night",date:"Jun 26"},
-              {id:"free_agency",label:"Free Agency",date:"Jul 1"},
-              {id:"preseason",label:"Preseason",date:"Oct 4"},
-              {id:"season",label:"Season",date:"Oct 21"},
-            ].map((phase,i)=>(
-              <div key={phase.id} style={{display:"flex",alignItems:"center",gap:8}}>
-                {i>0 && <div style={{width:20,height:1,background:"#1a1a1a"}} />}
-                <div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#f0f0f0",textTransform:"uppercase",letterSpacing:"0.06em"}}>{phase.label}</div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#333"}}>{phase.date}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button onClick={()=>onNav("DRAFT")} style={{fontFamily:"'DM Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,padding:"8px 20px",cursor:"pointer",whiteSpace:"nowrap"}}>
-            SIM TO DRAFT →
-          </button>
-        </div>
-      </div>
+      {/* NBA Season Calendar */}
+      <NBACalendar onNav={onNav} />
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
