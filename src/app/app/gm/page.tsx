@@ -1019,7 +1019,16 @@ function RosterSection({saveId, roster, state, onRosterChange}: {saveId:string; 
               <div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:13,color:"#666",marginBottom:6}}>{fmt$(p.salary)}/yr</div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#666"}}>{p.years_left} yr{p.years_left!==1?"s":""} left</div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",marginTop:6}}>Total: {fmt$(p.salary*p.years_left)}</div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",marginTop:6}}>
+                  Total: {fmt$((p as any).contract_years?.reduce((s:number,v:number)=>s+v,0) || p.salary*(p.years_left+1))}
+                </div>
+                {(p as any).contract_years && (p as any).contract_years.length > 1 && (
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#333",marginTop:4}}>
+                    {(p as any).contract_years.map((v:number,i:number)=>(
+                      <span key={i} style={{marginRight:8}}>{2026+i}: {fmt$(v)}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
