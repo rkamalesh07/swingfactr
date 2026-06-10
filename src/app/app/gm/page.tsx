@@ -624,34 +624,81 @@ function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:stri
 
 
 // ─── NBA Season Calendar ───────────────────────────────────────────────────────
-const NBA_CALENDAR_EVENTS = [
-  // Preseason
-  {month:10,day:2,year:2025,label:"Preseason Begins",type:"preseason",color:"#333"},
-  {month:10,day:17,year:2025,label:"Preseason Ends",type:"preseason",color:"#333"},
-  // Regular Season
-  {month:10,day:21,year:2025,label:"Regular Season Opens",type:"season",color:"#4bc87a"},
-  {month:4,day:12,year:2026,label:"Regular Season Ends",type:"season",color:"#4bc87a"},
-  // Play-In
-  {month:4,day:14,year:2026,label:"Play-In Tournament",type:"playin",color:"#6ab0e8"},
-  {month:4,day:17,year:2026,label:"Play-In Ends",type:"playin",color:"#6ab0e8"},
-  // Playoffs
-  {month:4,day:18,year:2026,label:"Playoffs R1 Game 1",type:"playoffs",color:"#c8a84b"},
-  {month:5,day:4,year:2026,label:"Second Round Begins",type:"playoffs",color:"#c8a84b"},
-  {month:5,day:18,year:2026,label:"Conference Finals G1",type:"playoffs",color:"#c8a84b"},
-  {month:5,day:30,year:2026,label:"Conf Finals G7 (if nec.)",type:"playoffs",color:"#c8a84b"},
-  // Finals
-  {month:6,day:3,year:2026,label:"NBA Finals Game 1",type:"finals",color:"#f0f0f0"},
-  {month:6,day:19,year:2026,label:"NBA Finals G7 (if nec.)",type:"finals",color:"#f0f0f0"},
-  // Offseason
-  {month:6,day:23,year:2026,label:"Draft Lottery",type:"draft",color:"#888"},
-  {month:6,day:24,year:2026,label:"NBA Draft",type:"draft",color:"#888"},
-  {month:6,day:30,year:2026,label:"Free Agency Opens",type:"fa",color:"#c86060"},
-  {month:7,day:6,year:2026,label:"Free Agency Frenzy Ends",type:"fa",color:"#c86060"},
-];
+// Map game day (0=Oct 21 2025) to calendar date
+function gameDayToDate(day: number): {month:number,day:number,year:number} {
+  const start = new Date(2025, 9, 21); // Oct 21 2025
+  const d = new Date(start.getTime() + day * 24*60*60*1000);
+  return {month: d.getMonth()+1, day: d.getDate(), year: d.getFullYear()};
+}
+function dateToGameDay(month: number, day: number, year: number): number {
+  const start = new Date(2025, 9, 21);
+  const target = new Date(year, month-1, day);
+  return Math.round((target.getTime()-start.getTime())/(24*60*60*1000));
+}
+
+// Key game days (hardcoded)
+const GAME_DAYS = {
+  preseasonStart:  dateToGameDay(10,2,2025),    // Oct 2
+  preseasonEnd:    dateToGameDay(10,17,2025),   // Oct 17
+  seasonStart:     dateToGameDay(10,21,2025),   // Oct 21
+  seasonEnd:       dateToGameDay(4,12,2026),    // Apr 12
+  playinStart:     dateToGameDay(4,14,2026),    // Apr 14
+  playinEnd:       dateToGameDay(4,17,2026),    // Apr 17
+  r1Start:         dateToGameDay(4,18,2026),    // Apr 18
+  r2Start:         dateToGameDay(5,4,2026),     // May 4
+  confFinalsStart: dateToGameDay(5,18,2026),    // May 18
+  confFinalsEnd:   dateToGameDay(5,30,2026),    // May 30 (G7 if needed)
+  finalsG1:        dateToGameDay(6,3,2026),     // Jun 3
+  finalsG7:        dateToGameDay(6,19,2026),    // Jun 19 (if needed)
+  draftLottery:    dateToGameDay(6,22,2026),    // Jun 22
+  draftNight:      dateToGameDay(6,24,2026),    // Jun 24
+  freeAgencyOpen:  dateToGameDay(6,30,2026),    // Jun 30
+  freeAgencyEnd:   dateToGameDay(7,6,2026),     // Jul 6
+  preseason2Start: dateToGameDay(10,2,2026),    // Oct 2 2026
+  season2Start:    dateToGameDay(10,21,2026),   // Oct 21 2026
+};
+
+interface CalEvent {
+  month:number; day:number; year:number;
+  label:string; type:string;
+  gameDay:number;
+  action?:string;
+  locked?:boolean;
+}
+
+function getCalendarEvents(currentGameDay: number): CalEvent[] {
+  const ev: CalEvent[] = [
+    {month:10,day:2,year:2025,label:"Preseason Begins",type:"preseason",gameDay:GAME_DAYS.preseasonStart},
+    {month:10,day:17,year:2025,label:"Preseason Ends",type:"preseason",gameDay:GAME_DAYS.preseasonEnd},
+    {month:10,day:21,year:2025,label:"Regular Season Opens",type:"season",gameDay:GAME_DAYS.seasonStart},
+    {month:4,day:12,year:2026,label:"Regular Season Ends",type:"season",gameDay:GAME_DAYS.seasonEnd},
+    {month:4,day:14,year:2026,label:"Play-In Tournament",type:"playin",gameDay:GAME_DAYS.playinStart},
+    {month:4,day:17,year:2026,label:"Play-In Ends",type:"playin",gameDay:GAME_DAYS.playinEnd},
+    {month:4,day:18,year:2026,label:"Playoffs R1",type:"playoffs",gameDay:GAME_DAYS.r1Start},
+    {month:5,day:4,year:2026,label:"Second Round",type:"playoffs",gameDay:GAME_DAYS.r2Start},
+    {month:5,day:18,year:2026,label:"Conf Finals",type:"playoffs",gameDay:GAME_DAYS.confFinalsStart},
+    {month:6,day:3,year:2026,label:"NBA Finals G1",type:"finals",gameDay:GAME_DAYS.finalsG1},
+    {month:6,day:22,year:2026,label:"Draft Lottery",type:"draft",gameDay:GAME_DAYS.draftLottery,action:"done"},
+    {month:6,day:24,year:2026,label:"NBA Draft",type:"draft",gameDay:GAME_DAYS.draftNight,action:"DRAFT"},
+    {month:6,day:30,year:2026,label:"Free Agency Opens",type:"fa",gameDay:GAME_DAYS.freeAgencyOpen,action:"FREE AGENTS"},
+    {month:7,day:6,year:2026,label:"Free Agency Frenzy",type:"fa",gameDay:GAME_DAYS.freeAgencyEnd},
+    {month:10,day:2,year:2026,label:"Preseason 2026-27",type:"preseason",gameDay:GAME_DAYS.preseason2Start},
+    {month:10,day:21,year:2026,label:"Season 2026-27",type:"season",gameDay:GAME_DAYS.season2Start},
+  ];
+  // Conf Finals G7 -- only show if conf finals went to game 7 (day >= confFinalsEnd)
+  if(currentGameDay >= GAME_DAYS.confFinalsEnd) {
+    ev.push({month:5,day:30,year:2026,label:"Conf Finals G7",type:"playoffs",gameDay:GAME_DAYS.confFinalsEnd});
+  }
+  // Finals G7 -- only show if finals reached game 7 (day >= finalsG7)
+  if(currentGameDay >= GAME_DAYS.finalsG7) {
+    ev.push({month:6,day:19,year:2026,label:"NBA Finals G7",type:"finals",gameDay:GAME_DAYS.finalsG7});
+  }
+  return ev;
+}
 
 const MONTH_NAMES = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
+function NBACalendar({onNav, currentGameDay}: {onNav:(s:string)=>void; currentGameDay:number}) {
   const MM = "'DM Mono',monospace";
   const [viewMonth, setViewMonth] = useState(6); // Start at June (current)
   const [viewYear, setViewYear] = useState(2026);
@@ -669,8 +716,9 @@ function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
   const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
   const firstDay = new Date(viewYear, viewMonth-1, 1).getDay(); // 0=Sun
 
-  // Events for this month
-  const monthEvents = NBA_CALENDAR_EVENTS.filter(e=>e.month===viewMonth&&e.year===viewYear);
+  // Events for this month -- filtered by current game day
+  const allEvents = getCalendarEvents(currentGameDay);
+  const monthEvents = allEvents.filter(e=>e.month===viewMonth&&e.year===viewYear);
 
   const TYPE_COLORS: Record<string,string> = {
     preseason:"#222",season:"#1a3a1a",playin:"#0d2040",
@@ -687,7 +735,7 @@ function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
   for(let d=1;d<=daysInMonth;d++) cells.push(d);
   while(cells.length%7!==0) cells.push(null);
 
-  const today = {m:6,d:10,y:2026}; // hardcoded current date
+  const todayDate = gameDayToDate(currentGameDay);
 
   return (
     <div style={{marginBottom:32,border:"1px solid #111",borderRadius:4,background:"#030303",overflow:"hidden"}}>
@@ -715,7 +763,7 @@ function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
         {cells.map((day,i)=>{
           const events = day ? monthEvents.filter(e=>e.day===day) : [];
-          const isToday = day===today.d&&viewMonth===today.m&&viewYear===today.y;
+          const isToday = day===todayDate.day&&viewMonth===todayDate.month&&viewYear===todayDate.year;
           return (
             <div key={i} style={{
               minHeight:72,borderRight:"1px solid #080808",borderBottom:"1px solid #080808",
@@ -735,14 +783,20 @@ function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
                         <div style={{fontFamily:MM,fontSize:6.5,color:TYPE_DOT[ev.type],
                           lineHeight:1.3,letterSpacing:"0.02em"}}>{ev.label}</div>
                       </div>
-                      {(ev.type==="draft"||ev.type==="fa")&&(
-                        <button onClick={()=>onNav(ev.type==="draft"?"DRAFT":"FREE AGENTS")}
+                      {(ev as any).action&&(ev as any).action!=="done"&&(
+                        <button
+                          onClick={()=>currentGameDay>=(ev as any).gameDay?onNav((ev as any).action):undefined}
                           style={{fontFamily:MM,fontSize:6,background:"transparent",
-                            border:`1px solid ${TYPE_DOT[ev.type]}33`,borderRadius:2,
-                            padding:"2px 5px",color:TYPE_DOT[ev.type],cursor:"pointer",
+                            border:`1px solid ${currentGameDay>=(ev as any).gameDay?TYPE_DOT[ev.type]+"88":"#222"}`,
+                            borderRadius:2,padding:"2px 5px",
+                            color:currentGameDay>=(ev as any).gameDay?TYPE_DOT[ev.type]:"#333",
+                            cursor:currentGameDay>=(ev as any).gameDay?"pointer":"not-allowed",
                             marginTop:2,textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>
-                          {ev.type==="draft"?"GO →":"VIEW →"}
+                          {currentGameDay>=(ev as any).gameDay?"GO →":"LOCKED"}
                         </button>
+                      )}
+                      {(ev as any).action==="done"&&(
+                        <div style={{fontFamily:MM,fontSize:6,color:"#4bc87a",marginTop:2}}>✓ DONE</div>
                       )}
                     </div>
                   ))}
@@ -999,7 +1053,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
       {/* NBA Season Calendar */}
-      <NBACalendar onNav={onNav} />
+      <NBACalendar onNav={onNav} currentGameDay={state.day} />
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
