@@ -1475,26 +1475,25 @@ def ai_trade_decision(
                 (" They needed to move this contract." if get_sal > 30_000_000 and rebuilding else ""),
         }
     else:
-        # Rejection reasons
-        # Hard strategy gates
-    if rebuilding:
-        # Rebuilders auto-reject aging expensive players
-        bad_fits = [p for p in give_players if p.get("age",25) >= 31 and p.get("salary",0) > 20_000_000]
-        if bad_fits:
-            names = ", ".join(p["name"] for p in bad_fits)
-            return {
-                "result": "REJECTED",
-                "reason": f"{target_team} is rebuilding. They won't take on {names}'s age/contract.",
-            }
-
-    if contending and give_pick_val > get_tv * 0.5:
-            reason = f"{target_team} doesn't need picks. They need players who can help now."
+        # Hard strategy gates first
+        if rebuilding:
+            bad_fits = [p for p in give_players if p.get('age',25) >= 31 and p.get('salary',0) > 20_000_000]
+            if bad_fits:
+                names = ', '.join(p['name'] for p in bad_fits)
+                return {
+                    'result': 'REJECTED',
+                    'reason': f'{target_team} is rebuilding. They will not take on {names} age/contract.',
+                }
+        if contending and give_pick_val > get_tv * 0.5:
+            reason = f'{target_team} does not need picks. They need players who can help now.'
         elif get_tv > give_tv * 1.3:
-            reason = f"{target_team} values their player too highly to move them for this."
+            reason = f'{target_team} values their player too highly to move them for this.'
         elif rebuilding and get_tv < 40 and give_pick_val == 0:
-            reason = f"{target_team} is rebuilding. They want draft capital, not expiring veterans."
+            reason = f'{target_team} is rebuilding. They want draft capital, not expiring veterans.'
         else:
-            reason = f"{target_team} doesn't see enough value here."
+            reason = f'{target_team} does not see enough value here.'
+        return {'result': 'REJECTED', 'reason': reason}
+
         return {"result": "REJECTED", "reason": reason}
 
 
