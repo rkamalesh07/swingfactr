@@ -753,6 +753,7 @@ function ExpiringPlayersSection({saveId, state, onResign}: {saveId:string; state
 function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState; roster:Player[]; onNav:(s:string)=>void; saveId:string; onViewOffer:(offer:any)=>void}) {
   const result = SEASON_RESULTS[state.gm_team];
   const [offers, setOffers] = useState<any[]>([]);
+  const [showAllOffers, setShowAllOffers] = useState(false);
   useEffect(()=>{
     if(!saveId) return;
     fetch(`${API}/gm/ai-trade-offers/${saveId}`)
@@ -813,7 +814,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       {/* AI Trade Offers */}
       {offers.length > 0 && (
         <div style={{marginBottom:24}}>
-          {offers.map((offer,i)=>(
+          {offers.slice(0, showAllOffers?offers.length:2).map((offer,i)=>(
             <div key={i} style={{border:"1px solid #1a1a1a",borderRadius:4,padding:"14px 18px",
               marginBottom:8,background:"#030303",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
@@ -833,7 +834,11 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
                   </span>
                 </div>
               </div>
-              <button onClick={()=>onViewOffer(offer)}
+              <button onClick={()=>{
+                  // Pre-populate both sides of trade
+                  const enriched = {...offer, they_offer_picks: offer.they_offer_picks||[], they_want_picks: offer.they_want_picks||[]};
+                  onViewOffer(enriched);
+                }}
                 style={{fontFamily:"'DM Mono',monospace",fontSize:8,textTransform:"uppercase" as const,
                   letterSpacing:"0.08em",background:"transparent",border:"1px solid #333",
                   borderRadius:3,padding:"6px 14px",color:"#888",cursor:"pointer",whiteSpace:"nowrap" as const,marginLeft:16}}>
@@ -845,9 +850,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       )}
 
       {/* Re-sign Window -- only after draft */}
-      {(state.day >= 178 || (state.season && state.season > 0)) &&
-        <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
-      }
+      <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
       {/* Offseason Timeline */}
       <div style={{marginBottom:40,padding:"16px 20px",border:"1px solid #111",borderRadius:4,background:"#030303"}}>
@@ -1500,12 +1503,16 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
     if(!pendingOffer) return;
     const team = pendingOffer.from_team;
     setTargetTeam(team);
-    loadTeam(team);
-    // Pre-select players they want from our roster
+    // Pre-select players they want from our roster (exclude expired)
     if(pendingOffer.they_want?.length) {
       const wantIds = pendingOffer.they_want.map((p:any)=>p.id).filter(Boolean);
-      setGiving(roster.filter(p=>wantIds.includes(p.id)));
+      setGiving(roster.filter(p=>wantIds.includes(p.id) && p.years_left!==0));
     }
+    // Pre-select picks they offer us
+    if(pendingOffer.they_offer_picks?.length) {
+      setTheirPicksReq(pendingOffer.they_offer_picks);
+    }
+    loadTeam(team);
     if(onOfferClear) onOfferClear();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[pendingOffer]);
@@ -1600,7 +1607,7 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
     <div style={{maxWidth:1100,margin:"0 auto",padding:"32px"}}>
       <div style={{...MONOSPACE,fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Trade Machine</div>
       <p style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#444",marginBottom:28}}>
-        Build a proposal. CBA matching rules apply — outgoing salary must be within 125% + $100K of incoming.
+        Build a proposal. Real CBA rules: over cap +$7.5M max, first apron 110%, second apron must match.
       </p>
 
       {/* Three-column layout: MY SIDE | SALARY CHECK | THEIR SIDE */}
@@ -1643,12 +1650,13 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
             {myTab==="roster" ? roster.map(p=>{
               const sel = !!giving.find(x=>x.id===p.id);
               return (
-                <div key={p.id} onClick={()=>toggleGive(p)}
+                <div key={p.id} onClick={()=>p.years_left!==0&&toggleGive(p)}
                   style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 14px",
-                    borderBottom:"1px solid #080808",cursor:"pointer",
+                    borderBottom:"1px solid #080808",cursor:p.years_left===0?"not-allowed":"pointer",
+                    opacity:p.years_left===0?0.35:1,
                     background:sel?"#0d0d0d":"transparent",transition:"background 0.1s"}}>
                   <div>
-                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}</div>
+                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}{p.years_left===0&&<span style={{...MONOSPACE,fontSize:7,color:"#c86060",marginLeft:6}}>EXPIRED</span>}</div>
                     <div style={{...MONOSPACE,fontSize:8,color:"#333",marginTop:2}}>{p.overall} OVR · {p.archetype}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
@@ -1709,12 +1717,13 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
 
           {/* CBA matching check */}
           {giving.length>0 && getting.length>0 && (() => {
-            const maxOut = gettingCap * 1.25 + 100_000;
-            const valid = givingCap <= maxOut && gettingCap <= givingCap * 1.25 + 100_000;
+            // Real CBA: over cap teams can take back outgoing + $7.5M
+            const maxIncoming = givingCap + 7_500_000;
+            const valid = gettingCap <= maxIncoming;
             return (
               <div style={{border:`1px solid ${valid?"#111":"#2a1111"}`,borderRadius:4,padding:"12px",background:valid?"transparent":"#0a0303"}}>
                 <div style={{...MONOSPACE,fontSize:8,color:valid?"#444":"#c86060",textTransform:"uppercase",marginBottom:4}}>CBA Match</div>
-                <div style={{...MONOSPACE,fontSize:8,color:valid?"#4bc87a":"#c86060"}}>{valid?"✓ Salaries match":"✗ Salary mismatch"}</div>
+                <div style={{...MONOSPACE,fontSize:8,color:valid?"#4bc87a":"#c86060"}}>{valid?`✓ Max incoming: ${fmt$(maxIncoming)}`:`✗ Exceeds max incoming ${fmt$(maxIncoming)}`}</div>
               </div>
             );
           })()}
@@ -1725,7 +1734,7 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
               border:"none",borderRadius:3,padding:"12px 8px",cursor:isValid?"pointer":"not-allowed",
               display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             {submitting && <div style={{width:8,height:8,border:"1.5px solid #888",borderTopColor:"#000",borderRadius:"50%",animation:"spin 0.7s linear infinite"}} />}
-            {submitting?"EVALUATING...":"PROPOSE TRADE"}
+            {submitting?"EVALUATING...":pendingOffer?"ACCEPT OFFER":"PROPOSE TRADE"}
           </button>
 
           {result && (
@@ -1788,12 +1797,13 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
             ) : theirTab==="roster" ? theirRoster.map(p=>{
               const sel = !!getting.find(x=>x.id===p.id);
               return (
-                <div key={p.id} onClick={()=>toggleGet(p)}
+                <div key={p.id} onClick={()=>p.years_left!==0&&toggleGet(p)}
                   style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 14px",
-                    borderBottom:"1px solid #080808",cursor:"pointer",
+                    borderBottom:"1px solid #080808",cursor:p.years_left===0?"not-allowed":"pointer",
+                    opacity:p.years_left===0?0.35:1,
                     background:sel?"#0d0d0d":"transparent",transition:"background 0.1s"}}>
                   <div>
-                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}</div>
+                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}{p.years_left===0&&<span style={{...MONOSPACE,fontSize:7,color:"#c86060",marginLeft:6}}>EXPIRED</span>}</div>
                     <div style={{...MONOSPACE,fontSize:8,color:"#333",marginTop:2}}>{p.overall} OVR · {p.archetype}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
