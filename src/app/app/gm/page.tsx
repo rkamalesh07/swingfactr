@@ -723,9 +723,8 @@ function NBACalendar({onNav}: {onNav:(s:string)=>void}) {
               opacity:day?1:0.3}}>
               {day&&(
                 <>
-                  <div style={{fontFamily:MM,fontSize:8,color:isToday?"#f0f0f0":"#444",
-                    marginBottom:4,fontWeight:isToday?600:400,
-                    background:isToday?"#f0f0f0":undefined,color:isToday?"#000":"#444",
+                  <div style={{fontFamily:MM,fontSize:8,marginBottom:4,fontWeight:isToday?600:400,
+                    background:isToday?"#f0f0f0":undefined,
                     borderRadius:isToday?2:0,padding:isToday?"1px 4px":undefined,display:"inline-block"}}>
                     {day}
                   </div>
