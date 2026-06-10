@@ -1485,370 +1485,455 @@ function DraftSection({gmTeam}: {gmTeam:string}) {
 
 // ─── Trade Machine ─────────────────────────────────────────────────────────────
 function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {saveId:string; state:GMState; roster:Player[]; pendingOffer?:any; onOfferClear?:()=>void}) {
-  const [giving, setGiving]         = useState<Player[]>([]);
-  const [targetTeam, setTargetTeam] = useState("");
-  const [myTab, setMyTab]           = useState<"roster"|"picks">("roster");
-  const [theirTab, setTheirTab]     = useState<"roster"|"picks">("roster");
-  const [theirRoster, setTheirRoster] = useState<Player[]>([]);
-  const [theirPicks, setTheirPicks] = useState<{round:number;from?:string;note:string;est_pick?:number}[]>([]);
-  const [getting, setGetting]       = useState<Player[]>([]);
-  const [myPicksOffered, setMyPicksOffered] = useState<string[]>([]);
-  const [theirPicksReq, setTheirPicksReq]   = useState<string[]>([]);
-  const [result, setResult]         = useState<string|null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingTeam, setLoadingTeam] = useState(false);
+  const MM = "'DM Mono',monospace";
+  const [targetTeam, setTargetTeam]     = useState("");
+  const [theirRoster, setTheirRoster]   = useState<Player[]>([]);
+  const [theirPicks, setTheirPicks]     = useState<any[]>([]);
+  const [giving, setGiving]             = useState<Player[]>([]);
+  const [getting, setGetting]           = useState<Player[]>([]);
+  const [myPicksOffered, setMyPicksOffered]   = useState<string[]>([]);
+  const [theirPicksReq, setTheirPicksReq]     = useState<string[]>([]);
+  const [result, setResult]             = useState<string|null>(null);
+  const [submitting, setSubmitting]     = useState(false);
+  const [loadingTeam, setLoadingTeam]   = useState(false);
+  const [myPicksFromDB, setMyPicksFromDB] = useState<any[]>([]);
+  const [mySearch, setMySearch]         = useState("");
+  const [theirSearch, setTheirSearch]   = useState("");
+
+  const myPicks = myPicksFromDB.length > 0 ? myPicksFromDB : (TEAM_PICKS[state.gm_team] || []);
+
+  useEffect(()=>{
+    if(!saveId) return;
+    fetch(`${API}/gm/picks/${saveId}`)
+      .then(r=>r.json()).then(d=>setMyPicksFromDB(d.picks||[]))
+      .catch(()=>{});
+  },[saveId]);
 
   // Auto-populate from incoming offer
   useEffect(()=>{
     if(!pendingOffer) return;
     const team = pendingOffer.from_team;
     setTargetTeam(team);
-    // Pre-select players they want from our roster (exclude expired)
     if(pendingOffer.they_want?.length) {
       const wantIds = pendingOffer.they_want.map((p:any)=>p.id).filter(Boolean);
       setGiving(roster.filter(p=>wantIds.includes(p.id) && p.years_left!==0));
     }
-    // Pre-select picks they offer us
-    if(pendingOffer.they_offer_picks?.length) {
-      setTheirPicksReq(pendingOffer.they_offer_picks);
-    }
+    if(pendingOffer.they_offer_picks?.length) setTheirPicksReq(pendingOffer.they_offer_picks);
     loadTeam(team);
     if(onOfferClear) onOfferClear();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[pendingOffer]);
 
-  const otherTeams = NBA_TEAMS.filter(t => t.abbr !== state.gm_team);
-  const [myPicksFromDB, setMyPicksFromDB] = useState<any[]>([]);
-  useEffect(()=>{
-    fetch(`${API}/gm/picks/${saveId}`)
-      .then(r=>r.json()).then(d=>setMyPicksFromDB(d.picks||[]))
-      .catch(()=>setMyPicksFromDB(TEAM_PICKS[state.gm_team]||[]));
-  },[saveId]);
-  const myPicks = myPicksFromDB.length > 0 ? myPicksFromDB : (TEAM_PICKS[state.gm_team] || []);
-  const SALARY_CAP   = 154_647_000;
-  const LUXURY_TAX   = 187_876_000;
+  async function loadTeam(abbr: string) {
+    if(!abbr){setTheirRoster([]);setTheirPicks([]);return;}
+    setLoadingTeam(true);
+    try {
+      const [pr, pkr] = await Promise.all([
+        fetch(`${API}/gm/league-players/${saveId}?limit=600`),
+        fetch(`${API}/gm/picks/${saveId}?team=${abbr}`),
+      ]);
+      const pd = await pr.json();
+      const pkd = await pkr.json();
+      setTheirRoster(pd.players.filter((p:Player)=>p.team===abbr));
+      setTheirPicks(pkd.picks||[]);
+    } catch(e){console.error(e);}
+    finally{setLoadingTeam(false);}
+  }
+
+  function toggleGive(p: Player) {
+    if(p.years_left===0) return;
+    setGiving(prev=>prev.find(x=>x.id===p.id)?prev.filter(x=>x.id!==p.id):[...prev,p]);
+    setResult(null);
+  }
+  function toggleGet(p: Player) {
+    if(p.years_left===0) return;
+    setGetting(prev=>prev.find(x=>x.id===p.id)?prev.filter(x=>x.id!==p.id):[...prev,p]);
+    setResult(null);
+  }
+  function toggleMyPick(note: string) {
+    setMyPicksOffered(prev=>prev.includes(note)?prev.filter(n=>n!==note):[...prev,note]);
+    setResult(null);
+  }
+  function toggleTheirPick(note: string) {
+    setTheirPicksReq(prev=>prev.includes(note)?prev.filter(n=>n!==note):[...prev,note]);
+    setResult(null);
+  }
 
   const givingCap  = giving.reduce((s,p)=>s+p.salary,0);
   const gettingCap = getting.reduce((s,p)=>s+p.salary,0);
   const capAfter   = state.cap_used - givingCap + gettingCap;
-  const isValid    = (giving.length>0||myPicksOffered.length>0) && targetTeam!=="";
-
-  function toggleGive(p: Player) {
-    setGiving(prev => prev.find(x=>x.id===p.id) ? prev.filter(x=>x.id!==p.id) : [...prev,p]);
-    setResult(null);
-  }
-  function toggleGet(p: Player) {
-    setGetting(prev => prev.find(x=>x.id===p.id) ? prev.filter(x=>x.id!==p.id) : [...prev,p]);
-    setResult(null);
-  }
-  function toggleMyPick(desc: string) {
-    setMyPicksOffered(prev => prev.includes(desc) ? prev.filter(d=>d!==desc) : [...prev,desc]);
-    setResult(null);
-  }
-  function toggleTheirPick(desc: string) {
-    setTheirPicksReq(prev => prev.includes(desc) ? prev.filter(d=>d!==desc) : [...prev,desc]);
-    setResult(null);
-  }
-
-  async function loadTeam(abbr: string) {
-    if (!abbr) { setTheirRoster([]); setTheirPicks([]); return; }
-    setLoadingTeam(true);
-    try {
-      const [playersRes, picksRes] = await Promise.all([
-        fetch(`${API}/gm/league-players/${saveId}?limit=600`),
-        fetch(`${API}/gm/picks/${saveId}?team=${abbr}`),
-      ]);
-      const playersData = await playersRes.json();
-      const picksData   = await picksRes.json();
-      setTheirRoster(playersData.players.filter((p: Player) => p.team === abbr));
-      setTheirPicks(picksData.picks || []);
-    } catch(e) { console.error(e); }
-    finally { setLoadingTeam(false); }
-  }
+  const maxIncoming = givingCap + 7_500_000;
+  const salaryOK   = gettingCap <= maxIncoming;
+  const isValid    = (giving.length>0||myPicksOffered.length>0) && (getting.length>0||theirPicksReq.length>0) && targetTeam!=="";
 
   async function evaluateTrade() {
-    setSubmitting(true);
-    setResult(null);
+    setSubmitting(true); setResult(null);
     try {
-      const res = await fetch(`${API}/gm/trade/${saveId}`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          giving: giving.map(p=>p.id),
-          getting: getting.map(p=>p.id),
-          target_team: targetTeam,
-          picks_offered: myPicksOffered.map(n=>n),
-          picks_requested: theirPicksReq.map(n=>n),
+      const res = await fetch(`${API}/gm/trade/${saveId}`,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          giving:giving.map(p=>p.id), getting:getting.map(p=>p.id),
+          target_team:targetTeam, picks_offered:myPicksOffered, picks_requested:theirPicksReq,
         }),
       });
       const data = await res.json();
-      setResult(data.result || data.error || "Unknown response");
-      if (data.accepted) {
-        // Clear selections and signal parent to reload roster
-        setGiving([]); setGetting([]); setMyPicksOffered([]); setTheirPicksReq([]);
-        setTimeout(() => window.location.reload(), 1500);
+      setResult(data.result||data.error||"Unknown response");
+      if(data.accepted){
+        setGiving([]);setGetting([]);setMyPicksOffered([]);setTheirPicksReq([]);
+        setTimeout(()=>window.location.reload(),1500);
       }
-    } catch(e: any) { setResult("Error: " + e.message); }
-    finally { setSubmitting(false); }
+    } catch(e:any){setResult("Error: "+e.message);}
+    finally{setSubmitting(false);}
   }
 
-  const MONOSPACE: React.CSSProperties = {fontFamily:"'DM Mono',monospace"};
-  const CAP_OK   = capAfter < SALARY_CAP;
-  const TAX_OK   = capAfter < LUXURY_TAX;
+  const otherTeams = NBA_TEAMS.filter(t=>t.abbr!==state.gm_team);
 
-  const tabBtn = (label: string, active: boolean, onClick: ()=>void) => (
-    <button onClick={onClick} style={{...MONOSPACE,fontSize:9,textTransform:"uppercase" as const,letterSpacing:"0.08em",
-      background:"transparent",border:"none",borderBottom:`1px solid ${active?"#888":"transparent"}`,
-      color:active?"#f0f0f0":"#444",padding:"4px 12px",cursor:"pointer"}}>
-      {label}
-    </button>
-  );
+  function PlayerRow({p, selected, onToggle, side}: {p:Player; selected:boolean; onToggle:()=>void; side:"give"|"get"}) {
+    const expired = p.years_left===0;
+    return (
+      <div onClick={expired?undefined:onToggle}
+        style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",
+          borderBottom:"1px solid #060606",cursor:expired?"not-allowed":"pointer",
+          background:selected?"#0d0d0d":"transparent",opacity:expired?0.3:1,
+          transition:"background 0.1s"}}>
+        <div style={{width:14,height:14,border:`1px solid ${selected?"#f0f0f0":"#222"}`,
+          borderRadius:2,background:selected?"#f0f0f0":"transparent",flexShrink:0,
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {selected&&<div style={{width:8,height:8,background:"#000",borderRadius:1}}/>}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontFamily:"Inter,sans-serif",fontSize:12,color:selected?"#f0f0f0":"#888",
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{p.name}</span>
+            {expired&&<span style={{...{fontFamily:MM},fontSize:7,color:"#c86060",border:"1px solid #3a1a1a",
+              borderRadius:2,padding:"1px 4px"}}>EXP</span>}
+          </div>
+          <div style={{fontFamily:MM,fontSize:7,color:"#444",marginTop:1}}>
+            {p.overall} OVR · {p.archetype} · Age {p.age}
+          </div>
+        </div>
+        <div style={{fontFamily:MM,fontSize:8,color:"#555",textAlign:"right" as const}}>
+          <div>${(p.salary/1e6).toFixed(1)}M</div>
+          <div style={{fontSize:7,color:"#333"}}>{p.years_left}yr left</div>
+        </div>
+      </div>
+    );
+  }
+
+  function PickRow({pk, selected, onToggle}: {pk:any; selected:boolean; onToggle:()=>void}) {
+    const year = pk.year||2026;
+    const isR1 = pk.round===1;
+    return (
+      <div onClick={onToggle}
+        style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",
+          borderBottom:"1px solid #060606",cursor:"pointer",
+          background:selected?"#0d0d0d":"transparent",transition:"background 0.1s"}}>
+        <div style={{width:14,height:14,border:`1px solid ${selected?"#f0f0f0":"#222"}`,
+          borderRadius:2,background:selected?"#f0f0f0":"transparent",flexShrink:0,
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {selected&&<div style={{width:8,height:8,background:"#000",borderRadius:1}}/>}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:MM,fontSize:9,color:selected?"#f0f0f0":isR1?"#888":"#555"}}>
+            {year} {pk.original_owner||state.gm_team} {isR1?"1st":"2nd"} Round
+          </div>
+          {pk.protection&&<div style={{fontFamily:MM,fontSize:7,color:"#444",marginTop:1}}>{pk.protection}</div>}
+          {pk.acquired_from&&<div style={{fontFamily:MM,fontSize:7,color:"#c8a84b",marginTop:1}}>via {pk.acquired_from}</div>}
+        </div>
+        <div style={{fontFamily:MM,fontSize:7,color:isR1?"#666":"#444"}}>
+          {isR1?"R1":"R2"}
+        </div>
+      </div>
+    );
+  }
+
+  const myFiltered    = roster.filter(p=>p.name.toLowerCase().includes(mySearch.toLowerCase()));
+  const theirFiltered = theirRoster.filter(p=>p.name.toLowerCase().includes(theirSearch.toLowerCase()));
 
   return (
-    <div style={{maxWidth:1100,margin:"0 auto",padding:"32px"}}>
-      <div style={{...MONOSPACE,fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Trade Machine</div>
-      <p style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#444",marginBottom:28}}>
-        Build a proposal. Real CBA rules: over cap +$7.5M max, first apron 110%, second apron must match.
-      </p>
+    <div style={{maxWidth:1400,margin:"0 auto",padding:"24px 24px"}}>
+      <div style={{fontFamily:MM,fontSize:9,color:"#333",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>TRADE MACHINE</div>
+      <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#333",marginBottom:20}}>
+        Real CBA: over cap +$7.5M max · first apron 110% · second apron must match
+      </div>
 
-      {/* Three-column layout: MY SIDE | SALARY CHECK | THEIR SIDE */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 220px 1fr",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 280px 1fr",gap:16,alignItems:"start"}}>
 
-        {/* ── LEFT: My Side ── */}
-        <div style={{border:"1px solid #111",borderRadius:4,overflow:"hidden"}}>
-          <div style={{background:"#080808",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{...MONOSPACE,fontSize:10,color:"#f0f0f0",textTransform:"uppercase",letterSpacing:"0.08em"}}>{state.gm_team}</div>
-            <div style={{...MONOSPACE,fontSize:9,color:"#444"}}>{fmt$(givingCap)} out</div>
-          </div>
-          <div style={{display:"flex",gap:0,borderBottom:"1px solid #111",padding:"0 8px"}}>
-            {tabBtn("Roster",myTab==="roster",()=>setMyTab("roster"))}
-            {tabBtn(`Picks (${myPicks.length})`,myTab==="picks",()=>setMyTab("picks"))}
+        {/* ── LEFT: My team ── */}
+        <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",overflow:"hidden"}}>
+          <div style={{padding:"12px 14px",borderBottom:"1px solid #0d0d0d",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontFamily:MM,fontSize:10,color:"#f0f0f0"}}>{state.gm_team}</div>
+            <div style={{fontFamily:MM,fontSize:8,color:"#c86060"}}>${(givingCap/1e6).toFixed(1)}M out</div>
           </div>
 
-          {/* Selected players going out */}
+          {/* Selected summary */}
           {(giving.length>0||myPicksOffered.length>0) && (
-            <div style={{padding:"10px 14px",background:"#050505",borderBottom:"1px solid #0d0d0d"}}>
-              <div style={{...MONOSPACE,fontSize:8,color:"#333",textTransform:"uppercase",marginBottom:6}}>Sending</div>
+            <div style={{padding:"8px 12px",background:"#050505",borderBottom:"1px solid #0d0d0d"}}>
+              <div style={{fontFamily:MM,fontSize:7,color:"#444",textTransform:"uppercase",marginBottom:4}}>SENDING</div>
               {giving.map(p=>(
-                <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                   <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#e0e0e0"}}>{p.name}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{...MONOSPACE,fontSize:9,color:"#444"}}>{fmt$(p.salary)}</span>
-                    <button onClick={()=>toggleGive(p)} style={{background:"transparent",border:"none",color:"#444",cursor:"pointer",fontSize:10}}>✕</button>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontFamily:MM,fontSize:8,color:"#555"}}>${(p.salary/1e6).toFixed(1)}M</span>
+                    <button onClick={()=>toggleGive(p)} style={{background:"transparent",border:"none",color:"#333",cursor:"pointer",fontSize:10}}>✕</button>
                   </div>
                 </div>
               ))}
-              {myPicksOffered.map(d=>(
-                <div key={d} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{...MONOSPACE,fontSize:9,color:"#888"}}>{d}</span>
-                  <button onClick={()=>toggleMyPick(d)} style={{background:"transparent",border:"none",color:"#444",cursor:"pointer",fontSize:10}}>✕</button>
+              {myPicksOffered.map(note=>(
+                <div key={note} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{fontFamily:MM,fontSize:9,color:"#6ab0e8"}}>{note}</span>
+                  <button onClick={()=>toggleMyPick(note)} style={{background:"transparent",border:"none",color:"#333",cursor:"pointer",fontSize:10}}>✕</button>
                 </div>
               ))}
             </div>
           )}
 
-          <div style={{height:360,overflowY:"auto"}}>
-            {myTab==="roster" ? roster.map(p=>{
-              const sel = !!giving.find(x=>x.id===p.id);
-              return (
-                <div key={p.id} onClick={()=>p.years_left!==0&&toggleGive(p)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 14px",
-                    borderBottom:"1px solid #080808",cursor:p.years_left===0?"not-allowed":"pointer",
-                    opacity:p.years_left===0?0.35:1,
-                    background:sel?"#0d0d0d":"transparent",transition:"background 0.1s"}}>
-                  <div>
-                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}{p.years_left===0&&<span style={{...MONOSPACE,fontSize:7,color:"#c86060",marginLeft:6}}>EXPIRED</span>}</div>
-                    <div style={{...MONOSPACE,fontSize:8,color:"#333",marginTop:2}}>{p.overall} OVR · {p.archetype}</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{...MONOSPACE,fontSize:9,color:sel?"#888":"#333"}}>{fmt$(p.salary)}</div>
-                    <div style={{...MONOSPACE,fontSize:8,color:"#222"}}>Age {p.age}</div>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div style={{padding:"12px 14px"}}>
-                {myPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No picks</div>}
-                {myPicks.map((pk:any,i:number)=>{
-                  const sel = myPicksOffered.includes(pk.note);
-                  const year = pk.year || 2026;
-                  const isOwn = (pk.note||"").startsWith("Own");
-                  return (
-                    <div key={i} onClick={()=>toggleMyPick(pk.note)}
-                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                        padding:"10px 0",borderBottom:"1px solid #080808",cursor:"pointer",
-                        background:sel?"#0d0d0d":"transparent"}}>
-                      <div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{...MONOSPACE,fontSize:8,color:"#333",minWidth:32}}>{year}</span>
-                          <span style={{...MONOSPACE,fontSize:8,color:pk.round===1?"#888":"#555",minWidth:16}}>R{pk.round}</span>
-                          <span style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":isOwn?"#888":"#6ab0e8"}}>{pk.note}</span>
-                        </div>
-                        {pk.protection && <div style={{...MONOSPACE,fontSize:7,color:"#444",marginTop:2,paddingLeft:54}}>{pk.protection}</div>}
-                        {pk.acquired_from && <div style={{...MONOSPACE,fontSize:7,color:"#c8a84b",marginTop:2,paddingLeft:54}}>acquired from {pk.acquired_from}</div>}
-                      </div>
-                      <div style={{...MONOSPACE,fontSize:8,color:sel?"#888":"#333"}}>
-                        {sel?"INCLUDED":"+ ADD"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* Tabs: Roster / Picks */}
+          <TeamPanel
+            label="ROSTER" picks={myPicks}
+            players={myFiltered} selectedPlayers={giving}
+            selectedPicks={myPicksOffered}
+            onTogglePlayer={toggleGive} onTogglePick={toggleMyPick}
+            search={mySearch} onSearch={setMySearch}
+            teamAbbr={state.gm_team}
+          />
         </div>
 
-        {/* ── CENTER: Salary Check + CTA ── */}
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{border:"1px solid #111",borderRadius:4,padding:"16px"}}>
-            <div style={{...MONOSPACE,fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Salary Check</div>
+        {/* ── CENTER: Summary ── */}
+        <div style={{display:"flex",flexDirection:"column" as const,gap:10,position:"sticky" as const,top:16}}>
+          <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",padding:"14px"}}>
+            <div style={{fontFamily:MM,fontSize:8,color:"#333",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Summary</div>
             {[
-              {label:"Sending",val:fmt$(givingCap)},
-              {label:"Receiving",val:fmt$(gettingCap)},
-              {label:"Cap after",val:fmt$(capAfter),warn:!CAP_OK},
-              {label:"Under cap",val:CAP_OK?"✓":"✗",ok:CAP_OK},
-              {label:"Under tax",val:TAX_OK?"✓":"✗",ok:TAX_OK},
+              {label:"Sending",val:`$${(givingCap/1e6).toFixed(1)}M`},
+              {label:"Receiving",val:`$${(gettingCap/1e6).toFixed(1)}M`},
+              {label:"Cap after",val:`$${(capAfter/1e6).toFixed(1)}M`,warn:capAfter>154_647_000},
             ].map(row=>(
-              <div key={row.label} style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-                <span style={{...MONOSPACE,fontSize:8,color:"#444"}}>{row.label}</span>
-                <span style={{...MONOSPACE,fontSize:9,color:(row as any).ok===false?"#c86060":(row as any).ok===true?"#4bc87a":(row as any).warn?"#ff8800":"#666"}}>{row.val}</span>
+              <div key={row.label} style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontFamily:MM,fontSize:8,color:"#444"}}>{row.label}</span>
+                <span style={{fontFamily:MM,fontSize:9,color:(row as any).warn?"#ff8800":"#666"}}>{row.val}</span>
               </div>
             ))}
+            <div style={{borderTop:"1px solid #0d0d0d",paddingTop:8,marginTop:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontFamily:MM,fontSize:8,color:"#444"}}>CBA</span>
+                <span style={{fontFamily:MM,fontSize:8,color:salaryOK?"#4bc87a":"#c86060"}}>
+                  {salaryOK?`✓ max $${(maxIncoming/1e6).toFixed(1)}M`:`✗ over limit`}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* CBA matching check */}
-          {giving.length>0 && getting.length>0 && (() => {
-            // Real CBA: over cap teams can take back outgoing + $7.5M
-            const maxIncoming = givingCap + 7_500_000;
-            const valid = gettingCap <= maxIncoming;
-            return (
-              <div style={{border:`1px solid ${valid?"#111":"#2a1111"}`,borderRadius:4,padding:"12px",background:valid?"transparent":"#0a0303"}}>
-                <div style={{...MONOSPACE,fontSize:8,color:valid?"#444":"#c86060",textTransform:"uppercase",marginBottom:4}}>CBA Match</div>
-                <div style={{...MONOSPACE,fontSize:8,color:valid?"#4bc87a":"#c86060"}}>{valid?`✓ Max incoming: ${fmt$(maxIncoming)}`:`✗ Exceeds max incoming ${fmt$(maxIncoming)}`}</div>
-              </div>
-            );
-          })()}
+          {/* Team selector */}
+          <select value={targetTeam}
+            onChange={e=>{setTargetTeam(e.target.value);loadTeam(e.target.value);setGetting([]);setTheirPicksReq([]);setResult(null);}}
+            style={{background:"#030303",border:"1px solid #111",borderRadius:4,
+              padding:"10px 12px",color:targetTeam?"#e0e0e0":"#333",fontFamily:MM,fontSize:9,
+              textTransform:"uppercase" as const,cursor:"pointer",width:"100%"}}>
+            <option value="">Select team...</option>
+            {otherTeams.map(t=>(
+              <option key={t.abbr} value={t.abbr}>{t.abbr} — {t.name} ({TEAM_STATUS_MAP_FRONTEND[t.abbr]||""})</option>
+            ))}
+          </select>
 
-          <button onClick={evaluateTrade} disabled={!isValid||submitting}
-            style={{...MONOSPACE,fontSize:9,fontWeight:600,textTransform:"uppercase" as const,letterSpacing:"0.1em",
-              background:isValid?"#f0f0f0":"#111",color:isValid?"#000":"#333",
-              border:"none",borderRadius:3,padding:"12px 8px",cursor:isValid?"pointer":"not-allowed",
+          <button onClick={evaluateTrade} disabled={!isValid||submitting||!salaryOK}
+            style={{fontFamily:MM,fontSize:9,fontWeight:600,textTransform:"uppercase" as const,letterSpacing:"0.1em",
+              background:isValid&&salaryOK?"#f0f0f0":"#111",color:isValid&&salaryOK?"#000":"#333",
+              border:"none",borderRadius:3,padding:"12px",cursor:isValid&&salaryOK?"pointer":"not-allowed",
               display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            {submitting && <div style={{width:8,height:8,border:"1.5px solid #888",borderTopColor:"#000",borderRadius:"50%",animation:"spin 0.7s linear infinite"}} />}
+            {submitting&&<div style={{width:8,height:8,border:"1.5px solid #888",borderTopColor:"#000",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
             {submitting?"EVALUATING...":pendingOffer?"ACCEPT OFFER":"PROPOSE TRADE"}
           </button>
 
-          {result && (
-            <div style={{border:"1px solid #1a1a1a",borderRadius:4,padding:"12px"}}>
-              <div style={{...MONOSPACE,fontSize:9,color:result.includes("ACCEPTED")?"#4bc87a":"#888",marginBottom:4}}>
-                {result.split("—")[0]}
+          {result&&(
+            <div style={{border:`1px solid ${result.includes("ACCEPTED")?"#1a3a1a":"#1a1a1a"}`,borderRadius:4,padding:"12px",background:result.includes("ACCEPTED")?"#030d03":"#030303"}}>
+              <div style={{fontFamily:MM,fontSize:9,color:result.includes("ACCEPTED")?"#4bc87a":"#888",marginBottom:4}}>
+                {result.split("—")[0].trim()}
               </div>
-              <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#555",lineHeight:1.5}}>
-                {result.split("—")[1]}
-              </div>
+              {result.includes("—")&&(
+                <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#555",lineHeight:1.5}}>
+                  {result.split("—").slice(1).join("—").trim()}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* ── RIGHT: Their Side ── */}
-        <div style={{border:"1px solid #111",borderRadius:4,overflow:"hidden"}}>
-          <div style={{background:"#080808",padding:"12px 16px"}}>
-            <select value={targetTeam} onChange={e=>{setTargetTeam(e.target.value);loadTeam(e.target.value);setGetting([]);setTheirPicksReq([]);setResult(null);}}
-              style={{width:"100%",background:"transparent",border:"none",
-                ...MONOSPACE,fontSize:10,color:targetTeam?"#f0f0f0":"#444",cursor:"pointer",outline:"none"}}>
-              <option value="">Select a team...</option>
-              {otherTeams.map(t=>{
-                const st = TEAM_STATUS[t.abbr];
-                return <option key={t.abbr} value={t.abbr}>{t.abbr} — {t.name}{st?` (${st.label})`:""}</option>;
-              })}
-            </select>
-          </div>
-          <div style={{display:"flex",gap:0,borderBottom:"1px solid #111",padding:"0 8px"}}>
-            {tabBtn("Roster",theirTab==="roster",()=>setTheirTab("roster"))}
-            {tabBtn(`Picks (${theirPicks.length})`,theirTab==="picks",()=>setTheirTab("picks"))}
+        {/* ── RIGHT: Their team ── */}
+        <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",overflow:"hidden"}}>
+          <div style={{padding:"12px 14px",borderBottom:"1px solid #0d0d0d",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontFamily:MM,fontSize:10,color:targetTeam?"#f0f0f0":"#333"}}>
+              {targetTeam ? `${targetTeam} — ${NBA_TEAMS.find(t=>t.abbr===targetTeam)?.name||""} (${TEAM_STATUS_MAP_FRONTEND[targetTeam]||""})` : "Select a team..."}
+            </div>
+            {getting.length>0&&<div style={{fontFamily:MM,fontSize:8,color:"#4bc87a"}}>${(gettingCap/1e6).toFixed(1)}M in</div>}
           </div>
 
-          {/* Selected players coming in */}
+          {/* Selected summary */}
           {(getting.length>0||theirPicksReq.length>0) && (
-            <div style={{padding:"10px 14px",background:"#050505",borderBottom:"1px solid #0d0d0d"}}>
-              <div style={{...MONOSPACE,fontSize:8,color:"#333",textTransform:"uppercase",marginBottom:6}}>Receiving</div>
+            <div style={{padding:"8px 12px",background:"#050505",borderBottom:"1px solid #0d0d0d"}}>
+              <div style={{fontFamily:MM,fontSize:7,color:"#444",textTransform:"uppercase",marginBottom:4}}>RECEIVING</div>
               {getting.map(p=>(
-                <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                   <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#e0e0e0"}}>{p.name}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{...MONOSPACE,fontSize:9,color:"#444"}}>{fmt$(p.salary)}</span>
-                    <button onClick={()=>toggleGet(p)} style={{background:"transparent",border:"none",color:"#444",cursor:"pointer",fontSize:10}}>✕</button>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontFamily:MM,fontSize:8,color:"#555"}}>${(p.salary/1e6).toFixed(1)}M</span>
+                    <button onClick={()=>toggleGet(p)} style={{background:"transparent",border:"none",color:"#333",cursor:"pointer",fontSize:10}}>✕</button>
                   </div>
                 </div>
               ))}
-              {theirPicksReq.map(d=>(
-                <div key={d} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{...MONOSPACE,fontSize:9,color:"#888"}}>{d}</span>
-                  <button onClick={()=>toggleTheirPick(d)} style={{background:"transparent",border:"none",color:"#444",cursor:"pointer",fontSize:10}}>✕</button>
+              {theirPicksReq.map(note=>(
+                <div key={note} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{fontFamily:MM,fontSize:9,color:"#6ab0e8"}}>{note}</span>
+                  <button onClick={()=>toggleTheirPick(note)} style={{background:"transparent",border:"none",color:"#333",cursor:"pointer",fontSize:10}}>✕</button>
                 </div>
               ))}
             </div>
           )}
 
-          <div style={{height:360,overflowY:"auto"}}>
-            {!targetTeam ? (
-              <div style={{padding:"32px 16px",textAlign:"center",color:"#333",...MONOSPACE,fontSize:9}}>Select a team to see their roster</div>
-            ) : loadingTeam ? (
-              <div style={{padding:"32px 16px",textAlign:"center",color:"#333",...MONOSPACE,fontSize:9}}>Loading...</div>
-            ) : theirTab==="roster" ? theirRoster.map(p=>{
-              const sel = !!getting.find(x=>x.id===p.id);
-              return (
-                <div key={p.id} onClick={()=>p.years_left!==0&&toggleGet(p)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 14px",
-                    borderBottom:"1px solid #080808",cursor:p.years_left===0?"not-allowed":"pointer",
-                    opacity:p.years_left===0?0.35:1,
-                    background:sel?"#0d0d0d":"transparent",transition:"background 0.1s"}}>
-                  <div>
-                    <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:sel?"#f0f0f0":"#888"}}>{p.name}{p.years_left===0&&<span style={{...MONOSPACE,fontSize:7,color:"#c86060",marginLeft:6}}>EXPIRED</span>}</div>
-                    <div style={{...MONOSPACE,fontSize:8,color:"#333",marginTop:2}}>{p.overall} OVR · {p.archetype}</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{...MONOSPACE,fontSize:9,color:sel?"#888":"#333"}}>{fmt$(p.salary)}</div>
-                    <div style={{...MONOSPACE,fontSize:8,color:"#222"}}>Age {p.age}</div>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div style={{padding:"12px 14px"}}>
-                {theirPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No picks</div>}
-                {theirPicks.map((pk:any,i:number)=>{
-                  const sel = theirPicksReq.includes(pk.note);
-                  const year = pk.year || 2026;
-                  const isOwn = (pk.note||"").startsWith("Own");
-                  return (
-                    <div key={i} onClick={()=>toggleTheirPick(pk.note)}
-                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                        padding:"10px 0",borderBottom:"1px solid #080808",cursor:"pointer",
-                        background:sel?"#0d0d0d":"transparent"}}>
-                      <div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{...MONOSPACE,fontSize:8,color:"#333",minWidth:32}}>{year}</span>
-                          <span style={{...MONOSPACE,fontSize:8,color:pk.round===1?"#888":"#555",minWidth:16}}>R{pk.round}</span>
-                          <span style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":isOwn?"#888":"#6ab0e8"}}>{pk.note}</span>
-                        </div>
-                        {pk.protection && <div style={{...MONOSPACE,fontSize:7,color:"#444",marginTop:2,paddingLeft:54}}>{pk.protection}</div>}
-                      </div>
-                      <div style={{...MONOSPACE,fontSize:8,color:sel?"#888":"#333"}}>
-                        {sel?"REQUESTED":"+ REQUEST"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {!targetTeam ? (
+            <div style={{padding:"40px 20px",textAlign:"center" as const}}>
+              <div style={{fontFamily:MM,fontSize:9,color:"#222"}}>Select a team above</div>
+            </div>
+          ) : loadingTeam ? (
+            <div style={{padding:"40px 20px",textAlign:"center" as const}}>
+              <div style={{fontFamily:MM,fontSize:9,color:"#333"}}>Loading...</div>
+            </div>
+          ) : (
+            <TeamPanel
+              label="ROSTER" picks={theirPicks}
+              players={theirFiltered} selectedPlayers={getting}
+              selectedPicks={theirPicksReq}
+              onTogglePlayer={toggleGet} onTogglePick={toggleTheirPick}
+              search={theirSearch} onSearch={setTheirSearch}
+              teamAbbr={targetTeam}
+            />
+          )}
         </div>
-
       </div>
     </div>
   );
 }
 
-// ─── Free Agents Section ──────────────────────────────────────────────────────
+const TEAM_STATUS_MAP_FRONTEND: Record<string,string> = {
+  OKC:"Dynasty",BOS:"Contender",CLE:"Contender",NY:"Contender",
+  SA:"Contender",DEN:"Contender",MIN:"Contender",MEM:"Rising",
+  HOU:"Rising",ATL:"Rising",NO:"Rising",IND:"Retooling",
+  DAL:"Retooling",LAL:"Retooling",MIL:"Retooling",PHX:"Retooling",
+  SAC:"Retooling",GS:"Retooling",MIA:"Retooling",LAC:"Retooling",
+  POR:"Rebuilding",DET:"Rebuilding",CHA:"Rebuilding",WSH:"Rebuilding",
+  UTAH:"Rebuilding",BKN:"Rebuilding",TOR:"Rebuilding",CHI:"Rebuilding",
+  ORL:"Rebuilding",PHI:"Rebuilding",
+};
+
+function TeamPanel({label, players, picks, selectedPlayers, selectedPicks, onTogglePlayer, onTogglePick, search, onSearch, teamAbbr}: {
+  label:string; players:Player[]; picks:any[]; selectedPlayers:Player[]; selectedPicks:string[];
+  onTogglePlayer:(p:Player)=>void; onTogglePick:(note:string)=>void;
+  search:string; onSearch:(s:string)=>void; teamAbbr:string;
+}) {
+  const MM = "'DM Mono',monospace";
+  const [tab, setTab] = useState<"players"|"picks">("players");
+
+  // Sort: selected first, then by salary desc
+  const sorted = [...players].sort((a,b)=>{
+    const as = selectedPlayers.find(x=>x.id===a.id)?1:0;
+    const bs = selectedPlayers.find(x=>x.id===b.id)?1:0;
+    if(as!==bs) return bs-as;
+    return b.salary-a.salary;
+  });
+
+  const picksSorted = [...picks].sort((a,b)=>{
+    const ay = a.year||2026, by2 = b.year||2026;
+    if(ay!==by2) return ay-by2;
+    return a.round-b.round;
+  });
+
+  return (
+    <div>
+      <div style={{display:"flex",borderBottom:"1px solid #0d0d0d"}}>
+        {(["players","picks"] as const).map(t=>(
+          <button key={t} onClick={()=>setTab(t)}
+            style={{flex:1,padding:"8px",fontFamily:MM,fontSize:8,textTransform:"uppercase" as const,
+              letterSpacing:"0.08em",background:"transparent",border:"none",cursor:"pointer",
+              color:tab===t?"#f0f0f0":"#333",borderBottom:tab===t?"1px solid #f0f0f0":"none"}}>
+            {t==="players"?`ROSTER (${players.length})`:`PICKS (${picks.length})`}
+          </button>
+        ))}
+      </div>
+      {tab==="players"&&(
+        <>
+          <div style={{padding:"8px 12px",borderBottom:"1px solid #060606"}}>
+            <input value={search} onChange={e=>onSearch(e.target.value)}
+              placeholder="Search players..."
+              style={{width:"100%",background:"transparent",border:"none",color:"#888",
+                fontFamily:MM,fontSize:9,outline:"none",boxSizing:"border-box" as const}}/>
+          </div>
+          <div style={{maxHeight:480,overflowY:"auto" as const}}>
+            {sorted.map(p=>{
+              const sel = !!selectedPlayers.find(x=>x.id===p.id);
+              return (
+                <div key={p.id} onClick={p.years_left===0?undefined:()=>onTogglePlayer(p)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",
+                    borderBottom:"1px solid #060606",cursor:p.years_left===0?"not-allowed":"pointer",
+                    background:sel?"#0d0d0d":"transparent",opacity:p.years_left===0?0.3:1}}>
+                  <div style={{width:14,height:14,border:`1px solid ${sel?"#f0f0f0":"#1a1a1a"}`,
+                    borderRadius:2,background:sel?"#f0f0f0":"transparent",flexShrink:0,
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {sel&&<div style={{width:8,height:8,background:"#000",borderRadius:1}}/>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <span style={{fontFamily:"Inter,sans-serif",fontSize:12,color:sel?"#f0f0f0":"#888",
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{p.name}</span>
+                      {p.years_left===0&&<span style={{fontFamily:MM,fontSize:6,color:"#c86060",border:"1px solid #3a1a1a",borderRadius:2,padding:"1px 3px"}}>EXP</span>}
+                    </div>
+                    <div style={{fontFamily:MM,fontSize:7,color:"#444",marginTop:1}}>
+                      {p.overall} OVR · {p.archetype} · Age {p.age}
+                    </div>
+                  </div>
+                  <div style={{fontFamily:MM,fontSize:8,color:"#555",textAlign:"right" as const,flexShrink:0}}>
+                    <div>${(p.salary/1e6).toFixed(1)}M</div>
+                    <div style={{fontSize:7,color:"#333"}}>{p.years_left}yr</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {tab==="picks"&&(
+        <div style={{maxHeight:480,overflowY:"auto" as const}}>
+          {picksSorted.length===0&&<div style={{padding:"20px",fontFamily:MM,fontSize:9,color:"#222",textAlign:"center" as const}}>No picks</div>}
+          {picksSorted.map((pk:any,i:number)=>{
+            const sel = selectedPicks.includes(pk.note);
+            const year = pk.year||2026;
+            const isR1 = pk.round===1;
+            const origOwner = pk.original_owner||teamAbbr;
+            const label2 = `${year} ${origOwner} ${isR1?"1st":"2nd"}`;
+            return (
+              <div key={i} onClick={()=>onTogglePick(pk.note)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",
+                  borderBottom:"1px solid #060606",cursor:"pointer",
+                  background:sel?"#0d0d0d":"transparent"}}>
+                <div style={{width:14,height:14,border:`1px solid ${sel?"#f0f0f0":"#1a1a1a"}`,
+                  borderRadius:2,background:sel?"#f0f0f0":"transparent",flexShrink:0,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {sel&&<div style={{width:8,height:8,background:"#000",borderRadius:1}}/>}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:MM,fontSize:9,color:sel?"#f0f0f0":isR1?"#888":"#555"}}>{label2}</div>
+                  {pk.protection&&<div style={{fontFamily:MM,fontSize:7,color:"#444",marginTop:1}}>{pk.protection}</div>}
+                  {pk.acquired_from&&<div style={{fontFamily:MM,fontSize:7,color:"#c8a84b",marginTop:1}}>via {pk.acquired_from}</div>}
+                </div>
+                <div style={{fontFamily:MM,fontSize:7,color:isR1?"#555":"#333"}}>{isR1?"R1":"R2"}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function FASection({saveId, state, onSign}: {saveId:string; state:GMState; onSign:()=>void}) {
   const [fa, setFa] = useState<Player[]>([]);
   const [signing, setSigning] = useState<string|null>(null);
