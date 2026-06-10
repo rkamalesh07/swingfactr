@@ -1496,13 +1496,23 @@ async def propose_trade(save_id: str, body: dict):
 
     # If accepted, execute the trade in the save state
     if decision["result"] == "ACCEPTED":
+        # Idempotency: re-check players are still on their rosters
+        my_roster_now     = league["teams"][gm_team]["roster"]
+        target_roster_now = league["teams"].get(target_team, {}).get("roster", [])
+        still_have = all(any(p["id"]==gid for p in my_roster_now)     for gid in giving_ids)
+        they_still = all(any(p["id"]==gid for p in target_roster_now) for gid in getting_ids)
+        if not still_have or not they_still:
+            return {
+                "result": "REJECTED — Trade already processed or players no longer available.",
+                "accepted": False,
+            }
         # Move players
         league["teams"][gm_team]["roster"]  = [
-            p for p in my_roster if p["id"] not in giving_ids
+            p for p in my_roster_now if p["id"] not in giving_ids
         ] + get_players
 
         league["teams"][target_team]["roster"] = [
-            p for p in target_roster if p["id"] not in getting_ids
+            p for p in target_roster_now if p["id"] not in getting_ids
         ] + give_players
 
         # Move picks between teams
@@ -1671,6 +1681,12 @@ async def get_ai_trade_offers(save_id: str):
 
         if len(offers) >= 2:
             break
+    # Randomly generate 0, 1, or 2 offers (weighted toward 1-2)
+    import random as _r2
+    if _r2.random() < 0.15:
+        offers = []  # 15% chance no offers
+    elif _r2.random() < 0.3 and len(offers) > 1:
+        offers = offers[:1]  # 30% chance only 1 offer
 
     return {"offers": offers}
 
