@@ -578,7 +578,7 @@ function FranchiseSelect({ onSelect, backButton }: { onSelect: (saveId: string, 
 
 // ─── Top Bar ──────────────────────────────────────────────────────────────────
 function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:string; onNav:(s:string)=>void; onNewGame:()=>void}) {
-  const NAV = ["HOME","ROSTER","STANDINGS","DRAFT","TRADE","FREE AGENTS"];
+  const NAV = ["HOME","ROSTER","STANDINGS","PROSPECTS","TRADE","FREE AGENTS"];
   return (
     <div style={{background:"rgba(0,0,0,0.97)",borderBottom:"1px solid #222",height:48,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 28px",position:"sticky",top:0,zIndex:200}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -678,7 +678,7 @@ function getCalendarEvents(currentGameDay: number): CalEvent[] {
 
 const MONTH_NAMES = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function NBACalendar({onNav, currentGameDay}: {onNav:(s:string)=>void; currentGameDay:number}) {
+function NBACalendar({onNav, currentGameDay, onSimToDay}: {onNav:(s:string)=>void; currentGameDay:number; onSimToDay:(day:number)=>void}) {
   const MM = "'DM Mono',monospace";
   const [viewMonth, setViewMonth] = useState(6); // Start at June (current)
   const [viewYear, setViewYear] = useState(2026);
@@ -745,10 +745,17 @@ function NBACalendar({onNav, currentGameDay}: {onNav:(s:string)=>void; currentGa
           const events = day ? monthEvents.filter(e=>e.day===day) : [];
           const isToday = day===todayDate.day&&viewMonth===todayDate.month&&viewYear===todayDate.year;
           return (
-            <div key={i} style={{
-              minHeight:72,borderRight:"1px solid #080808",borderBottom:"1px solid #080808",
-              padding:"6px",background:events.length>0?TYPE_COLORS[events[0].type]:"transparent",
-              opacity:day?1:0.3}}>
+            <div key={i}
+              onClick={()=>{
+                if(!day) return;
+                const targetDay = dateToGameDay(viewMonth, day, viewYear);
+                if(targetDay > currentGameDay) onSimToDay(targetDay);
+              }}
+              style={{
+                minHeight:72,borderRight:"1px solid #080808",borderBottom:"1px solid #080808",
+                padding:"6px",background:events.length>0?TYPE_COLORS[events[0].type]:"transparent",
+                opacity:day?1:0.3,
+                cursor:day&&dateToGameDay(viewMonth,day,viewYear)>currentGameDay?"pointer":"default"}}>
               {day&&(
                 <>
                   <div style={{fontFamily:MM,fontSize:8,marginBottom:4,fontWeight:isToday?600:400,
@@ -1033,7 +1040,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
       {/* NBA Season Calendar */}
-      <NBACalendar onNav={onNav} currentGameDay={state.day} />
+      <NBACalendar onNav={onNav} currentGameDay={state.day} onSimToDay={async (targetDay)=>{ await fetch(`${API}/gm/sim/${saveId}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:targetDay-state.day})}); window.location.reload(); }} />
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
@@ -1076,7 +1083,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
               </div>
             ))}
           </div>
-          <button onClick={()=>onNav("DRAFT")} style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",background:"transparent",border:"none",cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.08em",marginTop:8}}>FULL DRAFT BOARD →</button>
+          <button onClick={()=>onNav("PROSPECTS")} style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",background:"transparent",border:"none",cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.08em",marginTop:8}}>FULL DRAFT BOARD →</button>
         </div>
 
         {/* Priorities */}
@@ -2475,7 +2482,9 @@ export default function GMPage() {
         {section==="HOME"        && <HomeSection state={state} roster={roster} onNav={setSection} saveId={saveId} onViewOffer={(o)=>{setPendingOffer(o);setSection('TRADE');}} />}
         {section==="ROSTER"      && <RosterSection saveId={saveId} roster={roster} state={state} onRosterChange={()=>loadData(saveId)} />}
         {section==="STANDINGS"   && <StandingsSection saveId={saveId} gmTeam={state.gm_team} />}
-        {section==="DRAFT"       && <DraftSection gmTeam={state.gm_team} />}
+        {section==="PROSPECTS"   && <ProspectsSection gmTeam={state.gm_team} currentGameDay={state.day} />}
+        {section==="DRAFT"       && state.day>=246 && <DraftSection gmTeam={state.gm_team} />}
+        {section==="DRAFT"       && state.day<246  && <div style={{padding:"40px",textAlign:"center" as const,fontFamily:"'DM Mono',monospace",fontSize:10,color:"#333"}}>Draft unlocks June 24</div>}
         {section==="TRADE"       && <TradeSection saveId={saveId} roster={roster} state={state} pendingOffer={pendingOffer} onOfferClear={()=>setPendingOffer(null)} />}
         {section==="FREE AGENTS" && <FASection saveId={saveId} state={state} onSign={()=>loadData(saveId)} />}
       </div>
