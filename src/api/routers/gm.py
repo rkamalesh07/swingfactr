@@ -1452,6 +1452,16 @@ async def propose_trade(save_id: str, body: dict):
     give_players = [p for p in my_roster     if p["id"] in giving_ids]
     get_players  = [p for p in target_roster if p["id"] in getting_ids]
 
+    # Block expired contracts from being traded
+    expired_give = [p for p in give_players if p.get("years_left", 1) == 0]
+    expired_get  = [p for p in get_players  if p.get("years_left", 1) == 0]
+    if expired_give:
+        names = ", ".join(p["name"] for p in expired_give)
+        return {"result": f"REJECTED — {names} has an expired contract and cannot be traded."}
+    if expired_get:
+        names = ", ".join(p["name"] for p in expired_get)
+        return {"result": f"REJECTED — {names} has an expired contract and cannot be traded."}
+
     # CBA matching check (from user's side)
     give_sal = sum(p.get("salary", 0) for p in give_players)
     get_sal  = sum(p.get("salary", 0) for p in get_players)
@@ -1589,19 +1599,30 @@ async def get_ai_trade_offers(save_id: str):
                 and 56 <= p.get("overall", 0) <= 74
                 and p.get("salary", 0) >= 10_000_000
                 and not is_untouchable(p, status)
+                and p.get("years_left", 1) >= 1  # no expired contracts
             ]
             if not their_for_sale:
                 continue
             their_player = random.choice(their_for_sale[:3])
 
             # Find matching salary on YOUR team to take back
+            # Use real CBA matching: target team can receive up to outgoing + $7.5M
             their_sal = their_player.get("salary", 0)
+            target_payroll = sum(p.get("salary",0) for p in target_roster)
+            if target_payroll > 188_931_000:
+                max_incoming = their_sal  # second apron: must match
+            elif target_payroll > 178_132_000:
+                max_incoming = their_sal * 1.10  # first apron: 110%
+            else:
+                max_incoming = their_sal + 7_500_000  # standard: +$7.5M
+
             my_matches = [
                 p for p in my_roster
-                if abs(p.get("salary", 0) - their_sal) <= 8_000_000
-                and p.get("age", 25) >= 28
+                if p.get("salary", 0) <= max_incoming
+                and p.get("salary", 0) >= their_sal * 0.75  # reasonable floor
                 and not is_untouchable(p, gm_st)
-                and p.get("overall", 0) <= their_player.get("overall", 0) + 5
+                and p.get("years_left", 1) >= 1  # no expired contracts in trades
+                and p.get("overall", 0) <= their_player.get("overall", 0) + 8
             ]
             if not my_matches:
                 continue
@@ -1628,7 +1649,7 @@ async def get_ai_trade_offers(save_id: str):
             my_expiring = [
                 p for p in my_roster
                 if p.get("age", 25) >= 30
-                and p.get("years_left", 2) <= 1
+                and p.get("years_left", 2) == 1  # expiring but NOT yet expired
                 and 58 <= p.get("overall", 0) <= 76
                 and not is_untouchable(p, gm_st)
             ]
