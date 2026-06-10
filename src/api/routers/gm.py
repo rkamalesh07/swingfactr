@@ -1280,6 +1280,44 @@ def is_untouchable(player: dict, team_status: str) -> bool:
 
     return False
 
+POSITIONAL_SCARCITY = {
+    "Shot Creator":       1.28,
+    "Primary Ball Handler": 1.25,
+    "Two-Way Wing":       1.22,
+    "3-and-D":            1.18,
+    "Rim Protector":      1.15,
+    "Point Forward":      1.20,
+    "Scoring Wing":       1.12,
+    "Wing Scorer":        1.10,
+    "Stretch Four":       1.05,
+    "Traditional Big":    0.95,
+    "Energy Big":         0.88,
+    "Role Player":        0.90,
+    "Secondary Playmaker":0.92,
+    "Playmaking Big":     1.05,
+}
+
+def get_trade_memory(league: dict, team_a: str, team_b: str, trade_sig: str) -> dict:
+    """Get negotiation history between two teams for this trade."""
+    mem = league.setdefault("trade_memory", {})
+    key = f"{team_a}:{team_b}:{trade_sig}"
+    return mem.get(key, {"rejections": 0, "insult_count": 0, "blocked_until": 0})
+
+def update_trade_memory(league: dict, team_a: str, team_b: str, trade_sig: str, result: str, insult: bool = False):
+    """Update negotiation memory after a trade response."""
+    import time as _t
+    mem = league.setdefault("trade_memory", {})
+    key = f"{team_a}:{team_b}:{trade_sig}"
+    entry = mem.get(key, {"rejections": 0, "insult_count": 0, "blocked_until": 0})
+    if result == "REJECTED":
+        entry["rejections"] += 1
+        if insult:
+            entry["insult_count"] += 1
+        # After 3 rejections, block for a simulated period
+        if entry["rejections"] >= 3:
+            entry["blocked_until"] = entry.get("blocked_until", 0) + 30  # 30 sim days
+    mem[key] = entry
+
 def ai_trade_decision(
     give_players: list, get_players: list, give_picks: list, get_picks: list,
     target_team: str, state: dict, league: dict
@@ -1289,6 +1327,7 @@ def ai_trade_decision(
     Returns decision with reasoning.
     """
     import random
+    import hashlib as _hl
 
     gm_team     = state.get("gm_team", "")
     target_status = TEAM_STATUS_MAP.get(target_team, "Retooling")
@@ -1296,6 +1335,25 @@ def ai_trade_decision(
 
     gm_status_local = TEAM_STATUS_MAP.get(gm_team, "Retooling")
     target_status_local = TEAM_STATUS_MAP.get(target_team, "Retooling")
+
+    # Generate deterministic trade signature for memory lookup
+    give_ids = sorted(p.get("id","") for p in give_players)
+    get_ids  = sorted(p.get("id","") for p in get_players)
+    trade_sig = _hl.md5((str(give_ids)+str(get_ids)+str(sorted(give_picks))+str(sorted(get_picks))).encode()).hexdigest()[:12]
+
+    # Check negotiation memory -- repeated bad offers get auto-rejected
+    mem = get_trade_memory(league, gm_team, target_team, trade_sig)
+    sim_day = league.get("day", 0)
+    if mem.get("rejections", 0) >= 3:
+        return {
+            "result": "REJECTED",
+            "reason": f"{target_team} is no longer interested in discussing this trade. Try a different offer.",
+        }
+    if mem.get("insult_count", 0) >= 2:
+        return {
+            "result": "REJECTED",
+            "reason": f"{target_team}'s GM is offended by repeated lowball offers. This negotiation is dead.",
+        }
 
     # Check if user is requesting an untouchable from the target team
     untouchable_requested = [
@@ -1315,8 +1373,18 @@ def ai_trade_decision(
         # Both sides giving up untouchables -- evaluate normally but harder threshold
         # Fall through to normal evaluation with tighter threshold
 
-    give_tv  = sum(p.get("trade_value", 50) for p in give_players)
-    get_tv   = sum(p.get("trade_value", 50) for p in get_players)
+    # Apply positional scarcity multipliers
+    def _scarce_tv(p):
+        base = p.get("trade_value", 50)
+        arch = p.get("archetype", "Role Player")
+        mult = POSITIONAL_SCARCITY.get(arch, 1.0)
+        # Age curve: prime players (25-30) get bonus
+        age  = p.get("age", 28)
+        age_mult = 1.10 if 25 <= age <= 30 else (0.85 if age >= 34 else 1.0)
+        return base * mult * age_mult
+
+    give_tv  = sum(_scarce_tv(p) for p in give_players)
+    get_tv   = sum(_scarce_tv(p) for p in get_players)
     give_sal = sum(p.get("salary", 0) for p in give_players)
     get_sal  = sum(p.get("salary", 0) for p in get_players)
 
@@ -1408,7 +1476,18 @@ def ai_trade_decision(
         }
     else:
         # Rejection reasons
-        if contending and give_pick_val > get_tv * 0.5:
+        # Hard strategy gates
+    if rebuilding:
+        # Rebuilders auto-reject aging expensive players
+        bad_fits = [p for p in give_players if p.get("age",25) >= 31 and p.get("salary",0) > 20_000_000]
+        if bad_fits:
+            names = ", ".join(p["name"] for p in bad_fits)
+            return {
+                "result": "REJECTED",
+                "reason": f"{target_team} is rebuilding. They won't take on {names}'s age/contract.",
+            }
+
+    if contending and give_pick_val > get_tv * 0.5:
             reason = f"{target_team} doesn't need picks. They need players who can help now."
         elif get_tv > give_tv * 1.3:
             reason = f"{target_team} values their player too highly to move them for this."
@@ -1488,6 +1567,12 @@ async def propose_trade(save_id: str, body: dict):
                       f"Sending ${give_sal/1e6:.1f}M, max you can receive: ${max_incoming/1e6:.1f}M"
         }
 
+    import hashlib as _hl
+
+    # Compute trade value totals for insult detection
+    give_total = sum(p.get("trade_value",50) for p in give_players) + sum(12 if "R1" in pk or "Round 1" in pk else 4 for pk in picks_offered)
+    get_total  = sum(p.get("trade_value",50) for p in get_players)  + sum(12 if "R1" in pk or "Round 1" in pk else 4 for pk in picks_requested)
+
     # AI decision
     decision = ai_trade_decision(
         give_players, get_players, picks_offered, picks_requested,
@@ -1544,6 +1629,22 @@ async def propose_trade(save_id: str, body: dict):
             league["teams"][team]["cap_used"] = sum(p.get("salary",0) for p in roster)
 
         # Save
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE gm_saves SET state=%s WHERE save_id=%s",
+                        (json.dumps(league), save_id))
+            conn.commit()
+            cur.close()
+
+    # Update negotiation memory
+    was_insult = False
+    if decision["result"] == "REJECTED":
+        # Detect insult: offering <65% of requested value
+        if give_total > 0 and get_total > 0:
+            was_insult = (give_total / max(get_total, 1)) < 0.55
+        update_trade_memory(league, gm_team, target_team, 
+                           _hl.md5((str(sorted(giving_ids))+str(sorted(getting_ids))).encode()).hexdigest()[:12],
+                           "REJECTED", was_insult)
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("UPDATE gm_saves SET state=%s WHERE save_id=%s",
