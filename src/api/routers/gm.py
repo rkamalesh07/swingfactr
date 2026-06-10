@@ -1148,7 +1148,7 @@ class SimBody(BaseModel):
 @router.post("/simulate/{save_id}")
 def simulate(save_id: str, body: SimBody):
     """Simulate N days of games. Updates standings in save."""
-    days = max(1, min(body.days, 30))
+    days = max(1, min(body.days, 365))
     conn = get_conn()
     league = get_save(conn, save_id)
     league = simulate_days(league, days)
