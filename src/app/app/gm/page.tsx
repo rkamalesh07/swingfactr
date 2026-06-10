@@ -772,7 +772,7 @@ function NBACalendar({onNav, currentGameDay}: {onNav:(s:string)=>void; currentGa
               {day&&(
                 <>
                   <div style={{fontFamily:MM,fontSize:8,marginBottom:4,fontWeight:isToday?600:400,
-                    background:isToday?"#f0f0f0":undefined,
+                    outline:isToday?"1px solid #f0f0f0":undefined,
                     borderRadius:isToday?2:0,padding:isToday?"1px 4px":undefined,display:"inline-block"}}>
                     {day}
                   </div>
