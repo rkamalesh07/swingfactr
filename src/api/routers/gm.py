@@ -2176,7 +2176,7 @@ def get_expiring_players(save_id: str):
 
     expiring = []
     for p in roster:
-        if p.get("years_left", 2) <= 1:
+        if p.get("years_left", 2) == 0:
             offer = bird_max_offer(p, abbr, cap)
             expiring.append({
                 **p,
