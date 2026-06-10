@@ -9,7 +9,7 @@ type Player = {
   id: string; name: string; position: string; age: number; team: string;
   ppg: number; rpg: number; apg: number; mpg: number; gp: number;
   scoring: number; efficiency: number; playmaking: number;
-  rebounding: number; defense: number; composure: number; overall: number;
+  rebounding: number; defense: number; composure: number; ball_handling: number; overall: number;
   archetype: string; salary: number; years_left: number;
 };
 type TeamRow = { abbr: string; name: string; wins: number; losses: number; pct: number; gm_team: boolean; };
@@ -39,165 +39,297 @@ const NBA_TEAMS = [
 
 const DRAFT_PROSPECTS = [
   // LOTTERY (1-14) — averaged ESPN + other rankings
-  {rank:1,name:"AJ Dybantsa",pos:"F",school:"BYU",ovr:94,note:"Scoring wing, franchise-level tools. Three-level creator. Comp: T-Mac"},
-  {rank:2,name:"Darryn Peterson",pos:"G",school:"Kansas",ovr:92,note:"Best scorer/shotmaker in class. Elite touch on/off ball. Comp: SGA-lite"},
-  {rank:3,name:"Cameron Boozer",pos:"F",school:"Duke",ovr:90,note:"Most NBA-ready freshman ever. 2nd-highest BPM at 18 since Zion. Elite IQ"},
-  {rank:4,name:"Caleb Wilson",pos:"F",school:"UNC",ovr:88,note:"Special upside big. Explosive motor, multiple injuries in 2026. Comp: KG"},
-  {rank:5,name:"Keaton Wagler",pos:"G",school:"Illinois",ovr:86,note:"Tall on-ball playmaker, late bloomer. Led Illinois to Final Four"},
-  {rank:6,name:"Darius Acuff Jr.",pos:"G",school:"Arkansas",ovr:84,note:"Best PG in college basketball. 44% from 3 at 29.5% usage"},
-  {rank:7,name:"Kingston Flemings",pos:"G",school:"Houston",ovr:82,note:"Explosive burst, elite speed. Shortest wingspan concern. Comp: De'Aaron Fox"},
-  {rank:8,name:"Mikel Brown Jr.",pos:"G",school:"Louisville",ovr:80,note:"Nuclear scorer, medically cleared. Positional size + shotmaking elite"},
-  {rank:9,name:"Nate Ament",pos:"F",school:"Tennessee",ovr:78,note:"6-9.5 barefoot, elite wing measurements. Skilled but polarizing production"},
-  {rank:10,name:"Brayden Burries",pos:"G",school:"Arizona",ovr:77,note:"All-around guard, rebounds, two-way ability. Oldest freshman may push him down"},
-  {rank:11,name:"Aday Mara",pos:"C",school:"Michigan",ovr:76,note:"7-3 center, combine star. Best passing big in years. Unique skill set"},
-  {rank:12,name:"Yaxel Lendeborg",pos:"F",school:"Michigan",ovr:75,note:"Rare versatility — center size with perimeter skills. Guards all 5 positions"},
-  {rank:13,name:"Karim Lopez",pos:"F",school:"NZ Breakers",ovr:74,note:"Second NBL season showed real growth. Size + skill + toughness"},
-  {rank:14,name:"Labaron Philon",pos:"G",school:"Alabama",ovr:73,note:"Tight handle, creative scorer. Projects better as 6th-man type"},
+  {rank:1,name:"AJ Dybantsa",pos:"F",school:"BYU",ovr:62,pot:92,note:"Scoring wing, franchise-level tools. Three-level creator. Comp: T-Mac"},
+  {rank:2,name:"Darryn Peterson",pos:"G",school:"Kansas",ovr:60,pot:90,note:"Best scorer/shotmaker in class. Elite touch on/off ball. Comp: SGA-lite"},
+  {rank:3,name:"Cameron Boozer",pos:"F",school:"Duke",ovr:61,pot:88,note:"Most NBA-ready freshman ever. 2nd-highest BPM at 18 since Zion. Elite IQ"},
+  {rank:4,name:"Caleb Wilson",pos:"F",school:"UNC",ovr:57,pot:91,note:"Special upside big. Explosive motor, multiple injuries in 2026. Comp: KG"},
+  {rank:5,name:"Keaton Wagler",pos:"G",school:"Illinois",ovr:56,pot:86,note:"Tall on-ball playmaker, late bloomer. Led Illinois to Final Four"},
+  {rank:6,name:"Darius Acuff Jr.",pos:"G",school:"Arkansas",ovr:55,pot:84,note:"Best PG in college basketball. 44% from 3 at 29.5% usage"},
+  {rank:7,name:"Kingston Flemings",pos:"G",school:"Houston",ovr:54,pot:83,note:"Explosive burst, elite speed. Shortest wingspan concern. Comp: De'Aaron Fox"},
+  {rank:8,name:"Mikel Brown Jr.",pos:"G",school:"Louisville",ovr:53,pot:82,note:"Nuclear scorer, medically cleared. Positional size + shotmaking elite"},
+  {rank:9,name:"Nate Ament",pos:"F",school:"Tennessee",ovr:52,pot:81,note:"6-9.5 barefoot, elite wing measurements. Skilled but polarizing production"},
+  {rank:10,name:"Brayden Burries",pos:"G",school:"Arizona",ovr:51,pot:78,note:"All-around guard, rebounds, two-way ability. Oldest freshman may push him down"},
+  {rank:11,name:"Aday Mara",pos:"C",school:"Michigan",ovr:50,pot:82,note:"7-3 center, combine star. Best passing big in years. Unique skill set"},
+  {rank:12,name:"Yaxel Lendeborg",pos:"F",school:"Michigan",ovr:52,pot:76,note:"Rare versatility — center size with perimeter skills. Guards all 5 positions"},
+  {rank:13,name:"Karim Lopez",pos:"F",school:"NZ Breakers",ovr:49,pot:79,note:"Second NBL season showed real growth. Size + skill + toughness"},
+  {rank:14,name:"Labaron Philon",pos:"G",school:"Alabama",ovr:50,pot:76,note:"Tight handle, creative scorer. Projects better as 6th-man type"},
   // FIRST ROUND LATE (15-30)
-  {rank:15,name:"Hannes Steinbach",pos:"F",school:"Washington",ovr:72,note:"Best rebounder in draft. 34% from 3. Bankable floor"},
-  {rank:16,name:"Morez Johnson Jr.",pos:"F",school:"Michigan",ovr:71,note:"Defensive versatility, Michigan champion. Plus-6.5 inch wingspan"},
-  {rank:17,name:"Jayden Quaintance",pos:"C",school:"Kentucky",ovr:70,note:"Biggest wildcard. Elite D tools, knee history, only 18 years old"},
-  {rank:18,name:"Bennett Stirtz",pos:"G",school:"Iowa",ovr:69,note:"Best passer in draft. Shot well at combine. Veteran savvy"},
-  {rank:19,name:"Christian Anderson",pos:"G",school:"Texas Tech",ovr:68,note:"41.5% from 3, elite ball-screen operation. Only 6-1 barefoot"},
-  {rank:20,name:"Cameron Carr",pos:"G",school:"Baylor",ovr:67,note:"42-inch max vertical, 30 pts at combine scrimmage. Best athlete in class"},
-  {rank:21,name:"Chris Cenac Jr.",pos:"C",school:"Houston",ovr:66,note:"Projectable frame, fluid shooting mechanics, modern center profile"},
-  {rank:22,name:"Koa Peat",pos:"F",school:"Arizona",ovr:65,note:"Shooting mechanics concern. Winning history, defensive versatility"},
-  {rank:23,name:"Allen Graves",pos:"F",school:"Santa Clara",ovr:64,note:"Strong analytics profile, low usage. Does everything right. Rising stock"},
-  {rank:24,name:"Dailyn Swain",pos:"F",school:"Texas",ovr:63,note:"Athletic wing, versatile defender. 3pt shot is biggest hole in game"},
-  {rank:25,name:"Isaiah Evans",pos:"G",school:"Duke",ovr:62,note:"6-5.5 barefoot, great size at 2-guard. Shooter off movement"},
-  {rank:26,name:"Ebuka Okorie",pos:"G",school:"Stanford",ovr:61,note:"Best driving guard in class. 250 rim attempts. Led ACC in scoring"},
-  {rank:27,name:"Henri Veesaar",pos:"C",school:"UNC",ovr:60,note:"7-0 glue guy, stretch and defend. High energy. Comp: Chris Anderson"},
-  {rank:28,name:"Meleek Thomas",pos:"G",school:"Arkansas",ovr:59,note:"Athletic wing guard, one of class's better athletes"},
-  {rank:29,name:"Zuby Ejiofor",pos:"C",school:"St. John's",ovr:58,note:"Physical big, developing mid-range, high energy and effort"},
-  {rank:30,name:"Tarris Reed Jr.",pos:"C",school:"UConn",ovr:57,note:"Burly big, great footwork, measured well at combine"},
+  {rank:15,name:"Hannes Steinbach",pos:"F",school:"Washington",ovr:49,pot:74,note:"Best rebounder in draft. 34% from 3. Bankable floor"},
+  {rank:16,name:"Morez Johnson Jr.",pos:"F",school:"Michigan",ovr:48,pot:72,note:"Defensive versatility, Michigan champion. Plus-6.5 inch wingspan"},
+  {rank:17,name:"Jayden Quaintance",pos:"C",school:"Kentucky",ovr:47,pot:76,note:"Biggest wildcard. Elite D tools, knee history, only 18 years old"},
+  {rank:18,name:"Bennett Stirtz",pos:"G",school:"Iowa",ovr:50,pot:70,note:"Best passer in draft. Shot well at combine. Veteran savvy"},
+  {rank:19,name:"Christian Anderson",pos:"G",school:"Texas Tech",ovr:48,pot:69,note:"41.5% from 3, elite ball-screen operation. Only 6-1 barefoot"},
+  {rank:20,name:"Cameron Carr",pos:"G",school:"Baylor",ovr:47,pot:71,note:"42-inch max vertical, 30 pts at combine scrimmage. Best athlete in class"},
+  {rank:21,name:"Chris Cenac Jr.",pos:"C",school:"Houston",ovr:46,pot:70,note:"Projectable frame, fluid shooting mechanics, modern center profile"},
+  {rank:22,name:"Koa Peat",pos:"F",school:"Arizona",ovr:46,pot:68,note:"Shooting mechanics concern. Winning history, defensive versatility"},
+  {rank:23,name:"Allen Graves",pos:"F",school:"Santa Clara",ovr:45,pot:68,note:"Strong analytics profile, low usage. Does everything right. Rising stock"},
+  {rank:24,name:"Dailyn Swain",pos:"F",school:"Texas",ovr:45,pot:67,note:"Athletic wing, versatile defender. 3pt shot is biggest hole in game"},
+  {rank:25,name:"Isaiah Evans",pos:"G",school:"Duke",ovr:44,pot:66,note:"6-5.5 barefoot, great size at 2-guard. Shooter off movement"},
+  {rank:26,name:"Ebuka Okorie",pos:"G",school:"Stanford",ovr:44,pot:66,note:"Best driving guard in class. 250 rim attempts. Led ACC in scoring"},
+  {rank:27,name:"Henri Veesaar",pos:"C",school:"UNC",ovr:44,pot:64,note:"7-0 glue guy, stretch and defend. High energy. Comp: Chris Anderson"},
+  {rank:28,name:"Meleek Thomas",pos:"G",school:"Arkansas",ovr:43,pot:63,note:"Athletic wing guard, one of class's better athletes"},
+  {rank:29,name:"Zuby Ejiofor",pos:"C",school:"St. John's",ovr:43,pot:62,note:"Physical big, developing mid-range, high energy and effort"},
+  {rank:30,name:"Tarris Reed Jr.",pos:"C",school:"UConn",ovr:42,pot:60,note:"Burly big, great footwork, measured well at combine"},
   // SECOND ROUND (31-60)
-  {rank:31,name:"Alex Karaban",pos:"F",school:"UConn",ovr:55,note:"Veteran UConn champion. Stretch four, elite IQ player"},
-  {rank:32,name:"Joshua Jefferson",pos:"F",school:"Iowa State",ovr:54,note:"Productive senior, physical forward"},
-  {rank:33,name:"Luigi Suigo",pos:"C",school:"Italy",ovr:53,note:"7-3 international center. Massive hands, long-term project"},
-  {rank:34,name:"Ryan Conwell",pos:"G",school:"Louisville",ovr:52,note:"Scoring guard, Louisville"},
-  {rank:35,name:"Braden Smith",pos:"G",school:"Purdue",ovr:51,note:"Elite passer. Measured 5-11 barefoot — undersized concern"},
-  {rank:36,name:"Baba Miller",pos:"F",school:"Cincinnati",ovr:50,note:"Senior big, Cincinnati"},
-  {rank:37,name:"Sergio de Larrea",pos:"G",school:"Spain",ovr:49,note:"International guard, Spain"},
-  {rank:38,name:"Richie Saunders",pos:"G",school:"BYU",ovr:48,note:"Senior shooter, BYU"},
-  {rank:39,name:"Trevon Brazile",pos:"F",school:"Arkansas",ovr:47,note:"Athletic forward, Arkansas"},
-  {rank:40,name:"Jaden Bradley",pos:"G",school:"Arizona",ovr:46,note:"Veteran guard, Arizona"},
-  {rank:41,name:"Emanuel Sharp",pos:"G",school:"Houston",ovr:45,note:"Defensive wing, Houston"},
-  {rank:42,name:"Ja'Kobi Gillespie",pos:"G",school:"Tennessee",ovr:44,note:"Senior guard, Tennessee"},
-  {rank:43,name:"Ugonna Onyenso",pos:"C",school:"Virginia",ovr:43,note:"Rim protector, Virginia"},
-  {rank:44,name:"Dillon Mitchell",pos:"F",school:"St. John's",ovr:42,note:"Athletic forward, St. John's"},
-  {rank:45,name:"Bruce Thornton",pos:"G",school:"Ohio State",ovr:41,note:"Tenacious guard, Ohio State"},
-  {rank:46,name:"Otega Oweh",pos:"G",school:"Kentucky",ovr:40,note:"Athletic wing, Kentucky"},
-  {rank:47,name:"Tyler Bilodeau",pos:"F",school:"UCLA",ovr:39,note:"Physical forward, UCLA"},
-  {rank:48,name:"Felix Okpara",pos:"C",school:"Tennessee",ovr:38,note:"Mobile big, Tennessee"},
-  {rank:49,name:"Tyler Nickel",pos:"F",school:"Vanderbilt",ovr:37,note:"Shooter, Vanderbilt"},
-  {rank:50,name:"Kylan Boswell",pos:"G",school:"Illinois",ovr:36,note:"Veteran guard, Illinois"},
-  {rank:51,name:"Tobi Lawal",pos:"F",school:"Virginia Tech",ovr:35,note:"Athletic forward, Virginia Tech"},
-  {rank:52,name:"Izaiyah Nelson",pos:"F",school:"South Florida",ovr:34,note:"Physical forward, South Florida"},
-  {rank:53,name:"Jack Kayil",pos:"G",school:"Germany",ovr:33,note:"German guard, intriguing international prospect"},
-  {rank:54,name:"Maliq Brown",pos:"C",school:"Duke",ovr:32,note:"Big wing, Duke"},
-  {rank:55,name:"Milos Uzan",pos:"G",school:"Houston",ovr:31,note:"Veteran PG, Houston champion"},
-  {rank:56,name:"Bryce Hopkins",pos:"F",school:"St. John's",ovr:30,note:"Wing, St. John's champion"},
-  {rank:57,name:"Nate Bittle",pos:"C",school:"Oregon",ovr:29,note:"7-0 center, Oregon"},
-  {rank:58,name:"Keyshawn Hall",pos:"F",school:"Auburn",ovr:28,note:"Versatile wing, Auburn"},
-  {rank:59,name:"Nick Martinelli",pos:"F",school:"Northwestern",ovr:27,note:"Versatile forward, Northwestern"},
-  {rank:60,name:"Tobe Awaka",pos:"F",school:"Arizona",ovr:26,note:"Physical forward, Arizona"},
+  {rank:31,name:"Alex Karaban",pos:"F",school:"UConn",ovr:55,pot:63,note:"Veteran UConn champion. Stretch four, elite IQ player"},
+  {rank:32,name:"Joshua Jefferson",pos:"F",school:"Iowa State",ovr:54,pot:62,note:"Productive senior, physical forward"},
+  {rank:33,name:"Luigi Suigo",pos:"C",school:"Italy",ovr:53,pot:61,note:"7-3 international center. Massive hands, long-term project"},
+  {rank:34,name:"Ryan Conwell",pos:"G",school:"Louisville",ovr:52,pot:60,note:"Scoring guard, Louisville"},
+  {rank:35,name:"Braden Smith",pos:"G",school:"Purdue",ovr:51,pot:59,note:"Elite passer. Measured 5-11 barefoot — undersized concern"},
+  {rank:36,name:"Baba Miller",pos:"F",school:"Cincinnati",ovr:50,pot:58,note:"Senior big, Cincinnati"},
+  {rank:37,name:"Sergio de Larrea",pos:"G",school:"Spain",ovr:49,pot:57,note:"International guard, Spain"},
+  {rank:38,name:"Richie Saunders",pos:"G",school:"BYU",ovr:48,pot:56,note:"Senior shooter, BYU"},
+  {rank:39,name:"Trevon Brazile",pos:"F",school:"Arkansas",ovr:47,pot:55,note:"Athletic forward, Arkansas"},
+  {rank:40,name:"Jaden Bradley",pos:"G",school:"Arizona",ovr:46,pot:54,note:"Veteran guard, Arizona"},
+  {rank:41,name:"Emanuel Sharp",pos:"G",school:"Houston",ovr:45,pot:53,note:"Defensive wing, Houston"},
+  {rank:42,name:"Ja'Kobi Gillespie",pos:"G",school:"Tennessee",ovr:44,pot:52,note:"Senior guard, Tennessee"},
+  {rank:43,name:"Ugonna Onyenso",pos:"C",school:"Virginia",ovr:43,pot:51,note:"Rim protector, Virginia"},
+  {rank:44,name:"Dillon Mitchell",pos:"F",school:"St. John's",ovr:42,pot:50,note:"Athletic forward, St. John's"},
+  {rank:45,name:"Bruce Thornton",pos:"G",school:"Ohio State",ovr:41,pot:49,note:"Tenacious guard, Ohio State"},
+  {rank:46,name:"Otega Oweh",pos:"G",school:"Kentucky",ovr:40,pot:48,note:"Athletic wing, Kentucky"},
+  {rank:47,name:"Tyler Bilodeau",pos:"F",school:"UCLA",ovr:39,pot:47,note:"Physical forward, UCLA"},
+  {rank:48,name:"Felix Okpara",pos:"C",school:"Tennessee",ovr:38,pot:46,note:"Mobile big, Tennessee"},
+  {rank:49,name:"Tyler Nickel",pos:"F",school:"Vanderbilt",ovr:37,pot:45,note:"Shooter, Vanderbilt"},
+  {rank:50,name:"Kylan Boswell",pos:"G",school:"Illinois",ovr:36,pot:45,note:"Veteran guard, Illinois"},
+  {rank:51,name:"Tobi Lawal",pos:"F",school:"Virginia Tech",ovr:35,pot:45,note:"Athletic forward, Virginia Tech"},
+  {rank:52,name:"Izaiyah Nelson",pos:"F",school:"South Florida",ovr:34,pot:45,note:"Physical forward, South Florida"},
+  {rank:53,name:"Jack Kayil",pos:"G",school:"Germany",ovr:33,pot:45,note:"German guard, intriguing international prospect"},
+  {rank:54,name:"Maliq Brown",pos:"C",school:"Duke",ovr:32,pot:45,note:"Big wing, Duke"},
+  {rank:55,name:"Milos Uzan",pos:"G",school:"Houston",ovr:31,pot:45,note:"Veteran PG, Houston champion"},
+  {rank:56,name:"Bryce Hopkins",pos:"F",school:"St. John's",ovr:30,pot:45,note:"Wing, St. John's champion"},
+  {rank:57,name:"Nate Bittle",pos:"C",school:"Oregon",ovr:29,pot:45,note:"7-0 center, Oregon"},
+  {rank:58,name:"Keyshawn Hall",pos:"F",school:"Auburn",ovr:28,pot:45,note:"Versatile wing, Auburn"},
+  {rank:59,name:"Nick Martinelli",pos:"F",school:"Northwestern",ovr:27,pot:45,note:"Versatile forward, Northwestern"},
+  {rank:60,name:"Tobe Awaka",pos:"F",school:"Arizona",ovr:26,pot:45,note:"Physical forward, Arizona"},
   // LATE SECOND / UNDRAFTED (61-90)
-  {rank:61,name:"Aaron Nkrumah",pos:"G",school:"Tennessee State",ovr:25,note:"Guard, Tennessee State"},
-  {rank:62,name:"Noam Yaacov",pos:"G",school:"Israel",ovr:24,note:"International PG, Israel"},
-  {rank:63,name:"Oscar Cluff",pos:"C",school:"Purdue",ovr:23,note:"Big center, Purdue"},
-  {rank:64,name:"Rafael Castro",pos:"C",school:"George Washington",ovr:22,note:"Center, George Washington"},
-  {rank:65,name:"Tamin Lipsey",pos:"G",school:"Iowa State",ovr:21,note:"Defensive PG, Iowa State"},
-  {rank:66,name:"Quadir Copeland",pos:"G",school:"NC State",ovr:20,note:"Guard, NC State"},
-  {rank:67,name:"Nick Boyd",pos:"G",school:"Wisconsin",ovr:20,note:"Senior guard, Wisconsin"},
-  {rank:68,name:"Darrion Williams",pos:"F",school:"NC State",ovr:20,note:"Wing, NC State"},
-  {rank:69,name:"Jaron Pierre Jr.",pos:"G",school:"SMU",ovr:20,note:"Scoring guard, SMU"},
-  {rank:70,name:"Cade Tyson",pos:"F",school:"Minnesota",ovr:20,note:"Wing, Minnesota"},
-  {rank:71,name:"Trey Kaufman-Renn",pos:"F",school:"Purdue",ovr:20,note:"Skilled big, Purdue"},
-  {rank:72,name:"Jaden Henley",pos:"G",school:"Grand Canyon",ovr:20,note:"Athletic wing, Grand Canyon"},
-  {rank:73,name:"Graham Ike",pos:"C",school:"Gonzaga",ovr:20,note:"Physical big, Gonzaga"},
-  {rank:74,name:"Malik Reneau",pos:"F",school:"Miami",ovr:20,note:"Physical forward, Miami"},
-  {rank:75,name:"Tucker DeVries",pos:"F",school:"Indiana",ovr:20,note:"Shooter, Indiana"},
-  {rank:76,name:"Pavle Backo",pos:"C",school:"Serbia",ovr:20,note:"International center, Serbia"},
-  {rank:77,name:"Ernest Udeh Jr.",pos:"C",school:"Miami",ovr:20,note:"Athletic center, Miami"},
-  {rank:78,name:"Lamar Wilkerson",pos:"G",school:"Indiana",ovr:20,note:"Wing, Indiana"},
-  {rank:79,name:"Seth Trimble",pos:"G",school:"UNC",ovr:20,note:"Athletic guard, UNC"},
-  {rank:80,name:"Elijah Mahi",pos:"F",school:"Santa Clara",ovr:20,note:"Forward, Santa Clara"},
-  {rank:81,name:"Tre Donaldson",pos:"G",school:"Miami",ovr:20,note:"Guard, Miami"},
-  {rank:82,name:"Duke Miles",pos:"G",school:"Vanderbilt",ovr:20,note:"Guard, Vanderbilt"},
-  {rank:83,name:"Mark Mitchell",pos:"F",school:"Missouri",ovr:20,note:"Forward, Missouri"},
-  {rank:84,name:"Jaxon Kohler",pos:"C",school:"Michigan State",ovr:20,note:"Big center, Michigan State"},
-  {rank:85,name:"Melvin Council Jr.",pos:"G",school:"Kansas",ovr:20,note:"Senior guard, Kansas"},
-  {rank:86,name:"Josh Dix",pos:"G",school:"Creighton",ovr:20,note:"Shooter, Creighton"},
-  {rank:87,name:"Isaac McKneely",pos:"G",school:"Louisville",ovr:20,note:"Shooter, Louisville"},
-  {rank:88,name:"Donovan Atwell",pos:"G",school:"Texas Tech",ovr:20,note:"Guard, Texas Tech"},
-  {rank:89,name:"Trevon Scott",pos:"C",school:"Coastal Carolina",ovr:20,note:"Physical big, Coastal Carolina"},
-  {rank:90,name:"Tyler Powell",pos:"G",school:"Wright State",ovr:20,note:"Guard, Wright State"},
+  {rank:61,name:"Aaron Nkrumah",pos:"G",school:"Tennessee State",ovr:34,pot:50,note:"Guard, Tennessee State"},
+  {rank:62,name:"Noam Yaacov",pos:"G",school:"Israel",ovr:24,pot:45,note:"International PG, Israel"},
+  {rank:63,name:"Oscar Cluff",pos:"C",school:"Purdue",ovr:23,pot:45,note:"Big center, Purdue"},
+  {rank:64,name:"Rafael Castro",pos:"C",school:"George Washington",ovr:22,pot:45,note:"Center, George Washington"},
+  {rank:65,name:"Tamin Lipsey",pos:"G",school:"Iowa State",ovr:21,pot:45,note:"Defensive PG, Iowa State"},
+  {rank:66,name:"Quadir Copeland",pos:"G",school:"NC State",ovr:20,pot:45,note:"Guard, NC State"},
+  {rank:67,name:"Nick Boyd",pos:"G",school:"Wisconsin",ovr:20,pot:45,note:"Senior guard, Wisconsin"},
+  {rank:68,name:"Darrion Williams",pos:"F",school:"NC State",ovr:20,pot:45,note:"Wing, NC State"},
+  {rank:69,name:"Jaron Pierre Jr.",pos:"G",school:"SMU",ovr:20,pot:45,note:"Scoring guard, SMU"},
+  {rank:70,name:"Cade Tyson",pos:"F",school:"Minnesota",ovr:20,pot:45,note:"Wing, Minnesota"},
+  {rank:71,name:"Trey Kaufman-Renn",pos:"F",school:"Purdue",ovr:20,pot:45,note:"Skilled big, Purdue"},
+  {rank:72,name:"Jaden Henley",pos:"G",school:"Grand Canyon",ovr:20,pot:45,note:"Athletic wing, Grand Canyon"},
+  {rank:73,name:"Graham Ike",pos:"C",school:"Gonzaga",ovr:20,pot:45,note:"Physical big, Gonzaga"},
+  {rank:74,name:"Malik Reneau",pos:"F",school:"Miami",ovr:20,pot:45,note:"Physical forward, Miami"},
+  {rank:75,name:"Tucker DeVries",pos:"F",school:"Indiana",ovr:20,pot:45,note:"Shooter, Indiana"},
+  {rank:76,name:"Pavle Backo",pos:"C",school:"Serbia",ovr:20,pot:45,note:"International center, Serbia"},
+  {rank:77,name:"Ernest Udeh Jr.",pos:"C",school:"Miami",ovr:20,pot:45,note:"Athletic center, Miami"},
+  {rank:78,name:"Lamar Wilkerson",pos:"G",school:"Indiana",ovr:20,pot:45,note:"Wing, Indiana"},
+  {rank:79,name:"Seth Trimble",pos:"G",school:"UNC",ovr:20,pot:45,note:"Athletic guard, UNC"},
+  {rank:80,name:"Elijah Mahi",pos:"F",school:"Santa Clara",ovr:20,pot:45,note:"Forward, Santa Clara"},
+  {rank:81,name:"Tre Donaldson",pos:"G",school:"Miami",ovr:20,pot:45,note:"Guard, Miami"},
+  {rank:82,name:"Duke Miles",pos:"G",school:"Vanderbilt",ovr:20,pot:45,note:"Guard, Vanderbilt"},
+  {rank:83,name:"Mark Mitchell",pos:"F",school:"Missouri",ovr:20,pot:45,note:"Forward, Missouri"},
+  {rank:84,name:"Jaxon Kohler",pos:"C",school:"Michigan State",ovr:20,pot:45,note:"Big center, Michigan State"},
+  {rank:85,name:"Melvin Council Jr.",pos:"G",school:"Kansas",ovr:20,pot:45,note:"Senior guard, Kansas"},
+  {rank:86,name:"Josh Dix",pos:"G",school:"Creighton",ovr:20,pot:45,note:"Shooter, Creighton"},
+  {rank:87,name:"Isaac McKneely",pos:"G",school:"Louisville",ovr:20,pot:45,note:"Shooter, Louisville"},
+  {rank:88,name:"Donovan Atwell",pos:"G",school:"Texas Tech",ovr:20,pot:45,note:"Guard, Texas Tech"},
+  {rank:89,name:"Trevon Scott",pos:"C",school:"Coastal Carolina",ovr:20,pot:45,note:"Physical big, Coastal Carolina"},
+  {rank:90,name:"Tyler Powell",pos:"G",school:"Wright State",ovr:20,pot:45,note:"Guard, Wright State"},
 ];
 
-const TEAM_PICKS: Record<string, {round:number,from?:string,note:string}[]> = {
-  ATL:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  BOS:[{round:1,from:"BKN",note:"Via BKN"},{round:2,note:"Own pick"}],
-  BKN:[{round:2,note:"Own pick"}],
-  CHA:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  CHI:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  CLE:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  DAL:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  DEN:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  DET:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  GS:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  HOU:[{round:1,note:"Own pick"},{round:1,from:"BKN",note:"Via BKN"},{round:2,note:"Own pick"}],
-  IND:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  LAC:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  LAL:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  MEM:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  MIA:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  MIL:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  MIN:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  NO:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  NY:[{round:2,note:"Own pick"}],
-  OKC:[{round:1,note:"Own pick"},{round:1,from:"HOU",note:"Via HOU"},{round:2,note:"Own pick"}],
-  ORL:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  PHI:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  PHX:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  POR:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  SA:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  SAC:[{round:1,note:"Own pick"},{round:2,note:"Own pick"}],
-  TOR:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  UTAH:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
-  WSH:[{round:1,note:"Own pick (lottery)"},{round:2,note:"Own pick"}],
+const TEAM_PICKS: Record<string, {round:number,from?:string,note:string,year?:number,protection?:string}[]> = {
+  WSH:[
+    {round:1,note:"Own #1 (lottery)"},
+    {round:2,note:"NYK via HOU-OKC"},
+    {round:2,note:"MIN via NYK-DET"},
+    {round:2,note:"OKC via MIA-SAN"},
+    {round:1,note:"Own",year:2027},{round:2,note:"Own",year:2027},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  UTAH:[
+    {round:1,note:"Own #2"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  MEM:[
+    {round:1,note:"Own #3"},{round:1,note:"PHX #16 (via MEM swap)"},{round:2,note:"IND via MIL"},
+    {round:1,note:"Own",year:2027},{round:1,note:"LAL 5-30",year:2027},{round:1,note:"UTH/CLE/MIN best",year:2027},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  CHI:[
+    {round:1,note:"Own #4"},{round:1,note:"POR #15"},{round:2,note:"NO via POR-DET-BOS"},{round:2,note:"DEN via PHX-CHA"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  LAC:[
+    {round:1,note:"IND #5"},{round:2,note:"MEM via UTAH-ATL"},{round:2,note:"CLE"},
+    {round:1,note:"Own (swap w/DEN/OKC)",year:2027,protection:"top-5 protected"},
+    {round:1,note:"Own",year:2029,protection:"1-3 protected"},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  BKN:[
+    {round:1,note:"Own #6"},{round:2,note:"Own #33"},{round:2,note:"LAC via HOU"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  SAC:[
+    {round:1,note:"Own #7"},{round:2,note:"Own #34"},{round:2,note:"CHA via NYK-ATL-SAN"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  NO:[
+    {round:2,note:"DET via LAC-ORL-PHX-BRK-NYK"},
+    {round:1,note:"Own (top-4 protected to ATL)",year:2027,protection:"top-4 protected to ATL"},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  DAL:[
+    {round:1,note:"Own #9"},{round:1,note:"OKC #30 via PHI-WAS"},{round:2,note:"PHX via WAS"},
+    {round:1,note:"Own (3-30, else to CHA)",year:2027,protection:"1-2 to CHA"},{round:1,note:"Own",year:2028},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  MIL:[
+    {round:1,note:"Own #10"},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  GS:[
+    {round:1,note:"Own #11"},{round:2,note:"LAL via CLE-MIA-TOR"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own (1-20, else to DAL)",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  OKC:[
+    {round:1,note:"LAC #12"},{round:1,note:"PHI #17"},{round:2,note:"DAL"},{round:2,note:"WAS via MIA-SAN"},
+    {round:1,note:"OKC/DEN/LAC complex",year:2027},{round:1,note:"Own or swap DAL",year:2028},
+    {round:1,note:"Own + DEN 6-30",year:2029},{round:1,note:"Own + DEN 6-30",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  MIA:[
+    {round:1,note:"Own #13"},{round:2,note:"GS via ATL-OKC-NYK-CHA"},
+    {round:1,note:"Own (1-14, else to CHA)",year:2027,protection:"15-30 to CHA"},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  CHA:[
+    {round:1,note:"Own #14"},{round:1,note:"ORL #18 via MEM swap"},
+    {round:1,note:"Own + DAL 3-30 + MIA 15-30",year:2027},{round:1,note:"Own",year:2028},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  ATL:[
+    {round:1,note:"NO #8 via SAN swap"},{round:1,note:"CLE #23 via SAN swap"},{round:2,note:"BOS #57"},
+    {round:1,note:"Own (5-30, else complex)",year:2027},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  DET:[
+    {round:1,note:"MIN #21 via DET swap"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  PHI:[
+    {round:2,note:"HOU #22 via OKC"},{round:2,note:"HOU #53"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own (1-8 kept)",year:2028,protection:"9-30 complex"},
+    {round:1,note:"Own or swap LAC 4-30",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  DEN:[
+    {round:1,note:"Own #26"},{round:2,note:"ATL via GOS-BRK"},
+    {round:1,note:"Own (1-5 kept, 6-30 to OKC)",year:2027,protection:"top-5 protected"},
+    {round:1,note:"Own (1-5 kept)",year:2028,protection:"top-5 protected"},
+    {round:1,note:"Own (1-5 kept)",year:2029,protection:"top-5 protected"},
+    {round:1,note:"Own (1-5 kept)",year:2030,protection:"top-5 protected"},
+    {round:1,note:"Own",year:2032},
+  ],
+  CLE:[
+    {round:2,note:"SAN #29 via SAN swap"},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  TOR:[
+    {round:1,note:"Own #19"},{round:2,note:"Own #50"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},{round:1,note:"Own",year:2029},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  ORL:[
+    {round:2,note:"Own #46"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own (1-2 kept)",year:2029,protection:"3-30 to MEM"},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  SA:[
+    {round:1,note:"ATL #20 via SAN swap"},{round:2,note:"UTAH #35 via MIN"},{round:2,note:"POR #42 via NO"},
+    {round:2,note:"MIA #44 via MIA-IND"},{round:2,note:"MIN #59 via MIA-IND"},
+    {round:1,note:"ATL (via SAN swap)",year:2027},{round:1,note:"Own",year:2028},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own or swap SAC",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  HOU:[
+    {round:2,note:"CHI #39 via WAS"},{round:2,note:"Own #53"},
+    {round:1,note:"Own or swap BRK",year:2027},{round:1,note:"Own",year:2028},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  NYK:[
+    {round:1,note:"Own #24"},{round:2,note:"WAS #31 via HOU-OKC"},{round:2,note:"Own #55"},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2030},{round:1,note:"Own",year:2032},
+  ],
+  LAL:[
+    {round:1,note:"Own #25"},
+    {round:1,note:"Own (1-4 kept)",year:2027,protection:"5-30 to MEM"},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  PHX:[
+    {round:2,note:"PHI #47 via OKC-HOU"},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own (frozen thru 27-28)",year:2032,protection:"frozen"},
+  ],
+  MIN:[
+    {round:1,note:"DET #28 via DET swap"},{round:2,note:"SAN #59 via MIA-IND"},
+    {round:1,note:"Own",year:2028},{round:1,note:"Own (1-5 kept)",year:2029,protection:"6-30 to UTH"},
+    {round:1,note:"Own (1 kept)",year:2030,protection:"2-30 complex"},
+    {round:1,note:"Own (frozen thru 27-28)",year:2032,protection:"frozen"},
+  ],
+  POR:[
+    {round:1,note:"Own",year:2027},{round:1,note:"Own or swap MIL",year:2028},
+    {round:1,note:"Own",year:2029},{round:1,note:"Own or swap MIL",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  IND:[
+    {round:1,note:"Own",year:2027},{round:1,note:"Own",year:2028},
+    {round:1,note:"Own (traded to LAC)",year:2029},{round:1,note:"Own",year:2030},
+    {round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
+  BOS:[
+    {round:1,note:"Own #27"},{round:2,note:"MIL #40 via ORL"},
+    {round:1,note:"Own",year:2027},{round:1,note:"Own (2-30 or swap SAN)",year:2028},
+    {round:1,note:"Own",year:2030},{round:1,note:"Own",year:2031},{round:1,note:"Own",year:2032},
+  ],
 };
 
 const SEASON_RESULTS: Record<string,{w:number,l:number,result:string,note:string}> = {
-  ATL:{w:47,l:35,result:"Lost R1",note:"Lost to NY Knicks in R1. Knicks set NBA record 47-point halftime lead in Game 6."},
+  ATL:{w:38,l:44,result:"Lost R1",note:"Lost to NY Knicks in R1."},
   BOS:{w:52,l:30,result:"Lost R1",note:"Blew a 3-1 series lead to Philadelphia 76ers. Historic collapse for the defending champs."},
   BKN:{w:24,l:58,result:"Missed playoffs",note:"Missed playoffs for third straight season. Full rebuild mode."},
-  CHA:{w:28,l:54,result:"Missed playoffs",note:"Tenth consecutive missed playoff. Longest active drought in the NBA."},
-  CHI:{w:26,l:56,result:"Missed playoffs",note:"Missed playoffs for fourth straight season."},
-  CLE:{w:55,l:27,result:"Lost ECF",note:"Swept by NY Knicks 4-0 in Eastern Conference Finals."},
-  DAL:{w:30,l:52,result:"Missed playoffs",note:"Traded AD to WSH mid-season for picks. Rebuilding around Cooper Flagg (#1 pick 2025)."},
-  DEN:{w:45,l:37,result:"Lost R1",note:"Lost to SA Spurs in Round 1. Eight-year playoff streak ends."},
-  DET:{w:57,l:25,result:"Lost R2",note:"1-seed. Overcame 3-1 deficit vs Orlando in R1. Lost to Cleveland in second round."},
-  GS:{w:33,l:49,result:"Missed playoffs",note:"Play-in exit. Lost to LA Clippers in play-in elimination game."},
-  HOU:{w:48,l:34,result:"Lost R1",note:"Lost to OKC in R1. Blew a 6-point lead in final 30 seconds of regulation."},
-  IND:{w:38,l:44,result:"Missed playoffs",note:"Missed playoffs for first time since 2023. Defending Eastern Conference champs."},
-  LAC:{w:29,l:53,result:"Missed playoffs",note:"Missed playoffs for first time since 2022. Play-in exit."},
-  LAL:{w:44,l:38,result:"Lost R2",note:"Lost to SA Spurs in second round. Blew 3-1 lead — only second time in franchise history."},
-  MEM:{w:27,l:55,result:"Missed playoffs",note:"Missed playoffs for second straight season. Young core still developing."},
-  MIA:{w:31,l:51,result:"Missed playoffs",note:"Missed playoffs for first time since 2019. Play-in loss to Charlotte."},
-  MIL:{w:28,l:54,result:"Missed playoffs",note:"Missed playoffs for first time since 2016."},
-  MIN:{w:46,l:36,result:"Lost R2",note:"Lost to OKC in second round. Advanced as 6-seed for second straight season."},
-  NO:{w:22,l:60,result:"Missed playoffs",note:"Missed playoffs for second straight season. Lottery team."},
-  NY:{w:50,l:32,result:"NBA Finals",note:"Lead SA Spurs 2-0 in NBA Finals. Jalen Brunson averaging 34 PPG in the series. Seeking first title since 1973."},
-  OKC:{w:68,l:14,result:"Lost WCF",note:"Best record in NBA history this season. Lost to SA Spurs 4-3 in 7 epic games in WCF."},
-  ORL:{w:44,l:38,result:"Lost R1",note:"Lost to Detroit after blowing a 3-1 series lead. Pistons ended 11-game playoff home losing streak."},
-  PHI:{w:35,l:47,result:"Lost R2",note:"Play-in team. Shocked Boston 4-3 overcoming 3-1 deficit in R1. Lost to Cleveland in second round."},
-  PHX:{w:32,l:50,result:"Missed playoffs",note:"Play-in exit. Lost to Portland Trail Blazers in play-in elimination game."},
-  POR:{w:36,l:46,result:"Lost R1",note:"Won play-in vs PHX. Swept by OKC Thunder in Round 1."},
-  SA:{w:62,l:20,result:"NBA Finals",note:"In NBA Finals vs NY Knicks. Trail 0-2. Beat OKC 4-3 in 7-game WCF. Wembanyama averaging a triple-double in the Finals."},
+  CHA:{w:19,l:63,result:"Missed playoffs",note:"Lottery team. Rebuild continues."},
+  CHI:{w:22,l:60,result:"Missed playoffs",note:"Missed playoffs for fourth straight season."},
+  CLE:{w:64,l:18,result:"Lost ECF",note:"Swept by NY Knicks 4-0 in Eastern Conference Finals."},
+  DAL:{w:43,l:39,result:"Missed playoffs",note:"Traded AD to WSH mid-season for picks. Rebuilding around Cooper Flagg (#1 pick 2025)."},
+  DEN:{w:45,l:37,result:"Lost R1",note:"Lost to SA Spurs in Round 1."},
+  DET:{w:42,l:40,result:"Lost R1",note:"Overcame 3-1 deficit vs Orlando in R1. Lost to Cleveland."},
+  GS:{w:36,l:46,result:"Missed playoffs",note:"Play-in exit. Lost to LA Clippers in play-in elimination game."},
+  HOU:{w:52,l:30,result:"Lost R1",note:"Lost to OKC in R1."},
+  IND:{w:50,l:32,result:"Lost R2",note:"Lost to Cleveland in second round."},
+  LAC:{w:41,l:41,result:"Missed playoffs",note:"Play-in exit. Beat GS then lost to PHX."},
+  LAL:{w:50,l:32,result:"Lost R2",note:"Lost to SA Spurs in second round."},
+  MEM:{w:46,l:36,result:"Lost R1",note:"Won play-in. Lost to OKC in Round 1."},
+  MIA:{w:31,l:51,result:"Missed playoffs",note:"Missed playoffs. Play-in loss."},
+  MIL:{w:30,l:52,result:"Missed playoffs",note:"Missed playoffs for first time since 2016."},
+  MIN:{w:47,l:35,result:"Lost R1",note:"Lost to OKC in Round 1."},
+  NO:{w:28,l:54,result:"Missed playoffs",note:"Lottery team."},
+  NY:{w:51,l:31,result:"NBA Finals",note:"Lead SA Spurs 2-0 in NBA Finals. Jalen Brunson averaging 34 PPG. Seeking first title since 1973."},
+  OKC:{w:68,l:14,result:"Lost WCF",note:"Best record in NBA. Lost to SA Spurs 4-3 in 7 games in WCF."},
+  ORL:{w:47,l:35,result:"Lost R1",note:"Lost to Detroit after blowing a 3-1 series lead."},
+  PHI:{w:25,l:57,result:"Lost R2",note:"Play-in team. Shocked Boston 4-3 overcoming 3-1 deficit. Lost to Cleveland in R2."},
+  PHX:{w:34,l:48,result:"Missed playoffs",note:"Play-in exit. Lost to POR in play-in."},
+  POR:{w:22,l:60,result:"Lost R1",note:"Won play-in vs PHX. Swept by OKC in Round 1."},
+  SA:{w:62,l:20,result:"NBA Finals",note:"In NBA Finals vs NY Knicks. Trail 0-2. Beat OKC 4-3 in 7-game WCF."},
   SAC:{w:30,l:52,result:"Missed playoffs",note:"Missed playoffs for third consecutive season."},
-  TOR:{w:38,l:44,result:"Lost R1",note:"Lost to Cleveland in R1. Cavaliers tied record with 12 straight playoff wins vs Toronto."},
-  UTAH:{w:20,l:62,result:"Missed playoffs",note:"Near-lottery record. Full rebuild underway."},
-  WSH:{w:18,l:64,result:"Missed playoffs",note:"Fifth straight missed playoffs. One of worst records in the league."},
+  TOR:{w:24,l:58,result:"Missed playoffs",note:"Missed playoffs."},
+  UTAH:{w:20,l:62,result:"Missed playoffs",note:"Full rebuild underway."},
+  WSH:{w:18,l:64,result:"Missed playoffs",note:"Worst record in the East. #1 pick in the draft."},
 };
 
 function fmt$(n: number) {
@@ -489,8 +621,143 @@ function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:stri
 }
 
 // ─── Home Section ─────────────────────────────────────────────────────────────
-function HomeSection({state, roster, onNav}: {state:GMState; roster:Player[]; onNav:(s:string)=>void}) {
+
+function ExpiringPlayersSection({saveId, state, onResign}: {saveId:string; state:GMState; onResign:()=>void}) {
+  const MM = "'DM Mono',monospace";
+  const [expiring, setExpiring] = useState<any[]>([]);
+  const [offer, setOffer] = useState<Record<string,{salary:number,years:number}>>({});
+  const [result, setResult] = useState<Record<string,string>>({});
+  const [signing, setSigning] = useState<string|null>(null);
+
+  useEffect(()=>{
+    if(!saveId) return;
+    fetch(`${API}/gm/expiring-players/${saveId}?expired_only=true`)
+      .then(r=>r.json()).then(d=>{
+        setExpiring(d.expiring||[]);
+        const init: Record<string,{salary:number,years:number}> = {};
+        (d.expiring||[]).forEach((p:any)=>{
+          init[p.id] = {salary: p.offer_salary, years: Math.min(p.max_years, 3)};
+        });
+        setOffer(init);
+      }).catch(()=>{});
+  },[saveId]);
+
+  if(expiring.length === 0) return null;
+
+  async function resign(p: any) {
+    const o = offer[p.id];
+    if(!o) return;
+    setSigning(p.id);
+    try {
+      const res = await fetch(`${API}/gm/resign/${saveId}`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({player_id: p.id, salary: o.salary, years: o.years}),
+      });
+      const data = await res.json();
+      setResult(prev => ({...prev, [p.id]: data.outcome || data.reason}));
+      if(data.accepted) {
+        setExpiring(prev => prev.filter(x => x.id !== p.id));
+        onResign();
+      }
+    } catch(e:any) { setResult(prev=>({...prev,[p.id]:"Error"})); }
+    finally { setSigning(null); }
+  }
+
+  function letWalk(p: any) {
+    setExpiring(prev => prev.filter(x => x.id !== p.id));
+  }
+
+  return (
+    <div style={{marginBottom:24,border:"1px solid #1a1a1a",borderRadius:4,background:"#030303",padding:"16px 20px"}}>
+      <div style={{fontFamily:MM,fontSize:9,color:"#c8a84b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>
+        Re-sign Window — {expiring.length} Expired Contract{expiring.length!==1?"s":""}
+      </div>
+      <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#444",marginBottom:16}}>
+        These players' contracts expired after the 2025-26 season. Re-sign them before free agency opens July 1.
+      </div>
+      {expiring.map(p=>(
+        <div key={p.id} style={{borderTop:"1px solid #0d0d0d",paddingTop:12,marginTop:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#e0e0e0"}}>{p.name}</div>
+                {p.years_left===0 && <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,
+                  background:"#1a0a0a",color:"#c86060",border:"1px solid #3a1a1a",
+                  borderRadius:2,padding:"1px 5px",letterSpacing:"0.06em"}}>EXPIRED</span>}
+                {p.years_left===1 && <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,
+                  background:"#0d0d00",color:"#c8a84b",border:"1px solid #2a2a00",
+                  borderRadius:2,padding:"1px 5px",letterSpacing:"0.06em"}}>EXP '26-27</span>}
+              </div>
+              <div style={{fontFamily:MM,fontSize:8,color:"#555",marginTop:2}}>
+                {p.archetype} · {p.overall} OVR · Age {p.age} · {p.bird_rights.replace("_"," ")} Bird Rights
+              </div>
+              <div style={{fontFamily:MM,fontSize:8,color:"#333",marginTop:2}}>
+                Current: ${(p.salary/1e6).toFixed(1)}M · Max offer: ${(p.max_salary/1e6).toFixed(1)}M
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",flexDirection:"column" as const,gap:4}}>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{fontFamily:MM,fontSize:8,color:"#444"}}>$/yr</span>
+                  <input
+                    type="range"
+                    min={p.salary * 0.8}
+                    max={p.max_salary}
+                    step={500000}
+                    value={offer[p.id]?.salary || p.offer_salary}
+                    onChange={e=>setOffer(prev=>({...prev,[p.id]:{...prev[p.id],salary:parseInt(e.target.value)}}))}
+                    style={{width:120,accentColor:"#f0f0f0"}}
+                  />
+                  <span style={{fontFamily:MM,fontSize:9,color:"#888",minWidth:40}}>
+                    ${((offer[p.id]?.salary||p.offer_salary)/1e6).toFixed(1)}M
+                  </span>
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{fontFamily:MM,fontSize:8,color:"#444"}}>yrs</span>
+                  {[1,2,3,4,5].filter(y=>y<=p.max_years).map(y=>(
+                    <button key={y} onClick={()=>setOffer(prev=>({...prev,[p.id]:{...prev[p.id],years:y}}))}
+                      style={{fontFamily:MM,fontSize:8,padding:"2px 8px",cursor:"pointer",
+                        background:(offer[p.id]?.years||3)===y?"#f0f0f0":"transparent",
+                        color:(offer[p.id]?.years||3)===y?"#000":"#444",
+                        border:"1px solid #1a1a1a",borderRadius:2}}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>resign(p)} disabled={signing===p.id}
+                  style={{fontFamily:MM,fontSize:8,textTransform:"uppercase" as const,letterSpacing:"0.08em",
+                    background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,
+                    padding:"6px 14px",cursor:"pointer"}}>
+                  {signing===p.id?"...":"OFFER"}
+                </button>
+                <button onClick={()=>letWalk(p)}
+                  style={{fontFamily:MM,fontSize:8,textTransform:"uppercase" as const,letterSpacing:"0.08em",
+                    background:"transparent",color:"#555",border:"1px solid #1a1a1a",borderRadius:3,
+                    padding:"6px 14px",cursor:"pointer"}}>
+                  LET WALK
+                </button>
+              </div>
+            </div>
+          </div>
+          {result[p.id] && (
+            <div style={{fontFamily:MM,fontSize:9,color:"#888",marginTop:6}}>{result[p.id]}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState; roster:Player[]; onNav:(s:string)=>void; saveId:string; onViewOffer:(offer:any)=>void}) {
   const result = SEASON_RESULTS[state.gm_team];
+  const [offers, setOffers] = useState<any[]>([]);
+  useEffect(()=>{
+    if(!saveId) return;
+    fetch(`${API}/gm/ai-trade-offers/${saveId}`)
+      .then(r=>r.json()).then(d=>setOffers(d.offers||[])).catch(()=>{});
+  },[saveId]);
   const picks = TEAM_PICKS[state.gm_team] || [];
   const pickNum = picks.some(p => p.round===1) ? getPickNumber(state.gm_team) : null;
   const stars = [...roster].sort((a,b) => b.overall-a.overall).slice(0,3);  // show top 3 regardless of rating
@@ -542,6 +809,45 @@ function HomeSection({state, roster, onNav}: {state:GMState; roster:Player[]; on
 
       <p style={{fontFamily:"Inter,sans-serif",fontSize:14,color:"#555",lineHeight:1.7,maxWidth:640,marginBottom:8}}>{getNarrative()}</p>
       {result?.note && <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#555",marginBottom:24}}>{result.note}</p>}
+
+      {/* AI Trade Offers */}
+      {offers.length > 0 && (
+        <div style={{marginBottom:24}}>
+          {offers.map((offer,i)=>(
+            <div key={i} style={{border:"1px solid #1a1a1a",borderRadius:4,padding:"14px 18px",
+              marginBottom:8,background:"#030303",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#c8a84b",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>
+                  INCOMING TRADE OFFER · {offer.from_team} ({offer.from_team_status})
+                </div>
+                <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#888",marginBottom:4}}>{offer.message}</div>
+                <div style={{display:"flex",gap:16,flexWrap:"wrap" as const}}>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#c86060"}}>
+                    They want: {offer.they_want?.map((p:any)=>p.name).join(", ")}
+                  </span>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4bc87a"}}>
+                    They offer: {[
+                      ...(offer.they_offer_players||[]).map((p:any)=>p.name),
+                      ...(offer.they_offer_picks||[])
+                    ].join(", ")}
+                  </span>
+                </div>
+              </div>
+              <button onClick={()=>onViewOffer(offer)}
+                style={{fontFamily:"'DM Mono',monospace",fontSize:8,textTransform:"uppercase" as const,
+                  letterSpacing:"0.08em",background:"transparent",border:"1px solid #333",
+                  borderRadius:3,padding:"6px 14px",color:"#888",cursor:"pointer",whiteSpace:"nowrap" as const,marginLeft:16}}>
+                VIEW →
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Re-sign Window -- only after draft */}
+      {(state.day >= 178 || (state.season && state.season > 0)) &&
+        <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
+      }
 
       {/* Offseason Timeline */}
       <div style={{marginBottom:40,padding:"16px 20px",border:"1px solid #111",borderRadius:4,background:"#030303"}}>
@@ -687,7 +993,7 @@ function RosterSection({saveId, roster, state, onRosterChange}: {saveId:string; 
           {expanded===p.id && (
             <div style={{padding:"12px 0 18px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,borderTop:"1px solid #080808"}}>
               <div>
-                {[["Scoring",p.scoring],["Efficiency",p.efficiency],["Playmaking",p.playmaking],["Rebounding",p.rebounding],["Defense",p.defense],["Composure",p.composure]].map(([l,v])=>(
+                {[["Scoring",p.scoring],["Ball Handling",p.ball_handling],["Efficiency",p.efficiency],["Playmaking",p.playmaking],["Rebounding",p.rebounding],["Defense",p.defense],["Composure",p.composure]].map(([l,v])=>(
                   <div key={String(l)} style={{marginBottom:7}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                       <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555"}}>{l}</span>
@@ -823,13 +1129,43 @@ function DraftSection({gmTeam}: {gmTeam:string}) {
     const slotInfo = DRAFT_ORDER.find(d => d.slot === slot);
     const team = slotInfo?.team || "WSH";
     const needs = TEAM_NEEDS[team] || ["G","F","C"];
+    const teamStatus = TEAM_STATUS[team];
+    const isRebuilding = teamStatus?.label === "Rebuilding" || teamStatus?.label === "Rising";
+    const isContender = teamStatus?.label === "Contender" || teamStatus?.label === "Dynasty";
+
     const avail = available.filter(p => !draftLog.find(d => d.prospect?.name === p.name));
-    // AI drafts BPA but with 20% chance of reaching for a need
-    const needPos = needs[0];
-    const byNeed = avail.filter(p => p.pos === needPos);
-    const useNeed = Math.random() < 0.25 && byNeed.length > 0;
-    const pool = useNeed ? byNeed.slice(0, 5) : avail.slice(0, Math.max(3, Math.floor(slot * 0.4)));
-    return pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+    if (avail.length === 0) return available[0];
+
+    const rand = Math.random();
+
+    // Rebuilding teams: 40% chance draft for highest POT regardless of fit
+    if (isRebuilding && rand < 0.40) {
+      const byPot = [...avail].sort((a,b) => ((b as any).pot||b.ovr) - ((a as any).pot||a.ovr));
+      const pool = byPot.slice(0, Math.max(2, Math.floor(slot * 0.3)));
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    // Contenders: 35% chance draft for immediate fit (OVR focused, position need)
+    if (isContender && rand < 0.35) {
+      const byFit = avail.filter(p => needs.includes(p.pos)).slice(0, 4);
+      if (byFit.length > 0) return byFit[Math.floor(Math.random() * Math.min(2, byFit.length))];
+    }
+
+    // Occasional reach: 15% chance team falls in love with a prospect 3-8 spots lower
+    if (rand < 0.15 && slot > 5) {
+      const reachPool = avail.slice(2, Math.min(8, avail.length));
+      if (reachPool.length > 0) return reachPool[Math.floor(Math.random() * reachPool.length)];
+    }
+
+    // Occasional need pick: 25% chance draft for positional fit over BPA
+    if (rand < 0.40) {
+      const byNeed = avail.filter(p => needs[0] === p.pos).slice(0, 4);
+      if (byNeed.length > 0) return byNeed[Math.floor(Math.random() * Math.min(2, byNeed.length))];
+    }
+
+    // Default: BPA from top of remaining board
+    const bpaPool = avail.slice(0, Math.max(2, Math.floor(slot * 0.25)));
+    return bpaPool[Math.floor(Math.random() * bpaPool.length)];
   }
 
   function simOnePick() {
@@ -1024,7 +1360,7 @@ function DraftSection({gmTeam}: {gmTeam:string}) {
           {/* Header */}
           <div style={{display:"grid",gridTemplateColumns:"40px 1fr 36px 80px 60px 60px 80px",gap:8,
             padding:"0 0 8px 0",borderBottom:"1px solid #111",marginBottom:4}}>
-            {["#","NAME","POS","SCHOOL","OVR","POT",""].map((h,i)=>(
+            {["#","NAME","POS","SCHOOL","NOW","POT",""].map((h,i)=>(
               <div key={i} style={{fontFamily:MM,fontSize:8,color:"#333",textTransform:"uppercase",textAlign:i>3?"right":"left"}}>{h}</div>
             ))}
           </div>
@@ -1048,7 +1384,11 @@ function DraftSection({gmTeam}: {gmTeam:string}) {
                 <span style={{fontFamily:MM,fontSize:9,color:"#555"}}>{p.pos}</span>
                 <span style={{fontFamily:MM,fontSize:9,color:"#444"}}>{p.school}</span>
                 <span style={{fontFamily:MM,fontSize:10,color:p.ovr>=80?"#f0f0f0":p.ovr>=65?"#888":"#555",textAlign:"right"}}>{p.ovr}</span>
-                <span style={{fontFamily:MM,fontSize:9,color:"#444",textAlign:"right"}}>{Math.min(99,p.ovr+Math.floor(Math.random()*15+5))}</span>
+                <span style={{fontFamily:MM,fontSize:9,textAlign:"right",color:
+      (p as any).pot >= 88 ? "#c8a84b" :
+      (p as any).pot >= 80 ? "#4bc87a" :
+      (p as any).pot >= 70 ? "#6ab0e8" : "#555"
+    }}>{(p as any).pot || Math.min(99, p.ovr + 15)}</span>
                 <div style={{textAlign:"right"}}>
                   {isMyPick && isSel && (
                     <button onClick={(e)=>{e.stopPropagation();makePick(p);}}
@@ -1141,7 +1481,7 @@ function DraftSection({gmTeam}: {gmTeam:string}) {
 }
 
 // ─── Trade Machine ─────────────────────────────────────────────────────────────
-function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; roster:Player[]}) {
+function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {saveId:string; state:GMState; roster:Player[]; pendingOffer?:any; onOfferClear?:()=>void}) {
   const [giving, setGiving]         = useState<Player[]>([]);
   const [targetTeam, setTargetTeam] = useState("");
   const [myTab, setMyTab]           = useState<"roster"|"picks">("roster");
@@ -1155,8 +1495,29 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
   const [submitting, setSubmitting] = useState(false);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
+  // Auto-populate from incoming offer
+  useEffect(()=>{
+    if(!pendingOffer) return;
+    const team = pendingOffer.from_team;
+    setTargetTeam(team);
+    loadTeam(team);
+    // Pre-select players they want from our roster
+    if(pendingOffer.they_want?.length) {
+      const wantIds = pendingOffer.they_want.map((p:any)=>p.id).filter(Boolean);
+      setGiving(roster.filter(p=>wantIds.includes(p.id)));
+    }
+    if(onOfferClear) onOfferClear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[pendingOffer]);
+
   const otherTeams = NBA_TEAMS.filter(t => t.abbr !== state.gm_team);
-  const myPicks    = TEAM_PICKS[state.gm_team] || [];
+  const [myPicksFromDB, setMyPicksFromDB] = useState<any[]>([]);
+  useEffect(()=>{
+    fetch(`${API}/gm/picks/${saveId}`)
+      .then(r=>r.json()).then(d=>setMyPicksFromDB(d.picks||[]))
+      .catch(()=>setMyPicksFromDB(TEAM_PICKS[state.gm_team]||[]));
+  },[saveId]);
+  const myPicks = myPicksFromDB.length > 0 ? myPicksFromDB : (TEAM_PICKS[state.gm_team] || []);
   const SALARY_CAP   = 154_647_000;
   const LUXURY_TAX   = 187_876_000;
 
@@ -1186,11 +1547,14 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
     if (!abbr) { setTheirRoster([]); setTheirPicks([]); return; }
     setLoadingTeam(true);
     try {
-      const res = await fetch(`${API}/gm/league-players/${saveId}?limit=600`);
-      const data = await res.json();
-      const team = data.players.filter((p: Player) => p.team === abbr);
-      setTheirRoster(team);
-      setTheirPicks(TEAM_PICKS[abbr] || []);
+      const [playersRes, picksRes] = await Promise.all([
+        fetch(`${API}/gm/league-players/${saveId}?limit=600`),
+        fetch(`${API}/gm/picks/${saveId}?team=${abbr}`),
+      ]);
+      const playersData = await playersRes.json();
+      const picksData   = await picksRes.json();
+      setTheirRoster(playersData.players.filter((p: Player) => p.team === abbr));
+      setTheirPicks(picksData.picks || []);
     } catch(e) { console.error(e); }
     finally { setLoadingTeam(false); }
   }
@@ -1205,12 +1569,17 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
           giving: giving.map(p=>p.id),
           getting: getting.map(p=>p.id),
           target_team: targetTeam,
-          picks_offered: myPicksOffered,
-          picks_requested: theirPicksReq,
+          picks_offered: myPicksOffered.map(n=>n),
+          picks_requested: theirPicksReq.map(n=>n),
         }),
       });
       const data = await res.json();
       setResult(data.result || data.error || "Unknown response");
+      if (data.accepted) {
+        // Clear selections and signal parent to reload roster
+        setGiving([]); setGetting([]); setMyPicksOffered([]); setTheirPicksReq([]);
+        setTimeout(() => window.location.reload(), 1500);
+      }
     } catch(e: any) { setResult("Error: " + e.message); }
     finally { setSubmitting(false); }
   }
@@ -1290,17 +1659,24 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
               );
             }) : (
               <div style={{padding:"12px 14px"}}>
-                {myPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No 2026 picks</div>}
-                {myPicks.map(pk=>{
+                {myPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No picks</div>}
+                {myPicks.map((pk:any,i:number)=>{
                   const sel = myPicksOffered.includes(pk.note);
+                  const year = pk.year || 2026;
+                  const isOwn = (pk.note||"").startsWith("Own");
                   return (
-                    <div key={pk.note} onClick={()=>toggleMyPick(pk.note)}
+                    <div key={i} onClick={()=>toggleMyPick(pk.note)}
                       style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                         padding:"10px 0",borderBottom:"1px solid #080808",cursor:"pointer",
                         background:sel?"#0d0d0d":"transparent"}}>
                       <div>
-                        <div style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":"#888"}}>Round {pk.round} · {pk.note || pk.from || ""}</div>
-                        
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{...MONOSPACE,fontSize:8,color:"#333",minWidth:32}}>{year}</span>
+                          <span style={{...MONOSPACE,fontSize:8,color:pk.round===1?"#888":"#555",minWidth:16}}>R{pk.round}</span>
+                          <span style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":isOwn?"#888":"#6ab0e8"}}>{pk.note}</span>
+                        </div>
+                        {pk.protection && <div style={{...MONOSPACE,fontSize:7,color:"#444",marginTop:2,paddingLeft:54}}>{pk.protection}</div>}
+                        {pk.acquired_from && <div style={{...MONOSPACE,fontSize:7,color:"#c8a84b",marginTop:2,paddingLeft:54}}>acquired from {pk.acquired_from}</div>}
                       </div>
                       <div style={{...MONOSPACE,fontSize:8,color:sel?"#888":"#333"}}>
                         {sel?"INCLUDED":"+ ADD"}
@@ -1428,17 +1804,23 @@ function TradeSection({saveId, state, roster}: {saveId:string; state:GMState; ro
               );
             }) : (
               <div style={{padding:"12px 14px"}}>
-                {theirPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No 2026 picks</div>}
-                {theirPicks.map(pk=>{
+                {theirPicks.length===0 && <div style={{...MONOSPACE,fontSize:9,color:"#333"}}>No picks</div>}
+                {theirPicks.map((pk:any,i:number)=>{
                   const sel = theirPicksReq.includes(pk.note);
+                  const year = pk.year || 2026;
+                  const isOwn = (pk.note||"").startsWith("Own");
                   return (
-                    <div key={pk.note} onClick={()=>toggleTheirPick(pk.note)}
+                    <div key={i} onClick={()=>toggleTheirPick(pk.note)}
                       style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                         padding:"10px 0",borderBottom:"1px solid #080808",cursor:"pointer",
                         background:sel?"#0d0d0d":"transparent"}}>
                       <div>
-                        <div style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":"#888"}}>Round {pk.round} · {pk.note || pk.from || ""}</div>
-                        
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{...MONOSPACE,fontSize:8,color:"#333",minWidth:32}}>{year}</span>
+                          <span style={{...MONOSPACE,fontSize:8,color:pk.round===1?"#888":"#555",minWidth:16}}>R{pk.round}</span>
+                          <span style={{...MONOSPACE,fontSize:9,color:sel?"#f0f0f0":isOwn?"#888":"#6ab0e8"}}>{pk.note}</span>
+                        </div>
+                        {pk.protection && <div style={{...MONOSPACE,fontSize:7,color:"#444",marginTop:2,paddingLeft:54}}>{pk.protection}</div>}
                       </div>
                       <div style={{...MONOSPACE,fontSize:8,color:sel?"#888":"#333"}}>
                         {sel?"REQUESTED":"+ REQUEST"}
@@ -1527,6 +1909,7 @@ export default function GMPage() {
   const [state, setState] = useState<GMState|null>(null);
   const [roster, setRoster] = useState<Player[]>([]);
   const [section, setSection] = useState("HOME");
+  const [pendingOffer, setPendingOffer] = useState<any>(null);
   const [initDone, setInitDone] = useState(false);
 
   useEffect(()=>{
@@ -1577,11 +1960,11 @@ export default function GMPage() {
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} select option{background:#060606}`}</style>
       <TopBar state={state} section={section} onNav={setSection} onNewGame={handleNewGame} />
       <div style={{animation:"fadeIn 0.2s ease"}}>
-        {section==="HOME"        && <HomeSection state={state} roster={roster} onNav={setSection} />}
+        {section==="HOME"        && <HomeSection state={state} roster={roster} onNav={setSection} saveId={saveId} onViewOffer={(o)=>{setPendingOffer(o);setSection('TRADE');}} />}
         {section==="ROSTER"      && <RosterSection saveId={saveId} roster={roster} state={state} onRosterChange={()=>loadData(saveId)} />}
         {section==="STANDINGS"   && <StandingsSection saveId={saveId} gmTeam={state.gm_team} />}
         {section==="DRAFT"       && <DraftSection gmTeam={state.gm_team} />}
-        {section==="TRADE"       && <TradeSection saveId={saveId} roster={roster} state={state} />}
+        {section==="TRADE"       && <TradeSection saveId={saveId} roster={roster} state={state} pendingOffer={pendingOffer} onOfferClear={()=>setPendingOffer(null)} />}
         {section==="FREE AGENTS" && <FASection saveId={saveId} state={state} onSign={()=>loadData(saveId)} />}
       </div>
     </div>
