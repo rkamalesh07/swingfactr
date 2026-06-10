@@ -713,7 +713,7 @@ def fetch_contracts(conn) -> dict:
         cur = conn.cursor()
         cur.execute("""
             SELECT player_name, salary_2526, salary_2627, salary_2728,
-                   salary_2829, salary_2930, guaranteed, contract_type
+                   salary_2829, salary_2930, salary_3031, guaranteed, contract_type
             FROM player_contracts
         """)
         rows = cur.fetchall()
@@ -726,8 +726,9 @@ def fetch_contracts(conn) -> dict:
                 "salary_2728":   int(r[3]) if r[3] else None,
                 "salary_2829":   int(r[4]) if r[4] else None,
                 "salary_2930":   int(r[5]) if r[5] else None,
-                "guaranteed":    int(r[6]) if r[6] else None,
-                "contract_type": r[7] or "guaranteed",
+                "salary_3031":   int(r[6]) if r[6] else None,
+                "guaranteed":    int(r[7]) if r[7] else None,
+                "contract_type": r[8] or "guaranteed",
             }
             # Store under original name and normalized name
             result[r[0]] = entry
@@ -810,7 +811,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 sal = real_contract["salary"]
                 # Build full contract breakdown by year
                 contract_years_detail = [sal]  # 2025-26
-                for k in ["salary_2627","salary_2728","salary_2829","salary_2930"]:
+                for k in ["salary_2627","salary_2728","salary_2829","salary_2930","salary_3031"]:
                     v = real_contract.get(k)
                     if v: contract_years_detail.append(int(v))
                 yrs = len(contract_years_detail) - 1  # years remaining after this
