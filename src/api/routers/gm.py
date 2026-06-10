@@ -811,9 +811,10 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 yrs = sum(1 for k in ["salary_2627","salary_2728","salary_2829","salary_2930"] if real_contract.get(k))
                 contract_type = real_contract.get("contract_type", "guaranteed")
             else:
-                sal = market_salary(float(ratings["overall"]), age)
-                yrs = contract_years_for(float(ratings["overall"]), age)
-                contract_type = "guaranteed"
+                # Player not in contracts DB -- use vet minimum
+                sal = 500_000
+                yrs = 1
+                contract_type = "minimum"
             enriched.append({
                 "id":          str(uuid.uuid4())[:8],
                 "name":        p.get("full_name") or "Unknown",
