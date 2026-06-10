@@ -1040,7 +1040,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
       {/* NBA Season Calendar */}
-      <NBACalendar onNav={onNav} currentGameDay={state.day} onSimToDay={async (targetDay)=>{ await fetch(`${API}/gm/sim/${saveId}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:targetDay-state.day})}); window.location.reload(); }} />
+      <NBACalendar onNav={onNav} currentGameDay={state.day} onSimToDay={async (targetDay)=>{ await fetch(`${API}/gm/simulate/${saveId}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:targetDay-state.day})}); window.location.reload(); }} />
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
