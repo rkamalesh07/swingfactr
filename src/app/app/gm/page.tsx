@@ -1282,6 +1282,158 @@ const TEAM_NEEDS: Record<string, string[]> = {
 
 type DraftPick = {slot: number; team: string; note?: string; prospect?: {name:string;pos:string;school:string;ovr:number;note:string} | null};
 
+function ProspectsSection({gmTeam, currentGameDay}: {gmTeam:string; currentGameDay:number}) {
+  const MM = "'DM Mono',monospace";
+  const draftDay = 246;
+  const [watchlist, setWatchlist] = useState<number[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedProspect, setSelectedProspect] = useState<typeof DRAFT_PROSPECTS[0]|null>(null);
+  const [posFilter, setPosFilter] = useState("ALL");
+
+  function toggleWatchlist(rank: number) {
+    setWatchlist(prev => prev.includes(rank) ? prev.filter(r=>r!==rank) : [...prev,rank]);
+  }
+
+  const potColor = (pot: number) =>
+    pot >= 88 ? "#f0d080" : pot >= 80 ? "#4bc87a" : pot >= 70 ? "#6ab0e8" : "#888";
+  const potLabel = (pot: number) =>
+    pot >= 88 ? "Franchise" : pot >= 80 ? "All-Star" : pot >= 70 ? "Starter" : "Role Player";
+
+  const filtered = DRAFT_PROSPECTS.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.school.toLowerCase().includes(search.toLowerCase());
+    const matchPos = posFilter==="ALL" || p.pos.includes(posFilter);
+    return matchSearch && matchPos;
+  });
+
+  return (
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"24px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:MM,fontSize:11,color:"#f0f0f0",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>2026 DRAFT PROSPECTS</div>
+          <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#444"}}>
+            {currentGameDay >= draftDay ? "Draft is live" : `${draftDay-currentGameDay} days until draft`}
+            {watchlist.length>0 && <span style={{fontFamily:MM,fontSize:8,color:"#4bc87a",marginLeft:12}}>{watchlist.length} ON WATCHLIST</span>}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search prospects..."
+          style={{flex:1,background:"#080808",border:"1px solid #1a1a1a",borderRadius:3,
+            padding:"8px 12px",color:"#e0e0e0",fontFamily:"Inter,sans-serif",fontSize:13,outline:"none"}}/>
+        {["ALL","G","F","C"].map(f=>(
+          <button key={f} onClick={()=>setPosFilter(f)}
+            style={{fontFamily:MM,fontSize:8,padding:"6px 12px",border:"1px solid #1a1a1a",borderRadius:3,
+              background:posFilter===f?"#f0f0f0":"transparent",color:posFilter===f?"#000":"#444",cursor:"pointer"}}>
+            {f}
+          </button>
+        ))}
+        <span style={{fontFamily:MM,fontSize:8,color:"#333"}}>{filtered.length} available</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:16,alignItems:"start"}}>
+        <div style={{border:"1px solid #111",borderRadius:4,overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"40px 1fr 50px 100px 55px 55px 90px",
+            padding:"8px 12px",borderBottom:"1px solid #0d0d0d",background:"#030303"}}>
+            {["#","PLAYER","POS","SCHOOL","NOW","POT",""].map((h,i)=>(
+              <div key={i} style={{fontFamily:MM,fontSize:7,color:"#333",textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>{h}</div>
+            ))}
+          </div>
+          <div style={{maxHeight:600,overflowY:"auto" as const}}>
+            {filtered.map(p=>{
+              const onWatch = watchlist.includes(p.rank);
+              const sel = selectedProspect?.rank===p.rank;
+              return (
+                <div key={p.rank} onClick={()=>setSelectedProspect(sel?null:p)}
+                  style={{display:"grid",gridTemplateColumns:"40px 1fr 50px 100px 55px 55px 90px",
+                    padding:"9px 12px",borderBottom:"1px solid #060606",cursor:"pointer",
+                    background:onWatch?"#0d1a0d":sel?"#0d0d0d":"transparent"}}>
+                  <div style={{fontFamily:MM,fontSize:9,color:"#444"}}>{p.rank}</div>
+                  <div>
+                    <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:onWatch?"#4bc87a":"#e0e0e0"}}>{p.name}</div>
+                    <div style={{fontFamily:MM,fontSize:7,color:"#333",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{p.note?.slice(0,55)}{(p.note?.length||0)>55?"...":""}</div>
+                  </div>
+                  <div style={{fontFamily:MM,fontSize:9,color:"#555"}}>{p.pos}</div>
+                  <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:"#444",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{p.school}</div>
+                  <div style={{fontFamily:MM,fontSize:10,color:"#888"}}>{p.ovr}</div>
+                  <div style={{fontFamily:MM,fontSize:10,color:potColor(p.pot)}}>{p.pot}</div>
+                  <div onClick={e=>{e.stopPropagation();toggleWatchlist(p.rank);}}>
+                    <div style={{fontFamily:MM,fontSize:7,textTransform:"uppercase" as const,
+                      color:onWatch?"#4bc87a":"#333",border:`1px solid ${onWatch?"#1a3a1a":"#1a1a1a"}`,
+                      borderRadius:2,padding:"3px 6px",cursor:"pointer",textAlign:"center" as const,
+                      background:onWatch?"#0a1a0a":"transparent"}}>
+                      {onWatch?"LISTED":"+ WATCH"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",padding:"16px",position:"sticky" as const,top:16}}>
+          {!selectedProspect ? (
+            <div>
+              <div style={{fontFamily:MM,fontSize:8,color:"#444",textTransform:"uppercase",marginBottom:12}}>WATCHLIST ({watchlist.length})</div>
+              {watchlist.length===0&&<div style={{fontFamily:MM,fontSize:9,color:"#222",marginBottom:8}}>Click + WATCH to add prospects</div>}
+              {watchlist.map(rank=>{
+                const p=DRAFT_PROSPECTS.find(x=>x.rank===rank);
+                if(!p) return null;
+                return (
+                  <div key={rank} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    marginBottom:6,padding:"8px 10px",border:"1px solid #1a3a1a",borderRadius:3,background:"#0a1a0a",cursor:"pointer"}}
+                    onClick={()=>setSelectedProspect(p)}>
+                    <div>
+                      <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:"#4bc87a"}}>{p.name}</div>
+                      <div style={{fontFamily:MM,fontSize:7,color:"#444"}}>#{p.rank} · {p.pos} · {p.ovr} OVR</div>
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();toggleWatchlist(rank);}}
+                      style={{background:"transparent",border:"none",color:"#333",cursor:"pointer"}}>x</button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div>
+              <button onClick={()=>setSelectedProspect(null)}
+                style={{fontFamily:MM,fontSize:7,background:"transparent",border:"none",color:"#444",cursor:"pointer",marginBottom:12}}>back</button>
+              <div style={{fontFamily:MM,fontSize:7,color:"#444",textTransform:"uppercase",marginBottom:6}}>#{selectedProspect.rank} · {selectedProspect.pos}</div>
+              <div style={{fontFamily:"Inter,sans-serif",fontSize:18,color:"#f0f0f0",fontWeight:600,marginBottom:2}}>{selectedProspect.name}</div>
+              <div style={{fontFamily:MM,fontSize:8,color:"#555",marginBottom:16}}>{selectedProspect.school}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                {[
+                  {label:"Current",val:selectedProspect.ovr,color:"#888"},
+                  {label:"Potential",val:selectedProspect.pot,color:potColor(selectedProspect.pot)},
+                  {label:"Ceiling",val:potLabel(selectedProspect.pot),color:potColor(selectedProspect.pot)},
+                  {label:"Comp",val:(selectedProspect as any).comp||"TBD",color:"#6ab0e8"},
+                ].map(item=>(
+                  <div key={item.label} style={{border:"1px solid #111",borderRadius:3,padding:"10px"}}>
+                    <div style={{fontFamily:MM,fontSize:7,color:"#333",marginBottom:4}}>{item.label}</div>
+                    <div style={{fontFamily:MM,fontSize:10,color:item.color}}>{String(item.val)}</div>
+                  </div>
+                ))}
+              </div>
+              {selectedProspect.note&&(
+                <div style={{border:"1px solid #1a1a1a",borderRadius:3,padding:"10px",marginBottom:12,background:"#050505"}}>
+                  <div style={{fontFamily:MM,fontSize:7,color:"#333",textTransform:"uppercase",marginBottom:4}}>SCOUTING</div>
+                  <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#555",lineHeight:1.5}}>{selectedProspect.note}</div>
+                </div>
+              )}
+              <button onClick={()=>toggleWatchlist(selectedProspect.rank)}
+                style={{width:"100%",fontFamily:MM,fontSize:8,textTransform:"uppercase" as const,letterSpacing:"0.08em",
+                  background:watchlist.includes(selectedProspect.rank)?"#0a1a0a":"transparent",
+                  color:watchlist.includes(selectedProspect.rank)?"#4bc87a":"#888",
+                  border:`1px solid ${watchlist.includes(selectedProspect.rank)?"#1a3a1a":"#333"}`,
+                  borderRadius:3,padding:"8px",cursor:"pointer"}}>
+                {watchlist.includes(selectedProspect.rank)?"ON WATCHLIST":"+ ADD TO WATCHLIST"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DraftSection({gmTeam}: {gmTeam:string}) {
   const MM = "'DM Mono',monospace";
   const myPicks = TEAM_PICKS[gmTeam] || [];
