@@ -808,13 +808,19 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
             real_contract = contracts.get(name) or contracts.get(_norm(name)) or {}
             if real_contract.get("salary"):
                 sal = real_contract["salary"]
-                yrs = sum(1 for k in ["salary_2627","salary_2728","salary_2829","salary_2930"] if real_contract.get(k))
+                # Build full contract breakdown by year
+                contract_years_detail = [sal]  # 2025-26
+                for k in ["salary_2627","salary_2728","salary_2829","salary_2930"]:
+                    v = real_contract.get(k)
+                    if v: contract_years_detail.append(int(v))
+                yrs = len(contract_years_detail) - 1  # years remaining after this
                 contract_type = real_contract.get("contract_type", "guaranteed")
             else:
                 # Player not in contracts DB -- use vet minimum
                 sal = 500_000
                 yrs = 1
                 contract_type = "minimum"
+                contract_years_detail = [sal]
             enriched.append({
                 "id":          str(uuid.uuid4())[:8],
                 "name":        p.get("full_name") or "Unknown",
@@ -845,6 +851,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 "salary":      sal,
                 "years_left":  yrs,
                 "contract_type": contract_type,
+                "contract_years": locals().get("contract_years_detail", [sal]),
             })
         except Exception as e:
             import traceback as tb
