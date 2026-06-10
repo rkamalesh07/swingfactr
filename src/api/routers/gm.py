@@ -1985,3 +1985,255 @@ async def get_all_picks(save_id: str):
         all_picks[team] = saved_picks.get(team, REAL_PICK_REGISTRY[team])
 
     return {"picks": all_picks}
+
+
+# ─── Re-sign / Bird Rights System ────────────────────────────────────────────
+
+MARKET_SIZE: dict = {
+    "NY":90,"LAL":88,"GS":82,"BOS":80,"CHI":78,"MIA":76,"LAC":74,
+    "HOU":72,"DAL":70,"PHX":68,"ATL":66,"WAS":64,"SA":62,"DEN":62,
+    "MIN":58,"MEM":56,"OKC":54,"NO":52,"CLE":52,"PHI":70,
+    "TOR":60,"POR":48,"SAC":50,"DET":48,"ORL":50,"IND":50,
+    "MIL":52,"BKN":74,"CHA":46,"UTAH":44,
+}
+
+PERSONALITY_WEIGHTS = {
+    "ring_chaser":  {"money":0.20,"winning":0.60,"market":0.10,"loyalty":0.10},
+    "businessman":  {"money":0.40,"winning":0.15,"market":0.35,"loyalty":0.10},
+    "mercenary":    {"money":0.75,"winning":0.10,"market":0.10,"loyalty":0.05},
+    "balanced":     {"money":0.40,"winning":0.30,"market":0.20,"loyalty":0.10},
+}
+
+import random as _random
+
+def get_bird_rights(player: dict, team_abbr: str) -> str:
+    """
+    Determine Bird Rights based on years_left at time of signing.
+    We approximate: if the contract_type from BBRef suggests a long deal,
+    assume they've been there 3+ years. Otherwise use years_left as proxy.
+    In a real multi-season game, we'd track actual tenure.
+    For Year 1 of the sim, use a heuristic:
+      - players making >$20M on expiring deals likely have full bird rights
+      - everyone else gets early or non-bird based on salary tier
+    """
+    salary = player.get("salary", 0)
+    age    = player.get("age", 28)
+    if salary >= 20_000_000:
+        return "full"       # star players, clearly been there
+    elif salary >= 8_000_000:
+        return "early"      # solid rotation players
+    else:
+        return "non_bird"   # cheap/short-term guys
+
+def bird_max_offer(player: dict, team_abbr: str, cap: int = 154_647_000) -> dict:
+    """
+    Calculate max offer team can make using Bird Rights.
+    Returns offer details including years and salary.
+    """
+    rights = get_bird_rights(player, team_abbr)
+    salary = player.get("salary", 0)
+    ovr    = player.get("overall", 60)
+    age    = player.get("age", 28)
+
+    # Max salary tiers (% of cap)
+    service_years = max(1, 2026 - (2026 - (player.get("years_left", 1) + 1)))
+    if ovr >= 84:
+        max_pct = 0.35  # supermax eligible
+    elif ovr >= 78:
+        max_pct = 0.30
+    else:
+        max_pct = 0.25
+    max_salary = int(cap * max_pct)
+
+    if rights == "full":
+        offer_salary = min(max_salary, max(salary, int(salary * 1.08)))
+        max_years = 5
+    elif rights == "early":
+        offer_salary = min(int(salary * 1.75), int(cap * 0.25))
+        max_years = 4
+    else:  # non_bird
+        offer_salary = min(int(salary * 1.20), int(cap * 0.20))
+        max_years = 4
+
+    # Age adjusts years
+    if age >= 34: max_years = min(max_years, 2)
+    elif age >= 30: max_years = min(max_years, 3)
+
+    return {
+        "bird_rights": rights,
+        "offer_salary": offer_salary,
+        "max_years": max_years,
+        "max_salary": max_salary,
+    }
+
+def player_will_accept(player: dict, offer_salary: int, offer_years: int,
+                       team_abbr: str, cap_used: int, cap: int = 154_647_000) -> tuple[bool, str]:
+    """
+    Player evaluates offer using personality-weighted formula.
+    Returns (will_accept, reason).
+    """
+    ovr = player.get("overall", 60)
+    age = player.get("age", 28)
+
+    # Assign personality (in full game this would be stored per player)
+    _random.seed(hash(player.get("id","")) % 10000)
+    personalities = ["ring_chaser","businessman","mercenary","balanced","balanced"]
+    # Stars more likely ring-chasers, vets more mercenary
+    if ovr >= 82:
+        personalities = ["ring_chaser","balanced","balanced","businessman"]
+    elif age >= 32:
+        personalities = ["mercenary","mercenary","balanced","ring_chaser"]
+    personality = _random.choice(personalities)
+    weights = PERSONALITY_WEIGHTS[personality]
+
+    # Money score: offer / what they could get elsewhere
+    elsewhere_salary = int(cap * (0.25 if ovr >= 80 else 0.15 if ovr >= 70 else 0.07))
+    money_score = min(100, (offer_salary / max(elsewhere_salary, 1)) * 100)
+
+    # Winning score: based on team strength
+    team_ovr = 65 + (ovr - 70) * 0.3  # proxy -- in real game use actual team OVR
+    winning_score = min(100, max(0, team_ovr))
+
+    # Market score
+    market_score = MARKET_SIZE.get(team_abbr, 55)
+
+    # Loyalty bonus (they're already here)
+    loyalty_bonus = 12
+
+    offer_score = (
+        money_score    * weights["money"] +
+        winning_score  * weights["winning"] +
+        market_score   * weights["market"] +
+        loyalty_bonus  * weights["loyalty"]
+    )
+
+    # Threshold: player accepts if offer score >= 62
+    # Stars demand more, role players more flexible
+    threshold = 68 if ovr >= 78 else 60 if ovr >= 68 else 55
+
+    if offer_score >= threshold:
+        return True, f"Accepted {personality.replace('_',' ')}: offer score {offer_score:.0f}"
+    else:
+        shortfall = threshold - offer_score
+        if weights["money"] > 0.5:
+            return False, f"Wants more money (${offer_salary/1e6:.1f}M isn't enough)"
+        elif weights["winning"] > 0.4:
+            return False, f"Prioritizing winning. Looking for a contender."
+        else:
+            return False, f"Looking at other options (score {offer_score:.0f} vs threshold {threshold})"
+
+
+@router.get("/expiring-players/{save_id}")
+def get_expiring_players(save_id: str):
+    """
+    Return your team's players with expiring contracts (years_left = 0 or 1).
+    These can be re-signed using Bird Rights before free agency.
+    Includes the max Bird Rights offer for each.
+    """
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
+
+    abbr    = league["gm_team"]
+    roster  = league["teams"][abbr]["roster"]
+    cap     = SALARY_CAP
+
+    expiring = []
+    for p in roster:
+        if p.get("years_left", 2) <= 1:
+            offer = bird_max_offer(p, abbr, cap)
+            expiring.append({
+                **p,
+                "bird_rights":  offer["bird_rights"],
+                "offer_salary": offer["offer_salary"],
+                "max_years":    offer["max_years"],
+                "max_salary":   offer["max_salary"],
+                "is_expiring":  True,
+            })
+
+    expiring.sort(key=lambda x: -x["overall"])
+    return {"expiring": expiring, "count": len(expiring)}
+
+
+class ResignBody(BaseModel):
+    player_id: str
+    salary:    int
+    years:     int
+
+@router.post("/resign/{save_id}")
+def resign_player(save_id: str, body: ResignBody):
+    """
+    Re-sign an expiring player using Bird Rights.
+    Validates offer is within Bird Rights limits.
+    Player may decline if offer is too low.
+    """
+    conn = get_conn()
+    league = get_save(conn, save_id)
+
+    abbr    = league["gm_team"]
+    team    = league["teams"][abbr]
+    roster  = team["roster"]
+    cap_used = team["cap_used"]
+
+    player = next((p for p in roster if p["id"] == body.player_id), None)
+    if not player:
+        raise HTTPException(404, "Player not on your roster")
+
+    if player.get("years_left", 2) > 1:
+        raise HTTPException(400, "Player still has years remaining -- cannot re-sign yet")
+
+    # Validate Bird Rights limits
+    offer_info = bird_max_offer(player, abbr, SALARY_CAP)
+    if body.salary > offer_info["max_salary"] * 1.02:
+        raise HTTPException(400, f"Offer exceeds max salary (${offer_info['max_salary']:,.0f})")
+    if body.years > offer_info["max_years"]:
+        raise HTTPException(400, f"Contract too long (max {offer_info['max_years']} years)")
+    if body.years < 1:
+        raise HTTPException(400, "Minimum 1 year")
+
+    # CBA: Bird Rights teams can exceed cap to re-sign own players
+    # But check apron limits
+    new_cap = cap_used - player.get("salary", 0) + body.salary
+    FIRST_APRON  = 178_132_000
+    SECOND_APRON = 188_931_000
+
+    if new_cap > SECOND_APRON and body.salary > SALARY_CAP * 0.20:
+        raise HTTPException(400, f"Second apron teams can only offer vet minimum to new additions")
+
+    # Player decides
+    will_accept, reason = player_will_accept(
+        player, body.salary, body.years, abbr, cap_used
+    )
+
+    if not will_accept:
+        # Player walks -- move to FA pool
+        team["roster"] = [p for p in roster if p["id"] != body.player_id]
+        team["cap_used"] = cap_used - player.get("salary", 0)
+        league["fa_pool"].append({**player, "team": "FA", "years_left": 0})
+        with get_conn() as conn:
+            put_save(conn, save_id, league)
+        return {
+            "accepted": False,
+            "reason":   reason,
+            "player":   player["name"],
+            "outcome":  f"{player['name']} declined and became a free agent.",
+        }
+
+    # Update player contract
+    player["salary"]     = body.salary
+    player["years_left"] = body.years
+    team["cap_used"]     = new_cap
+
+    with get_conn() as conn:
+        put_save(conn, save_id, league)
+
+    return {
+        "accepted":   True,
+        "reason":     reason,
+        "player":     player["name"],
+        "salary":     body.salary,
+        "years":      body.years,
+        "cap_used":   new_cap,
+        "cap_space":  SALARY_CAP - new_cap,
+        "outcome":    f"{player['name']} re-signed for ${body.salary/1e6:.1f}M x {body.years} years.",
+    }
+
