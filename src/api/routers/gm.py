@@ -641,13 +641,14 @@ def fetch_all_players(conn) -> list[dict]:
             s.player_name        AS full_name,
             COALESCE(p.position, 'G') AS position,
             COALESCE(pa.age, 26) AS age,
-            COALESCE(lt.team_abbr, p.team_id::text, 'FA') AS team_abbr,
+            COALESCE(pc.team, lt.team_abbr, p.team_id::text, 'FA') AS team_abbr,
             s.gp, s.ppg, s.rpg, s.apg, s.spg, s.bpg,
             s.fg3m, s.tov, s.mpg, s.fg_pct, s.efg_pct, s.fg3_pct_est
         FROM season_stats s
         LEFT JOIN latest_team lt ON lt.player_name = s.player_name
         LEFT JOIN players p ON p.full_name = s.player_name
         LEFT JOIN player_ages pa ON pa.full_name = s.player_name
+        LEFT JOIN player_contracts pc ON pc.player_name = s.player_name
         ORDER BY s.ppg DESC
     """)
     cols = [d[0] for d in cur.description]
