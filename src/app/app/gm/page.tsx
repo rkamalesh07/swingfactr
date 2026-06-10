@@ -415,7 +415,7 @@ const START_POINTS = [
   {id:"free_agency", label:"Free Agency",     date:"Jul 1, 2026",  desc:"Draft is done. Build your roster in free agency before training camp."},
 ];
 
-function FranchiseSelect({ onSelect }: { onSelect: (saveId: string, abbr: string) => void }) {
+function FranchiseSelect({ onSelect, backButton }: { onSelect: (saveId: string, abbr: string) => void; backButton?: React.ReactNode }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [hov, setHov] = useState<string | null>(null);
   const [startPoint, setStartPoint] = useState("draft");
@@ -1903,6 +1903,235 @@ function FASection({saveId, state, onSign}: {saveId:string; state:GMState; onSig
   );
 }
 
+
+// ─── Save Manager ─────────────────────────────────────────────────────────────
+interface SaveEntry {
+  save_id: string;
+  name: string;
+  team: string;
+  team_name: string;
+  record: string;
+  result: string;
+  created: string;
+  updated: string;
+}
+
+function SaveManager({onLoad, onNewGame}: {onLoad:(sid:string)=>void; onNewGame:()=>void}) {
+  const MM = "'DM Mono',monospace";
+  const [saves, setSaves] = useState<SaveEntry[]>([]);
+  const [deleting, setDeleting] = useState<string|null>(null);
+
+  useEffect(()=>{
+    const raw = localStorage.getItem("gm_saves_index");
+    if(raw) {
+      try { setSaves(JSON.parse(raw)); } catch {}
+    }
+  },[]);
+
+  function deleteSave(sid: string) {
+    const updated = saves.filter(s=>s.save_id!==sid);
+    setSaves(updated);
+    localStorage.setItem("gm_saves_index", JSON.stringify(updated));
+    // Also clean up the active save if it matches
+    if(localStorage.getItem("gm_save_id")===sid) {
+      localStorage.removeItem("gm_save_id");
+      localStorage.removeItem("gm_team");
+    }
+    setDeleting(null);
+  }
+
+  const NBA_TEAM_NAMES: Record<string,string> = {
+    ATL:"Hawks",BOS:"Celtics",BKN:"Nets",CHA:"Hornets",CHI:"Bulls",
+    CLE:"Cavaliers",DAL:"Mavericks",DEN:"Nuggets",DET:"Pistons",GS:"Warriors",
+    HOU:"Rockets",IND:"Pacers",LAC:"Clippers",LAL:"Lakers",MEM:"Grizzlies",
+    MIA:"Heat",MIL:"Bucks",MIN:"Timberwolves",NO:"Pelicans",NY:"Knicks",
+    OKC:"Thunder",ORL:"Magic",PHI:"76ers",PHX:"Suns",POR:"Trail Blazers",
+    SA:"Spurs",SAC:"Kings",TOR:"Raptors",UTAH:"Jazz",WSH:"Wizards",
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#000",color:"#f0f0f0",fontFamily:"Inter,sans-serif"}}>
+      <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Header */}
+      <div style={{borderBottom:"1px solid #0d0d0d",padding:"18px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontFamily:MM,fontSize:11,color:"#f0f0f0",letterSpacing:"0.12em",textTransform:"uppercase"}}>
+          SWINGFACTR / GM MODE
+        </div>
+        <button onClick={onNewGame}
+          style={{fontFamily:MM,fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",
+            background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,
+            padding:"8px 20px",cursor:"pointer"}}>
+          + NEW GAME
+        </button>
+      </div>
+
+      <div style={{maxWidth:900,margin:"0 auto",padding:"48px 32px",animation:"fadeIn 0.2s ease"}}>
+
+        {saves.length === 0 ? (
+          <div style={{textAlign:"center",paddingTop:80}}>
+            <div style={{fontFamily:MM,fontSize:11,color:"#222",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:16}}>
+              NO SAVED GAMES
+            </div>
+            <div style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#333",marginBottom:40}}>
+              Start your first GM run below.
+            </div>
+            <button onClick={onNewGame}
+              style={{fontFamily:MM,fontSize:10,textTransform:"uppercase",letterSpacing:"0.1em",
+                background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,
+                padding:"12px 32px",cursor:"pointer"}}>
+              START NEW GAME →
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{fontFamily:MM,fontSize:9,color:"#333",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:24}}>
+              {saves.length} SAVED RUN{saves.length!==1?"S":""}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+              {[...saves].reverse().map(s=>(
+                <div key={s.save_id}
+                  style={{border:"1px solid #111",borderRadius:4,background:"#030303",
+                    padding:"20px 20px 16px",cursor:"pointer",transition:"border-color 0.15s"}}
+                  onMouseEnter={e=>(e.currentTarget.style.borderColor="#222")}
+                  onMouseLeave={e=>(e.currentTarget.style.borderColor="#111")}
+                  onClick={()=>onLoad(s.save_id)}>
+                  <div style={{fontFamily:MM,fontSize:8,color:"#444",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>
+                    {s.team} · {NBA_TEAM_NAMES[s.team]||s.team}
+                  </div>
+                  <div style={{fontFamily:"Inter,sans-serif",fontSize:16,color:"#e0e0e0",fontWeight:600,marginBottom:4}}>
+                    {s.name || `${s.team} Run`}
+                  </div>
+                  <div style={{fontFamily:MM,fontSize:9,color:"#888",marginBottom:2}}>
+                    {s.record} · {s.result}
+                  </div>
+                  <div style={{fontFamily:MM,fontSize:8,color:"#333",marginBottom:16}}>
+                    {s.updated ? `Last played ${new Date(s.updated).toLocaleDateString()}` : s.created}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontFamily:MM,fontSize:8,color:"#555",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                      CLICK TO LOAD
+                    </span>
+                    {deleting===s.save_id ? (
+                      <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
+                        <button onClick={()=>deleteSave(s.save_id)}
+                          style={{fontFamily:MM,fontSize:7,background:"#c86060",color:"#000",border:"none",
+                            borderRadius:2,padding:"3px 8px",cursor:"pointer"}}>DELETE</button>
+                        <button onClick={()=>setDeleting(null)}
+                          style={{fontFamily:MM,fontSize:7,background:"transparent",color:"#555",
+                            border:"1px solid #222",borderRadius:2,padding:"3px 8px",cursor:"pointer"}}>CANCEL</button>
+                      </div>
+                    ) : (
+                      <button onClick={e=>{e.stopPropagation();setDeleting(s.save_id);}}
+                        style={{fontFamily:MM,fontSize:7,background:"transparent",color:"#333",
+                          border:"1px solid #111",borderRadius:2,padding:"3px 8px",cursor:"pointer",
+                          textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                        DELETE
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* New game card */}
+              <div onClick={onNewGame}
+                style={{border:"1px dashed #111",borderRadius:4,background:"transparent",
+                  padding:"20px",cursor:"pointer",display:"flex",flexDirection:"column",
+                  alignItems:"center",justifyContent:"center",minHeight:140,transition:"border-color 0.15s"}}
+                onMouseEnter={e=>(e.currentTarget.style.borderColor="#222")}
+                onMouseLeave={e=>(e.currentTarget.style.borderColor="#111")}>
+                <div style={{fontFamily:MM,fontSize:20,color:"#222",marginBottom:8}}>+</div>
+                <div style={{fontFamily:MM,fontSize:9,color:"#333",textTransform:"uppercase",letterSpacing:"0.1em"}}>
+                  NEW GAME
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── New Game Flow (name input → franchise select) ────────────────────────────
+function NewGameFlow({onComplete, onBack}: {onComplete:(sid:string,abbr:string)=>void; onBack:()=>void}) {
+  const MM = "'DM Mono',monospace";
+  const [step, setStep] = useState<"name"|"franchise">("name");
+  const [saveName, setSaveName] = useState("");
+
+  if(step==="name") return (
+    <div style={{minHeight:"100vh",background:"#000",color:"#f0f0f0",display:"flex",flexDirection:"column"}}>
+      <div style={{borderBottom:"1px solid #0d0d0d",padding:"18px 32px",display:"flex",alignItems:"center",gap:16}}>
+        <button onClick={onBack} style={{fontFamily:MM,fontSize:9,background:"transparent",color:"#444",
+          border:"1px solid #111",borderRadius:3,padding:"6px 14px",cursor:"pointer",letterSpacing:"0.08em"}}>
+          ← BACK
+        </button>
+        <div style={{fontFamily:MM,fontSize:11,color:"#f0f0f0",letterSpacing:"0.12em",textTransform:"uppercase"}}>
+          NEW GAME
+        </div>
+      </div>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center",maxWidth:400}}>
+          <div style={{fontFamily:MM,fontSize:9,color:"#444",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>
+            NAME YOUR RUN
+          </div>
+          <input
+            autoFocus
+            value={saveName}
+            onChange={e=>setSaveName(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&saveName.trim()&&setStep("franchise")}
+            placeholder="e.g. Rebuild with WSH, Flagg Dynasty..."
+            style={{width:"100%",background:"#080808",border:"1px solid #1a1a1a",borderRadius:3,
+              padding:"12px 16px",color:"#e0e0e0",fontFamily:"Inter,sans-serif",fontSize:14,
+              outline:"none",marginBottom:16,boxSizing:"border-box" as const}}
+          />
+          <button
+            onClick={()=>saveName.trim()&&setStep("franchise")}
+            disabled={!saveName.trim()}
+            style={{fontFamily:MM,fontSize:10,textTransform:"uppercase",letterSpacing:"0.1em",
+              background:saveName.trim()?"#f0f0f0":"#111",color:saveName.trim()?"#000":"#333",
+              border:"none",borderRadius:3,padding:"10px 28px",cursor:saveName.trim()?"pointer":"default"}}>
+            CHOOSE FRANCHISE →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <FranchiseSelect
+        onSelect={(sid, abbr)=>{
+          // Save the name to the saves index
+          const raw = localStorage.getItem("gm_saves_index");
+          const existing: SaveEntry[] = raw ? JSON.parse(raw) : [];
+          const result = SEASON_RESULTS[abbr];
+          const entry: SaveEntry = {
+            save_id: sid,
+            name: saveName.trim() || `${abbr} Run`,
+            team: abbr,
+            team_name: abbr,
+            record: result ? `${result.w}-${result.l}` : "0-0",
+            result: result?.result || "",
+            created: new Date().toLocaleDateString(),
+            updated: new Date().toISOString(),
+          };
+          localStorage.setItem("gm_saves_index", JSON.stringify([...existing, entry]));
+          onComplete(sid, abbr);
+        }}
+        backButton={
+          <button onClick={()=>setStep("name")}
+            style={{fontFamily:MM,fontSize:9,background:"transparent",color:"#444",
+              border:"1px solid #111",borderRadius:3,padding:"6px 14px",cursor:"pointer",letterSpacing:"0.08em"}}>
+            ← BACK
+          </button>
+        }
+      />
+    </>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function GMPage() {
   const [saveId, setSaveId] = useState<string|null>(null);
@@ -1910,11 +2139,10 @@ export default function GMPage() {
   const [roster, setRoster] = useState<Player[]>([]);
   const [section, setSection] = useState("HOME");
   const [pendingOffer, setPendingOffer] = useState<any>(null);
+  const [screen, setScreen] = useState<"saves"|"new"|"game">("saves");
   const [initDone, setInitDone] = useState(false);
 
   useEffect(()=>{
-    const s = localStorage.getItem("gm_save_id");
-    if (s) setSaveId(s);
     setInitDone(true);
     fetch(`${API}/gm/init-db`,{method:"POST"}).catch(()=>{});
   },[]);
@@ -1930,35 +2158,58 @@ export default function GMPage() {
 
   useEffect(()=>{ if(saveId) loadData(saveId); },[saveId,loadData]);
 
-  function handleSelect(sid: string, abbr: string) {
+  function handleLoad(sid: string) {
+    localStorage.setItem("gm_save_id", sid);
     setSaveId(sid);
     setSection("HOME");
+    setScreen("game");
   }
 
-  function handleNewGame() {
+  function handleNewGameComplete(sid: string, abbr: string) {
+    localStorage.setItem("gm_save_id", sid);
+    setSaveId(sid);
+    setSection("HOME");
+    setScreen("game");
+  }
+
+  function handleReturnToSaves() {
     localStorage.removeItem("gm_save_id");
-    localStorage.removeItem("gm_team");
     setSaveId(null);
     setState(null);
     setRoster([]);
-    setSection("HOME");
+    setScreen("saves");
   }
+
+  // Update save index with latest record when in game
+  useEffect(()=>{
+    if(!saveId || !state) return;
+    const raw = localStorage.getItem("gm_saves_index");
+    if(!raw) return;
+    try {
+      const saves: SaveEntry[] = JSON.parse(raw);
+      const idx = saves.findIndex(s=>s.save_id===saveId);
+      if(idx>=0) {
+        const result = SEASON_RESULTS[state.gm_team];
+        saves[idx] = {...saves[idx],
+          record: `${state.wins||0}-${state.losses||0}`,
+          result: result?.result||saves[idx].result,
+          updated: new Date().toISOString(),
+        };
+        localStorage.setItem("gm_saves_index", JSON.stringify(saves));
+      }
+    } catch {}
+  },[saveId, state]);
 
   if (!initDone) return null;
 
-  if (!saveId || !state) {
-    return (
-      <>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        <FranchiseSelect onSelect={handleSelect} />
-      </>
-    );
-  }
+  if (screen==="saves") return <SaveManager onLoad={handleLoad} onNewGame={()=>setScreen("new")} />;
+  if (screen==="new") return <NewGameFlow onComplete={handleNewGameComplete} onBack={()=>setScreen("saves")} />;
+  if (!saveId || !state) return <SaveManager onLoad={handleLoad} onNewGame={()=>setScreen("new")} />;
 
   return (
     <div style={{minHeight:"100vh",background:"#000",color:"#f0f0f0"}}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} select option{background:#060606}`}</style>
-      <TopBar state={state} section={section} onNav={setSection} onNewGame={handleNewGame} />
+      <TopBar state={state} section={section} onNav={setSection} onNewGame={handleReturnToSaves} />
       <div style={{animation:"fadeIn 0.2s ease"}}>
         {section==="HOME"        && <HomeSection state={state} roster={roster} onNav={setSection} saveId={saveId} onViewOffer={(o)=>{setPendingOffer(o);setSection('TRADE');}} />}
         {section==="ROSTER"      && <RosterSection saveId={saveId} roster={roster} state={state} onRosterChange={()=>loadData(saveId)} />}
