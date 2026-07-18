@@ -762,6 +762,195 @@ def put_save(conn, save_id: str, state: dict):
 
 # ─── League Initialisation ────────────────────────────────────────────────────
 
+REAL_PICK_REGISTRY = {
+    # Format: team -> list of picks they own going into 2026-27
+    # Simplified: no swaps, no protections beyond basic notes
+    "ATL": [
+        {"round":1,"year":2027,"original_owner":"ATL","note":"ATL 2027 R1"},
+        {"round":2,"year":2027,"original_owner":"OKC","note":"OKC 2027 R2 via ATL"},
+        {"round":1,"year":2028,"original_owner":"ATL","note":"ATL 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"ATL","note":"ATL 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"ATL","note":"ATL 2030 R1"},
+    ],
+    "BOS": [
+        {"round":1,"year":2027,"original_owner":"BOS","note":"BOS 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1 (via BOS-PHI trade)"},
+        {"round":1,"year":2029,"original_owner":"BOS","note":"BOS 2029 R1"},
+        {"round":1,"year":2031,"original_owner":"PHI","note":"PHI 2031 R1 (via BOS-PHI trade)"},
+        {"round":1,"year":2030,"original_owner":"BOS","note":"BOS 2030 R1"},
+    ],
+    "BKN": [
+        {"round":1,"year":2027,"original_owner":"BKN","note":"BKN 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"BKN","note":"BKN 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"BKN","note":"BKN 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"BKN","note":"BKN 2030 R1"},
+    ],
+    "CHA": [
+        {"round":1,"year":2027,"original_owner":"CHA","note":"CHA 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"CHA","note":"CHA 2028 R1"},
+        {"round":1,"year":2033,"original_owner":"MIN","note":"MIN 2033 R1 (via CHA)"},
+        {"round":1,"year":2033,"original_owner":"PHX","note":"PHX 2033 R1 (via CHA)"},
+    ],
+    "CHI": [
+        {"round":1,"year":2027,"original_owner":"CHI","note":"CHI 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"CHI","note":"CHI 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"CHI","note":"CHI 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"CHI","note":"CHI 2030 R1"},
+    ],
+    "CLE": [
+        {"round":1,"year":2027,"original_owner":"CLE","note":"CLE 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"CLE","note":"CLE 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"CLE","note":"CLE 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"CLE","note":"CLE 2030 R1"},
+    ],
+    "DAL": [
+        {"round":1,"year":2027,"original_owner":"DAL","note":"DAL 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"DAL","note":"DAL 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"DAL","note":"DAL 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"DAL","note":"DAL 2030 R1"},
+    ],
+    "DEN": [
+        {"round":1,"year":2027,"original_owner":"DEN","note":"DEN 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"DEN","note":"DEN 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"DEN","note":"DEN 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"DEN","note":"DEN 2030 R1"},
+    ],
+    "DET": [
+        {"round":1,"year":2027,"original_owner":"DET","note":"DET 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"DET","note":"DET 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"DET","note":"DET 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"DET","note":"DET 2030 R1"},
+    ],
+    "GS": [
+        {"round":1,"year":2027,"original_owner":"GS","note":"GS 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"GS","note":"GS 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"GS","note":"GS 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"GS","note":"GS 2030 R1"},
+    ],
+    "HOU": [
+        {"round":1,"year":2027,"original_owner":"HOU","note":"HOU 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"HOU","note":"HOU 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"HOU","note":"HOU 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"HOU","note":"HOU 2030 R1"},
+    ],
+    "IND": [
+        {"round":1,"year":2027,"original_owner":"IND","note":"IND 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"IND","note":"IND 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"IND","note":"IND 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"IND","note":"IND 2030 R1"},
+    ],
+    "LAC": [
+        {"round":1,"year":2027,"original_owner":"LAC","note":"LAC 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"LAC","note":"LAC 2028 R1"},
+        {"round":1,"year":2031,"original_owner":"TOR","note":"TOR 2031 R1 (via LAC)"},
+        {"round":1,"year":2033,"original_owner":"TOR","note":"TOR 2033 R1 (via LAC)"},
+    ],
+    "LAL": [
+        {"round":1,"year":2027,"original_owner":"LAL","note":"LAL 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"LAL","note":"LAL 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"LAL","note":"LAL 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"LAL","note":"LAL 2030 R1"},
+    ],
+    "MEM": [
+        {"round":1,"year":2027,"original_owner":"MEM","note":"MEM 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"MEM","note":"MEM 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"MEM","note":"MEM 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"GS","note":"GS 2030 R1 (via MEM, top-20 protected)"},
+    ],
+    "MIA": [
+        {"round":1,"year":2027,"original_owner":"MIA","note":"MIA 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"MIA","note":"MIA 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"MIA","note":"MIA 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"MIA","note":"MIA 2030 R1"},
+    ],
+    "MIL": [
+        {"round":1,"year":2027,"original_owner":"MIL","note":"MIL 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"MIL","note":"MIL 2028 R1"},
+        {"round":1,"year":2031,"original_owner":"MIA","note":"MIA 2031 R1 (via MIL)"},
+        {"round":1,"year":2033,"original_owner":"MIA","note":"MIA 2033 R1 (via MIL)"},
+    ],
+    "MIN": [
+        {"round":1,"year":2027,"original_owner":"MIN","note":"MIN 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"MIN","note":"MIN 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"MIN","note":"MIN 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"MIN","note":"MIN 2030 R1"},
+    ],
+    "NO": [
+        {"round":1,"year":2027,"original_owner":"NO","note":"NO 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"NO","note":"NO 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"NO","note":"NO 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"NO","note":"NO 2030 R1"},
+    ],
+    "NY": [
+        {"round":1,"year":2027,"original_owner":"NY","note":"NY 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"NY","note":"NY 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"NY","note":"NY 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"NY","note":"NY 2030 R1"},
+    ],
+    "OKC": [
+        {"round":1,"year":2027,"original_owner":"OKC","note":"OKC 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"OKC","note":"OKC 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"OKC","note":"OKC 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"OKC","note":"OKC 2030 R1"},
+    ],
+    "ORL": [
+        {"round":1,"year":2027,"original_owner":"ORL","note":"ORL 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"ORL","note":"ORL 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"ORL","note":"ORL 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"ORL","note":"ORL 2030 R1"},
+    ],
+    "PHI": [
+        {"round":1,"year":2027,"original_owner":"PHI","note":"PHI 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"PHI","note":"PHI 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"PHI","note":"PHI 2030 R1"},
+    ],
+    "PHX": [
+        {"round":1,"year":2027,"original_owner":"PHX","note":"PHX 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"PHX","note":"PHX 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"PHX","note":"PHX 2029 R1 (top-5 protected)"},
+        {"round":1,"year":2030,"original_owner":"PHX","note":"PHX 2030 R1"},
+    ],
+    "POR": [
+        {"round":1,"year":2027,"original_owner":"POR","note":"POR 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"POR","note":"POR 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"POR","note":"POR 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"POR","note":"POR 2030 R1"},
+    ],
+    "SA": [
+        {"round":1,"year":2027,"original_owner":"SA","note":"SA 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"SA","note":"SA 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"SA","note":"SA 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"SA","note":"SA 2030 R1"},
+    ],
+    "SAC": [
+        {"round":1,"year":2027,"original_owner":"SAC","note":"SAC 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"SAC","note":"SAC 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"SAC","note":"SAC 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"SAC","note":"SAC 2030 R1"},
+    ],
+    "TOR": [
+        {"round":1,"year":2027,"original_owner":"TOR","note":"TOR 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"TOR","note":"TOR 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"TOR","note":"TOR 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"TOR","note":"TOR 2030 R1"},
+    ],
+    "UTAH": [
+        {"round":1,"year":2027,"original_owner":"UTAH","note":"UTAH 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"LAL","note":"LAL 2028 R1 (via UTAH)"},
+        {"round":1,"year":2029,"original_owner":"UTAH","note":"UTAH 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"LAL","note":"LAL 2030 R1 (via UTAH)"},
+        {"round":1,"year":2031,"original_owner":"LAL","note":"LAL 2031 R1 (via UTAH)"},
+        {"round":1,"year":2033,"original_owner":"LAL","note":"LAL 2033 R1 (via UTAH)"},
+    ],
+    "WSH": [
+        {"round":1,"year":2027,"original_owner":"WSH","note":"WSH 2027 R1"},
+        {"round":1,"year":2028,"original_owner":"WSH","note":"WSH 2028 R1"},
+        {"round":1,"year":2029,"original_owner":"WSH","note":"WSH 2029 R1"},
+        {"round":1,"year":2030,"original_owner":"WSH","note":"WSH 2030 R1"},
+    ],
+}
+
 def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict = None) -> dict:
     """
     Distribute real players across 30 teams.
