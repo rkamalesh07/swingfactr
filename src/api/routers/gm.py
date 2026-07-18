@@ -1094,11 +1094,6 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
     # Build team rosters from real team assignments
     teams = {}
     for abbr in NBA_TEAMS:
-        # Apply 2K rating overrides
-        for p in enriched:
-            k = _get_2k_ovr(p.get("name",""), ratings_2k)
-            if k: p["overall"] = k
-
         teams[abbr] = {
             "abbr":     abbr,
             "name":     TEAM_FULL_NAMES[abbr],
@@ -1127,6 +1122,15 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
             roster = roster[:15]
         team["roster"] = roster
         team["cap_used"] = sum(p["salary"] for p in team["roster"])
+
+    # Apply 2K rating overrides to all players
+    for abbr, team in teams.items():
+        for p in team.get("roster", []):
+            k = _get_2k_ovr(p.get("name",""), ratings_2k)
+            if k: p["overall"] = k
+    for p in fa_pool:
+        k = _get_2k_ovr(p.get("name",""), ratings_2k)
+        if k: p["overall"] = k
 
     return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 245, "games_simmed": 0}
 
