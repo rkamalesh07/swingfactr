@@ -774,7 +774,7 @@ REAL_PICK_REGISTRY = {
     ],
     "BOS": [
         {"round":1,"year":2027,"original_owner":"BOS","note":"BOS 2027 R1"},
-        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1"},
+        {"round":1,"year":2028,"original_owner":"LAC","note":"LAC 2028 R1"},
         {"round":1,"year":2029,"original_owner":"BOS","note":"BOS 2029 R1"},
         {"round":1,"year":2031,"original_owner":"PHI","note":"PHI 2031 R1"},
         {"round":1,"year":2030,"original_owner":"BOS","note":"BOS 2030 R1"},
@@ -901,7 +901,7 @@ REAL_PICK_REGISTRY = {
     ],
     "PHI": [
         {"round":1,"year":2027,"original_owner":"PHI","note":"PHI 2027 R1"},
-        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1"},
+        {"round":1,"year":2028,"original_owner":"LAC","note":"LAC 2028 R1"},
         {"round":1,"year":2029,"original_owner":"PHI","note":"PHI 2029 R1"},
         {"round":1,"year":2030,"original_owner":"PHI","note":"PHI 2030 R1"},
     ],
