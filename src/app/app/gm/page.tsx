@@ -1021,9 +1021,14 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
   const relevantProspects = pickNum ? DRAFT_PROSPECTS.filter(p => Math.abs(p.rank-pickNum)<=2) : DRAFT_PROSPECTS.slice(0,3);
 
   return (
-    <div style={{maxWidth:1100,margin:"0 auto",padding:"40px 32px"}}>
+    <div style={{maxWidth:1400,margin:"0 auto",padding:"16px 24px"}}>
+      {/* Two-column layout: calendar left, sidebar right */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:16,alignItems:"start"}}>
+
+      {/* LEFT: Calendar (primary) */}
+      <div>
       {/* Season banner */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:"#0d0d0d",borderRadius:4,overflow:"hidden",marginBottom:32}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:"#0d0d0d",borderRadius:4,overflow:"hidden",marginBottom:16}}>
         {[
           {label:"2025-26 Record",value:`${result?.w??state.wins}-${result?.l??state.losses}`},
           {label:"Season Result",value:result?.result??"—",hi:result?.result==="NBA Champions"},
@@ -1158,22 +1163,85 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
               }} />
 
       {state.day >= 246 && state.day < 370 && (
-        <div style={{textAlign:"center" as const,marginBottom:24}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#333",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.08em"}}>
-            Ready to start the 2026-27 season?
-          </div>
+        <div style={{textAlign:"center" as const,marginBottom:16}}>
           <button onClick={async ()=>{
-            const daysToSim = 370 - state.day; // Oct 26 2026 approx
-            setSimConfirm({targetDay:370, days:daysToSim});
+            setSimConfirm({targetDay:370, days:370-state.day});
           }}
             style={{fontFamily:"'DM Mono',monospace",fontSize:9,textTransform:"uppercase" as const,letterSpacing:"0.1em",
               background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,
-              padding:"10px 28px",cursor:"pointer"}}>
+              padding:"8px 24px",cursor:"pointer"}}>
             SIM TO 2026-27 SEASON →
           </button>
         </div>
       )}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
+      </div>{/* end left column */}
+
+      {/* RIGHT SIDEBAR */}
+      <div style={{position:"sticky" as const,top:16}}>
+
+        {/* Quick stats */}
+        <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",padding:"14px",marginBottom:12}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#333",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>SEASON SUMMARY</div>
+          {[
+            {label:"Record",val:`${result?.w??state.wins}-${result?.l??state.losses}`},
+            {label:"Result",val:result?.result??"—"},
+            {label:"Cap Used",val:fmt$(state.cap_used)},
+            {label:"Cap Space",val:fmt$(Math.max(0,SALARY_CAP-state.cap_used))},
+            {label:"Roster",val:`${roster.length}/15`},
+          ].map(r=>(
+            <div key={r.label} style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#444"}}>{r.label}</span>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#888"}}>{r.val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Top players */}
+        <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",padding:"14px",marginBottom:12}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#333",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>CORE PLAYERS</div>
+          {[...roster].sort((a,b)=>b.overall-a.overall).slice(0,5).map(p=>(
+            <div key={p.id} style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#888",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,maxWidth:140}}>{p.name}</span>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#555",flexShrink:0}}>{p.overall} OVR</span>
+            </div>
+          ))}
+          <button onClick={()=>onNav("ROSTER")}
+            style={{fontFamily:"'DM Mono',monospace",fontSize:7,textTransform:"uppercase" as const,letterSpacing:"0.06em",
+              background:"transparent",border:"none",color:"#333",cursor:"pointer",marginTop:4,padding:0}}>
+            FULL ROSTER →
+          </button>
+        </div>
+
+        {/* Trade offers */}
+        {offers.length>0&&(
+          <div style={{border:"1px solid #111",borderRadius:4,background:"#030303",padding:"14px",marginBottom:12}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#333",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
+              TRADE OFFERS ({offers.length})
+            </div>
+            {offers.slice(0,2).map((offer,i)=>(
+              <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #0d0d0d"}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#555",marginBottom:3}}>
+                  {offer.from_team} · {offer.strategy||"Retooling"}
+                </div>
+                <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:"#888",marginBottom:4,lineHeight:1.3}}>
+                  {offer.summary||`Offer from ${offer.from_team}`}
+                </div>
+                <button onClick={()=>onViewOffer(offer)}
+                  style={{fontFamily:"'DM Mono',monospace",fontSize:7,textTransform:"uppercase" as const,
+                    letterSpacing:"0.06em",background:"transparent",border:"1px solid #222",
+                    borderRadius:2,padding:"3px 8px",color:"#555",cursor:"pointer"}}>
+                  VIEW →
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>{/* end sidebar */}
+      </div>{/* end grid */}
+
+      {/* Bottom stats grid -- hidden, moved to sidebar */}
+      <div style={{display:"none",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
         <div style={{border:"1px solid #222",borderRadius:4,padding:"18px"}}>
           <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Core Players</div>
