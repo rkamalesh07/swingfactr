@@ -695,6 +695,28 @@ def fetch_advanced_metrics(conn) -> dict:
         return {}
 
 
+def fetch_2k_ratings(conn) -> dict:
+    """Fetch 2K ratings from DB as name->overall dict."""
+    import unicodedata as _ud
+    def _norm(s):
+        s = _ud.normalize("NFKD", str(s))
+        return "".join(c for c in s if not _ud.combining(c)).strip()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT player_name, overall FROM player_2k_ratings")
+        rows = cur.fetchall()
+        cur.close()
+        result = {}
+        for name, ovr in rows:
+            result[_norm(name)] = ovr
+            # Also store suffixes stripped
+            for sfx in [" III"," II"," IV"," Jr."," Sr."," Jr"," Sr"]:
+                result[_norm(name.replace(sfx,""))] = ovr
+        return result
+    except Exception as e:
+        print(f"2K ratings fetch error: {e}")
+        return {}
+
 def fetch_contracts(conn) -> dict:
     """
     Load real 2025-26 salaries from player_contracts table.
@@ -951,6 +973,27 @@ REAL_PICK_REGISTRY = {
     ],
 }
 
+def _get_2k_ovr(name: str, ratings_2k: dict) -> int | None:
+    """Look up 2K rating by player name with fuzzy matching."""
+    import unicodedata as _ud
+    def _norm(s):
+        s = _ud.normalize("NFKD", str(s))
+        s = "".join(c for c in s if not _ud.combining(c))
+        for sfx in [" III"," II"," IV"," Jr."," Sr."," Jr"," Sr"]:
+            s = s.replace(sfx,"")
+        return s.strip()
+    if not name or not ratings_2k: return None
+    n = _norm(name)
+    if n in ratings_2k: return ratings_2k[n]
+    # Try last name match for common cases
+    parts = n.split()
+    if len(parts) >= 2:
+        # Try first + last
+        key = f"{parts[0]} {parts[-1]}"
+        if key in ratings_2k: return ratings_2k[key]
+    return None
+
+
 def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict = None) -> dict:
     """
     Distribute real players across 30 teams.
@@ -1025,7 +1068,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 "fg3m":        round(float(p.get("fg3m") or 0), 1),
                 "mpg":         round(float(p.get("mpg") or 0), 1),
                 "gp":          int(p.get("gp") or 0),
-                "overall":     ratings["overall"],
+                "overall":     _get_2k_ovr(p.get("full_name",""), ratings_2k) or ratings["overall"],
                 "talent":      talent_from_advanced._last_talent,
                 "future":      ratings["future"],
                 "trade_value": ratings["trade_value"],
@@ -1236,6 +1279,7 @@ def new_game(body: NewGameBody):
         players    = fetch_all_players(conn)
         adv_lookup = fetch_advanced_metrics(conn)
         contracts  = fetch_contracts(conn)
+    ratings_2k = fetch_2k_ratings(conn)
         print(f"Advanced metrics: {len(adv_lookup)}, contracts: {len(contracts)}")
         if len(adv_lookup) == 0:
             raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
