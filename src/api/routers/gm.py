@@ -767,16 +767,16 @@ REAL_PICK_REGISTRY = {
     # Simplified: no swaps, no protections beyond basic notes
     "ATL": [
         {"round":1,"year":2027,"original_owner":"ATL","note":"ATL 2027 R1"},
-        {"round":2,"year":2027,"original_owner":"OKC","note":"OKC 2027 R2 via ATL"},
+        {"round":2,"year":2027,"original_owner":"OKC","note":"OKC 2027 R2"},
         {"round":1,"year":2028,"original_owner":"ATL","note":"ATL 2028 R1"},
         {"round":1,"year":2029,"original_owner":"ATL","note":"ATL 2029 R1"},
         {"round":1,"year":2030,"original_owner":"ATL","note":"ATL 2030 R1"},
     ],
     "BOS": [
         {"round":1,"year":2027,"original_owner":"BOS","note":"BOS 2027 R1"},
-        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1 (via BOS-PHI trade)"},
+        {"round":1,"year":2028,"original_owner":"PHI","note":"PHI 2028 R1"},
         {"round":1,"year":2029,"original_owner":"BOS","note":"BOS 2029 R1"},
-        {"round":1,"year":2031,"original_owner":"PHI","note":"PHI 2031 R1 (via BOS-PHI trade)"},
+        {"round":1,"year":2031,"original_owner":"PHI","note":"PHI 2031 R1"},
         {"round":1,"year":2030,"original_owner":"BOS","note":"BOS 2030 R1"},
     ],
     "BKN": [
@@ -788,8 +788,8 @@ REAL_PICK_REGISTRY = {
     "CHA": [
         {"round":1,"year":2027,"original_owner":"CHA","note":"CHA 2027 R1"},
         {"round":1,"year":2028,"original_owner":"CHA","note":"CHA 2028 R1"},
-        {"round":1,"year":2033,"original_owner":"MIN","note":"MIN 2033 R1 (via CHA)"},
-        {"round":1,"year":2033,"original_owner":"PHX","note":"PHX 2033 R1 (via CHA)"},
+        {"round":1,"year":2033,"original_owner":"MIN","note":"MIN 2033 R1"},
+        {"round":1,"year":2033,"original_owner":"PHX","note":"PHX 2033 R1"},
     ],
     "CHI": [
         {"round":1,"year":2027,"original_owner":"CHI","note":"CHI 2027 R1"},
@@ -842,8 +842,8 @@ REAL_PICK_REGISTRY = {
     "LAC": [
         {"round":1,"year":2027,"original_owner":"LAC","note":"LAC 2027 R1"},
         {"round":1,"year":2028,"original_owner":"LAC","note":"LAC 2028 R1"},
-        {"round":1,"year":2031,"original_owner":"TOR","note":"TOR 2031 R1 (via LAC)"},
-        {"round":1,"year":2033,"original_owner":"TOR","note":"TOR 2033 R1 (via LAC)"},
+        {"round":1,"year":2031,"original_owner":"TOR","note":"TOR 2031 R1"},
+        {"round":1,"year":2033,"original_owner":"TOR","note":"TOR 2033 R1"},
     ],
     "LAL": [
         {"round":1,"year":2027,"original_owner":"LAL","note":"LAL 2027 R1"},
@@ -855,7 +855,7 @@ REAL_PICK_REGISTRY = {
         {"round":1,"year":2027,"original_owner":"MEM","note":"MEM 2027 R1"},
         {"round":1,"year":2028,"original_owner":"MEM","note":"MEM 2028 R1"},
         {"round":1,"year":2029,"original_owner":"MEM","note":"MEM 2029 R1"},
-        {"round":1,"year":2030,"original_owner":"GS","note":"GS 2030 R1 (via MEM, top-20 protected)"},
+        {"round":1,"year":2030,"original_owner":"GS","note":"GS 2030 R1 (top-20 protected)"},
     ],
     "MIA": [
         {"round":1,"year":2027,"original_owner":"MIA","note":"MIA 2027 R1"},
@@ -866,8 +866,8 @@ REAL_PICK_REGISTRY = {
     "MIL": [
         {"round":1,"year":2027,"original_owner":"MIL","note":"MIL 2027 R1"},
         {"round":1,"year":2028,"original_owner":"MIL","note":"MIL 2028 R1"},
-        {"round":1,"year":2031,"original_owner":"MIA","note":"MIA 2031 R1 (via MIL)"},
-        {"round":1,"year":2033,"original_owner":"MIA","note":"MIA 2033 R1 (via MIL)"},
+        {"round":1,"year":2031,"original_owner":"MIA","note":"MIA 2031 R1"},
+        {"round":1,"year":2033,"original_owner":"MIA","note":"MIA 2033 R1"},
     ],
     "MIN": [
         {"round":1,"year":2027,"original_owner":"MIN","note":"MIN 2027 R1"},
@@ -937,11 +937,11 @@ REAL_PICK_REGISTRY = {
     ],
     "UTAH": [
         {"round":1,"year":2027,"original_owner":"UTAH","note":"UTAH 2027 R1"},
-        {"round":1,"year":2028,"original_owner":"LAL","note":"LAL 2028 R1 (via UTAH)"},
+        {"round":1,"year":2028,"original_owner":"LAL","note":"LAL 2028 R1"},
         {"round":1,"year":2029,"original_owner":"UTAH","note":"UTAH 2029 R1"},
-        {"round":1,"year":2030,"original_owner":"LAL","note":"LAL 2030 R1 (via UTAH)"},
-        {"round":1,"year":2031,"original_owner":"LAL","note":"LAL 2031 R1 (via UTAH)"},
-        {"round":1,"year":2033,"original_owner":"LAL","note":"LAL 2033 R1 (via UTAH)"},
+        {"round":1,"year":2030,"original_owner":"LAL","note":"LAL 2030 R1"},
+        {"round":1,"year":2031,"original_owner":"LAL","note":"LAL 2031 R1"},
+        {"round":1,"year":2033,"original_owner":"LAL","note":"LAL 2033 R1"},
     ],
     "WSH": [
         {"round":1,"year":2027,"original_owner":"WSH","note":"WSH 2027 R1"},
