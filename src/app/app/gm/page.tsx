@@ -580,7 +580,8 @@ function FranchiseSelect({ onSelect, backButton }: { onSelect: (saveId: string, 
 
 // ─── Top Bar ──────────────────────────────────────────────────────────────────
 function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:string; onNav:(s:string)=>void; onNewGame:()=>void}) {
-  const NAV = ["HOME","ROSTER","STANDINGS","PROSPECTS","TRADE","FREE AGENTS"];
+  const isOffseason = state.day >= 245 && state.day < 370;
+  const NAV = ["HOME","ROSTER","STANDINGS",...(isOffseason?["PROSPECTS"]:[]),"TRADE","FREE AGENTS"];
   return (
     <div style={{background:"rgba(0,0,0,0.97)",borderBottom:"1px solid #222",height:48,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 28px",position:"sticky",top:0,zIndex:200}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
