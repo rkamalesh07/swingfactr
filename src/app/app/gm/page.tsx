@@ -2007,11 +2007,17 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
     setResult(null);
   }
   function toggleMyPick(note: string) {
-    setMyPicksOffered(prev=>prev.includes(note)?prev.filter(n=>n!==note):[...prev,note]);
+    setMyPicksOffered(prev=>{
+      if(prev.includes(note)) return prev.filter(n=>n!==note);
+      return [...prev, note];
+    });
     setResult(null);
   }
   function toggleTheirPick(note: string) {
-    setTheirPicksReq(prev=>prev.includes(note)?prev.filter(n=>n!==note):[...prev,note]);
+    setTheirPicksReq(prev=>{
+      if(prev.includes(note)) return prev.filter(n=>n!==note);
+      return [...prev, note];
+    });
     setResult(null);
   }
 
@@ -2181,7 +2187,12 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
 
           {/* Team selector */}
           <select value={targetTeam}
-            onChange={e=>{setTargetTeam(e.target.value);loadTeam(e.target.value);setGetting([]);setTheirPicksReq([]);setResult(null);}}
+            onChange={e=>{
+              const t=e.target.value;
+              setTargetTeam(t);
+              setGetting([]);setTheirPicksReq([]);setResult(null);
+              if(t) loadTeam(t);
+            }}
             style={{background:"#030303",border:"1px solid #111",borderRadius:4,
               padding:"10px 12px",color:targetTeam?"#e0e0e0":"#333",fontFamily:MM,fontSize:9,
               textTransform:"uppercase" as const,cursor:"pointer",width:"100%"}}>
@@ -2296,8 +2307,8 @@ function TeamPanel({label, players, picks, selectedPlayers, selectedPicks, onTog
     return b.salary-a.salary;
   });
 
-  const picksSorted = [...picks].sort((a,b)=>{
-    const ay = a.year||2026, by2 = b.year||2026;
+  const picksSorted = [...picks].filter((pk:any)=>(pk.year||2026)>2026).sort((a,b)=>{
+    const ay = a.year||2027, by2 = b.year||2027;
     if(ay!==by2) return ay-by2;
     return a.round-b.round;
   });
