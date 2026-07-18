@@ -912,6 +912,47 @@ def sim_game(home: dict, away: dict) -> tuple[str, str]:
         return home["abbr"], away["abbr"]
     return away["abbr"], home["abbr"]
 
+def _maybe_sign_lebron(league: dict):
+    """Auto-sign LeBron to a team if still FA and in day range 245-248."""
+    import random as _r
+    day = league.get("day", 0)
+    if day < 245 or day > 248:
+        return
+    gm_team = league.get("gm_team", "")
+
+    # Check if LeBron is already on a team
+    for abbr, team in league["teams"].items():
+        for p in team["roster"]:
+            if "lebron" in p.get("name","").lower() or "james" in p.get("name","").lower() and "lebron" in p.get("name","").lower():
+                return  # Already signed
+
+    # Find LeBron in FA pool
+    fa_pool = league.get("fa_pool", [])
+    lebron = next((p for p in fa_pool if "lebron" in p.get("name","").lower()), None)
+    if not lebron:
+        return
+
+    # Random destination weighted by Kalshi odds
+    destinations = ["MIA","CLE","GS","PHI","MIN",gm_team]
+    weights = [30, 30, 25, 10, 4, 1]
+    chosen = _r.choices(destinations, weights=weights, k=1)[0]
+
+    if chosen not in league["teams"]:
+        chosen = "MIA"
+
+    # Sign LeBron
+    lebron["salary"] = 2_449_421
+    lebron["years_left"] = 1
+    lebron["contract_type"] = "minimum"
+    lebron["team"] = chosen
+    league["teams"][chosen]["roster"].append(lebron)
+    league["teams"][chosen]["cap_used"] += lebron["salary"]
+    league["fa_pool"] = [p for p in fa_pool if "lebron" not in p.get("name","").lower()]
+    league.setdefault("news", []).append(
+        f"LeBron James signs with {chosen} on a veteran minimum deal."
+    )
+
+
 def simulate_days(league: dict, n_days: int) -> dict:
     """Simulate n_days of games across all 30 teams."""
     teams = league["teams"]
