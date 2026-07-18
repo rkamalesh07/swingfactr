@@ -1479,10 +1479,11 @@ def league_players(save_id: str, limit: int = Query(600)):
 # ─── Trade Evaluation ────────────────────────────────────────────────────────
 
 TEAM_STATUS_MAP = {
-    "OKC":"Dynasty","BOS":"Contender","CLE":"Contender","NY":"Contender",
-    "SA":"Contender","DEN":"Contender","MIN":"Contender","MEM":"Rising",
-    "HOU":"Rising","ATL":"Rising","NO":"Rising","IND":"Retooling",
-    "DAL":"Retooling","LAL":"Retooling","MIL":"Retooling","PHX":"Retooling",
+    "OKC":"Dynasty","SA":"Contender","MIA":"Contender","BOS":"Contender",
+    "CLE":"Contender","NY":"Contender","DEN":"Contender","MIN":"Contender",
+    "HOU":"Rising","POR":"Rising","ATL":"Rising","PHI":"Rising",
+    "IND":"Retooling","DAL":"Retooling","LAL":"Retooling","TOR":"Retooling",
+    "MEM":"Retooling","NO":"Retooling","SAC":"Retooling","GS":"Retooling",
     "SAC":"Retooling","GS":"Retooling","MIA":"Retooling","LAC":"Retooling",
     "POR":"Rebuilding","DET":"Rebuilding","CHA":"Rebuilding","WSH":"Rebuilding",
     "UTAH":"Rebuilding","BKN":"Rebuilding","TOR":"Rebuilding","CHI":"Rebuilding",

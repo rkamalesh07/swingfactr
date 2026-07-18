@@ -2270,14 +2270,14 @@ function TradeSection({saveId, state, roster, pendingOffer, onOfferClear}: {save
 }
 
 const TEAM_STATUS_MAP_FRONTEND: Record<string,string> = {
-  OKC:"Dynasty",BOS:"Contender",CLE:"Contender",NY:"Contender",
-  SA:"Contender",DEN:"Contender",MIN:"Contender",MEM:"Rising",
-  HOU:"Rising",ATL:"Rising",NO:"Rising",IND:"Retooling",
-  DAL:"Retooling",LAL:"Retooling",MIL:"Retooling",PHX:"Retooling",
-  SAC:"Retooling",GS:"Retooling",MIA:"Retooling",LAC:"Retooling",
-  POR:"Rebuilding",DET:"Rebuilding",CHA:"Rebuilding",WSH:"Rebuilding",
-  UTAH:"Rebuilding",BKN:"Rebuilding",TOR:"Rebuilding",CHI:"Rebuilding",
-  ORL:"Rebuilding",PHI:"Rebuilding",
+  NY:"Contender",SA:"Contender",MIA:"Contender",BOS:"Contender",
+  CLE:"Contender",OKC:"Contender",DEN:"Contender",MIN:"Contender",
+  HOU:"Rising",POR:"Rising",ATL:"Rising",PHI:"Rising",
+  IND:"Retooling",DAL:"Retooling",LAL:"Retooling",MEM:"Retooling",
+  NO:"Retooling",SAC:"Retooling",GS:"Retooling",LAC:"Rebuilding",
+  TOR:"Retooling",DET:"Rebuilding",CHA:"Rebuilding",WSH:"Rebuilding",
+  UTAH:"Rebuilding",BKN:"Rebuilding",MIL:"Rebuilding",CHI:"Rebuilding",
+  ORL:"Rebuilding",PHX:"Rebuilding",
 };
 
 function TeamPanel({label, players, picks, selectedPlayers, selectedPicks, onTogglePlayer, onTogglePick, search, onSearch, teamAbbr}: {
