@@ -1479,15 +1479,14 @@ def league_players(save_id: str, limit: int = Query(600)):
 # ─── Trade Evaluation ────────────────────────────────────────────────────────
 
 TEAM_STATUS_MAP = {
-    "OKC":"Dynasty","SA":"Contender","MIA":"Contender","BOS":"Contender",
-    "CLE":"Contender","NY":"Contender","DEN":"Contender","MIN":"Contender",
+    "NY":"Contender","SA":"Contender","MIA":"Contender","BOS":"Contender",
+    "CLE":"Contender","OKC":"Contender","DEN":"Contender","MIN":"Contender",
     "HOU":"Rising","POR":"Rising","ATL":"Rising","PHI":"Rising",
-    "IND":"Retooling","DAL":"Retooling","LAL":"Retooling","TOR":"Retooling",
-    "MEM":"Retooling","NO":"Retooling","SAC":"Retooling","GS":"Retooling",
-    "SAC":"Retooling","GS":"Retooling","MIA":"Retooling","LAC":"Retooling",
-    "POR":"Rebuilding","DET":"Rebuilding","CHA":"Rebuilding","WSH":"Rebuilding",
-    "UTAH":"Rebuilding","BKN":"Rebuilding","TOR":"Rebuilding","CHI":"Rebuilding",
-    "ORL":"Rebuilding","PHI":"Rebuilding",
+    "IND":"Retooling","DAL":"Retooling","LAL":"Retooling","MEM":"Retooling",
+    "NO":"Retooling","SAC":"Retooling","GS":"Retooling","TOR":"Retooling",
+    "LAC":"Rebuilding","DET":"Rebuilding","CHA":"Rebuilding","WSH":"Rebuilding",
+    "UTAH":"Rebuilding","BKN":"Rebuilding","MIL":"Rebuilding","CHI":"Rebuilding",
+    "ORL":"Rebuilding","PHX":"Rebuilding",
 }
 
 
