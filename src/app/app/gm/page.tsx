@@ -299,13 +299,13 @@ const SEASON_RESULTS: Record<string,{w:number,l:number,result:string,note:string
   MIL:{w:30,l:52,result:"Missed playoffs",note:"Missed playoffs for first time since 2016."},
   MIN:{w:47,l:35,result:"Lost R1",note:"Lost to OKC in Round 1."},
   NO:{w:28,l:54,result:"Missed playoffs",note:"Lottery team."},
-  NY:{w:51,l:31,result:"NBA Finals",note:"Lead SA Spurs 2-0 in NBA Finals. Jalen Brunson averaging 34 PPG. Seeking first title since 1973."},
+  NY:{w:51,l:31,result:"NBA Champions",note:"2025-26 NBA Champions. Defeated SA Spurs 4-1 in the NBA Finals. Jalen Brunson won Finals MVP averaging 34.2 PPG."},
   OKC:{w:68,l:14,result:"Lost WCF",note:"Best record in NBA. Lost to SA Spurs 4-3 in 7 games in WCF."},
   ORL:{w:47,l:35,result:"Lost R1",note:"Lost to Detroit after blowing a 3-1 series lead."},
   PHI:{w:25,l:57,result:"Lost R2",note:"Play-in team. Shocked Boston 4-3 overcoming 3-1 deficit. Lost to Cleveland in R2."},
   PHX:{w:34,l:48,result:"Missed playoffs",note:"Play-in exit. Lost to POR in play-in."},
   POR:{w:22,l:60,result:"Lost R1",note:"Won play-in vs PHX. Swept by OKC in Round 1."},
-  SA:{w:62,l:20,result:"NBA Finals",note:"In NBA Finals vs NY Knicks. Trail 0-2. Beat OKC 4-3 in 7-game WCF."},
+  SA:{w:62,l:20,result:"Lost Finals",note:"Lost NBA Finals 1-4 to NY Knicks. De'Aaron Fox averaged 28 PPG in Finals."},
   SAC:{w:30,l:52,result:"Missed playoffs",note:"Missed playoffs for third consecutive season."},
   TOR:{w:24,l:58,result:"Missed playoffs",note:"Missed playoffs."},
   UTAH:{w:20,l:62,result:"Missed playoffs",note:"Full rebuild underway."},
@@ -324,6 +324,8 @@ function attrColor(v: number) {
 }
 function resultColor(r: string) {
   if (r === "NBA Champions") return "#f0f0f0";
+  if (r === "NBA Champions") return "#c8a84b";
+  if (r === "Lost Finals") return "#777";
   if (r === "NBA Finals") return "#777";
   if (r.includes("Lost")) return "#888";
   return "#555";
@@ -443,7 +445,7 @@ function FranchiseSelect({ onSelect, backButton }: { onSelect: (saveId: string, 
             Choose your <strong style={{fontWeight:700}}>franchise.</strong>
           </h1>
           <p style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#3a3a3a",marginTop:10,maxWidth:500}}>
-            Real 2025-26 rosters from actual game logs. NY Knicks lead SA Spurs 2-0 in the NBA Finals.
+            Real 2025-26 rosters. NY Knicks are 2025-26 NBA Champions. Jalen Brunson FMVP. Now entering the 2026 offseason.
           </p>
         </div>
 
@@ -602,6 +604,56 @@ function TopBar({state, section, onNav, onNewGame}: {state:GMState; section:stri
 
 // ─── Home Section ─────────────────────────────────────────────────────────────
 
+
+
+// ─── Calendar Flip Loading Animation ─────────────────────────────────────────
+function CalendarFlipAnimation({month, day}: {month:string; day:number}) {
+  return (
+    <div style={{display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",
+      position:"fixed" as const,inset:0,background:"rgba(0,0,0,0.92)",zIndex:2000}}>
+      <style>{`
+        @keyframes flipPage {
+          0%   { transform: rotateX(0deg);   opacity:1; }
+          45%  { transform: rotateX(-90deg); opacity:0; }
+          55%  { transform: rotateX(-90deg); opacity:0; }
+          100% { transform: rotateX(0deg);   opacity:1; }
+        }
+        @keyframes pageFlip {
+          0%   { transform: scaleY(1);   }
+          50%  { transform: scaleY(-1);  }
+          100% { transform: scaleY(1);   }
+        }
+        .cal-flip { animation: flipPage 0.6s ease-in-out infinite; transform-origin: top center; }
+      `}</style>
+      <div style={{width:120,height:140,borderRadius:8,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
+        {/* Calendar top strip */}
+        <div style={{background:"#111",height:32,display:"flex",alignItems:"center",justifyContent:"center",
+          borderBottom:"2px solid #000"}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#555",letterSpacing:"0.15em",textTransform:"uppercase"}}>
+            {month}
+          </div>
+        </div>
+        {/* Calendar rings */}
+        <div style={{position:"absolute" as const,top:20,left:0,right:0,display:"flex",justifyContent:"space-around",padding:"0 20px",zIndex:1}}>
+          {[0,1,2].map(i=>(
+            <div key={i} style={{width:8,height:16,borderRadius:"0 0 4px 4px",background:"#222",border:"1px solid #333"}}/>
+          ))}
+        </div>
+        {/* Flipping page */}
+        <div className="cal-flip" style={{background:"#0a0a0a",flex:1,display:"flex",alignItems:"center",
+          justifyContent:"center",height:108,border:"1px solid #111"}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:52,color:"#f0f0f0",fontWeight:700,lineHeight:1}}>
+            {String(day).padStart(2,"0")}
+          </div>
+        </div>
+      </div>
+      <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#333",marginTop:20,letterSpacing:"0.1em",
+        textTransform:"uppercase"}}>
+        SIMULATING...
+      </div>
+    </div>
+  );
+}
 
 // ─── NBA Season Calendar ───────────────────────────────────────────────────────
 // Map game day (0=Oct 21 2025) to calendar date
@@ -943,6 +995,8 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
   const [showAllOffers, setShowAllOffers] = useState(false);
   const [simConfirm, setSimConfirm] = useState<{targetDay:number;days:number}|null>(null);
   const [simming, setSimming] = useState(false);
+  const [simDay, setSimDay] = useState(0);
+  const [simMonth, setSimMonth] = useState("");
   useEffect(()=>{
     if(!saveId) return;
     fetch(`${API}/gm/ai-trade-offers/${saveId}`)
@@ -1042,6 +1096,7 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
       <ExpiringPlayersSection saveId={saveId} state={state} onResign={()=>window.location.reload()} />
 
       {/* Sim Confirm Modal */}
+      {simming && <CalendarFlipAnimation month={simMonth||"JUN"} day={simDay||24} />}
       {simConfirm && (
         <div style={{position:"fixed" as const,inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,
           display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1058,13 +1113,21 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
               <button onClick={async ()=>{
                 setSimming(true);
                 let remaining = simConfirm.days;
+                let currentDay = state.day;
+                const MONTHS = ["","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep"];
                 while(remaining > 0) {
-                  const chunk = Math.min(remaining, 60);
-                  await fetch(`${API}/gm/simulate/${saveId}`,{
+                  const chunk = Math.min(remaining, 7);
+                  const res = await fetch(`${API}/gm/simulate/${saveId}`,{
                     method:"POST",headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({days:chunk})
                   });
+                  const data = await res.json();
+                  currentDay = data.total_day || currentDay + chunk;
+                  const d = gameDayToDate(currentDay);
+                  setSimDay(d.day);
+                  setSimMonth(MONTHS[d.month]||"");
                   remaining -= chunk;
+                  await new Promise(r=>setTimeout(r, 80));
                 }
                 setSimConfirm(null);
                 setSimming(false);
@@ -1093,6 +1156,22 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
                 setSimConfirm({targetDay, days:daysToSim});
               }} />
 
+      {state.day >= 246 && state.day < 370 && (
+        <div style={{textAlign:"center" as const,marginBottom:24}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#333",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+            Ready to start the 2026-27 season?
+          </div>
+          <button onClick={async ()=>{
+            const daysToSim = 370 - state.day; // Oct 26 2026 approx
+            setSimConfirm({targetDay:370, days:daysToSim});
+          }}
+            style={{fontFamily:"'DM Mono',monospace",fontSize:9,textTransform:"uppercase" as const,letterSpacing:"0.1em",
+              background:"#f0f0f0",color:"#000",border:"none",borderRadius:3,
+              padding:"10px 28px",cursor:"pointer"}}>
+            SIM TO 2026-27 SEASON →
+          </button>
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginTop:8}}>
         {/* Core Players */}
         <div style={{border:"1px solid #222",borderRadius:4,padding:"18px"}}>
