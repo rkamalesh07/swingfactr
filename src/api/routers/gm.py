@@ -1279,7 +1279,7 @@ def new_game(body: NewGameBody):
         players    = fetch_all_players(conn)
         adv_lookup = fetch_advanced_metrics(conn)
         contracts  = fetch_contracts(conn)
-    ratings_2k = fetch_2k_ratings(conn)
+        ratings_2k = fetch_2k_ratings(conn)
         print(f"Advanced metrics: {len(adv_lookup)}, contracts: {len(contracts)}")
         if len(adv_lookup) == 0:
             raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
