@@ -1068,7 +1068,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
                 "fg3m":        round(float(p.get("fg3m") or 0), 1),
                 "mpg":         round(float(p.get("mpg") or 0), 1),
                 "gp":          int(p.get("gp") or 0),
-                "overall":     _get_2k_ovr(p.get("full_name",""), ratings_2k) or ratings["overall"],
+                "overall":     ratings["overall"],
                 "talent":      talent_from_advanced._last_talent,
                 "future":      ratings["future"],
                 "trade_value": ratings["trade_value"],
@@ -1094,6 +1094,11 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
     # Build team rosters from real team assignments
     teams = {}
     for abbr in NBA_TEAMS:
+        # Apply 2K rating overrides
+        for p in enriched:
+            k = _get_2k_ovr(p.get("name",""), ratings_2k)
+            if k: p["overall"] = k
+
         teams[abbr] = {
             "abbr":     abbr,
             "name":     TEAM_FULL_NAMES[abbr],
