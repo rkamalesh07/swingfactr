@@ -814,13 +814,14 @@ function NBACalendar({onNav, currentGameDay, onSimToDay}: {onNav:(s:string)=>voi
               onClick={()=>{
                 if(!day) return;
                 const targetDay = dateToGameDay(viewMonth, day, viewYear);
-                if(targetDay > currentGameDay) onSimToDay(targetDay);
+                const todayGameDay = currentGameDay;
+                if(targetDay > todayGameDay) onSimToDay(targetDay);
               }}
               style={{
                 minHeight:72,borderRight:"1px solid #080808",borderBottom:"1px solid #080808",
                 padding:"6px",background:events.length>0?TYPE_COLORS[events[0].type]:"transparent",
                 opacity:day?1:0.3,
-                cursor:day&&dateToGameDay(viewMonth,day,viewYear)>currentGameDay?"pointer":"default"}}>
+                cursor:day&&dateToGameDay(viewMonth,day,viewYear)>currentGameDay?"pointer":"not-allowed"}}>
               {day&&(
                 <>
                   <div style={{fontFamily:MM,fontSize:8,marginBottom:4,fontWeight:isToday?600:400,

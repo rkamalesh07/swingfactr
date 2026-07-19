@@ -1133,7 +1133,7 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
     for p in fa_pool:
         k = _get_2k_ovr(p.get("name",""), _r2k)
         if k: p["overall"] = k
-    return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 245, "games_simmed": 0}
+    return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 270, "games_simmed": 0}
 
 # ─── Season Simulation ────────────────────────────────────────────────────────
 
