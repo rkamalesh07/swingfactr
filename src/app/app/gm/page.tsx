@@ -1131,27 +1131,28 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
             <div style={{display:"flex",gap:10}}>
               <button onClick={async ()=>{
                 setSimming(true);
-                let remaining = simConfirm.days;
                 const targetGameDay = simConfirm.targetDay;
-                let animDay = state.day;
+                const startDay = state.day;
+                const totalDays = targetGameDay - startDay;
                 const MONTHS = ["","OCT","NOV","DEC","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP"];
-                // Animate up to target day only
+                // Show starting day immediately
+                const startDate = gameDayToDate(startDay);
+                setSimDay(startDate.day);
+                setSimMonth(MONTHS[startDate.month]||"JUL");
+                // Animate from start to target
+                let step = 0;
                 const animInterval = setInterval(()=>{
-                  if(animDay < targetGameDay) {
-                    animDay += 1;
-                    const d = gameDayToDate(animDay);
-                    setSimDay(d.day);
-                    setSimMonth(MONTHS[d.month]||"JUL");
-                  }
-                }, 150);
-                // Sim in one shot
-                if(remaining > 0) {
-                  await fetch(`${API}/gm/simulate/${saveId}`,{
-                    method:"POST",headers:{"Content-Type":"application/json"},
-                    body:JSON.stringify({days:remaining})
-                  });
-                }
-                clearInterval(animInterval);
+                  step = Math.min(step + 1, totalDays);
+                  const d = gameDayToDate(startDay + step);
+                  setSimDay(d.day);
+                  setSimMonth(MONTHS[d.month]||"JUL");
+                  if(step >= totalDays) clearInterval(animInterval);
+                }, Math.max(80, Math.min(300, 1500/totalDays)));
+                // Sim the days
+                await fetch(`${API}/gm/simulate/${saveId}`,{
+                  method:"POST",headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({days:totalDays})
+                });
                 setSimConfirm(null);
                 setSimming(false);
                 window.location.reload();
