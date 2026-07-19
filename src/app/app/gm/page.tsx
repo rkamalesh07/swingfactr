@@ -715,6 +715,7 @@ function getCalendarEvents(currentGameDay: number): CalEvent[] {
     {month:6,day:24,year:2026,label:"NBA Draft",type:"draft",gameDay:GAME_DAYS.draftNight,action:"DRAFT"},
     {month:6,day:30,year:2026,label:"Free Agency Opens",type:"fa",gameDay:GAME_DAYS.freeAgencyOpen,action:"FREE AGENTS"},
     {month:7,day:6,year:2026,label:"Free Agency Frenzy",type:"fa",gameDay:GAME_DAYS.freeAgencyEnd},
+    {month:7,day:21,year:2026,label:"FA Period Ends",type:"fa",gameDay:dateToGameDay(7,21,2026)},
     {month:10,day:2,year:2026,label:"Preseason 2026-27",type:"preseason",gameDay:GAME_DAYS.preseason2Start},
     {month:10,day:21,year:2026,label:"Season 2026-27",type:"season",gameDay:GAME_DAYS.season2Start},
   ];
@@ -733,10 +734,17 @@ const MONTH_NAMES = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","O
 
 function NBACalendar({onNav, currentGameDay, onSimToDay}: {onNav:(s:string)=>void; currentGameDay:number; onSimToDay:(day:number)=>void}) {
   const MM = "'DM Mono',monospace";
-  const [viewMonth, setViewMonth] = useState(6); // Start at June (current)
-  const [viewYear, setViewYear] = useState(2026);
+  // Start at current real-world month
+  const realDate = new Date();
+  const [viewMonth, setViewMonth] = useState(realDate.getMonth()+1);
+  const [viewYear, setViewYear] = useState(realDate.getFullYear());
+
 
   function prevMonth() {
+    const todayD = gameDayToDate(currentGameDay);
+    // Can't go back before current month
+    if(viewYear < todayD.year) return;
+    if(viewYear === todayD.year && viewMonth <= todayD.month) return;
     if(viewMonth===1){setViewMonth(12);setViewYear(y=>y-1);}
     else setViewMonth(m=>m-1);
   }
@@ -775,8 +783,12 @@ function NBACalendar({onNav, currentGameDay, onSimToDay}: {onNav:(s:string)=>voi
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
         padding:"12px 16px",borderBottom:"1px solid #0d0d0d"}}>
-        <button onClick={prevMonth} style={{fontFamily:MM,fontSize:10,background:"transparent",
-          border:"1px solid #1a1a1a",borderRadius:3,padding:"4px 10px",color:"#555",cursor:"pointer"}}>←</button>
+        <button onClick={prevMonth}
+          disabled={viewYear<=gameDayToDate(currentGameDay).year&&viewMonth<=gameDayToDate(currentGameDay).month}
+          style={{fontFamily:MM,fontSize:10,background:"transparent",
+          border:"1px solid #1a1a1a",borderRadius:3,padding:"4px 10px",
+          color:(viewYear<=gameDayToDate(currentGameDay).year&&viewMonth<=gameDayToDate(currentGameDay).month)?"#222":"#555",
+          cursor:(viewYear<=gameDayToDate(currentGameDay).year&&viewMonth<=gameDayToDate(currentGameDay).month)?"not-allowed":"pointer"}}>←</button>
         <div style={{fontFamily:MM,fontSize:10,color:"#888",textTransform:"uppercase",letterSpacing:"0.1em"}}>
           {MONTH_NAMES[viewMonth]} {viewYear}
         </div>
