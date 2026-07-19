@@ -1133,21 +1133,23 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
                 setSimming(true);
                 let remaining = simConfirm.days;
                 let currentDay = state.day;
-                const MONTHS = ["","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep"];
+                const MONTHS = ["","OCT","NOV","DEC","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP"];
+                // Animate through days even without API calls
+                const animInterval = setInterval(()=>{
+                  currentDay += 1;
+                  const d = gameDayToDate(currentDay);
+                  setSimDay(d.day);
+                  setSimMonth(MONTHS[d.month]||"JUL");
+                }, 120);
                 while(remaining > 0) {
-                  const chunk = Math.min(remaining, 7);
-                  const res = await fetch(`${API}/gm/simulate/${saveId}`,{
+                  const chunk = Math.min(remaining, 30);
+                  await fetch(`${API}/gm/simulate/${saveId}`,{
                     method:"POST",headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({days:chunk})
                   });
-                  const data = await res.json();
-                  currentDay = data.total_day || currentDay + chunk;
-                  const d = gameDayToDate(currentDay);
-                  setSimDay(d.day);
-                  setSimMonth(MONTHS[d.month]||"");
                   remaining -= chunk;
-                  await new Promise(r=>setTimeout(r, 80));
                 }
+                clearInterval(animInterval);
                 setSimConfirm(null);
                 setSimming(false);
                 window.location.reload();
