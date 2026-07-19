@@ -1123,15 +1123,16 @@ def build_league(players: list[dict], adv_lookup: dict = None, contracts: dict =
         team["roster"] = roster
         team["cap_used"] = sum(p["salary"] for p in team["roster"])
 
-    # Apply 2K rating overrides to all players
+    # Apply 2K overrides
+    import builtins as _b
+    _r2k = getattr(_b, "_ratings_2k_cache", {})
     for abbr, team in teams.items():
         for p in team.get("roster", []):
-            k = _get_2k_ovr(p.get("name",""), ratings_2k)
+            k = _get_2k_ovr(p.get("name",""), _r2k)
             if k: p["overall"] = k
     for p in fa_pool:
-        k = _get_2k_ovr(p.get("name",""), ratings_2k)
+        k = _get_2k_ovr(p.get("name",""), _r2k)
         if k: p["overall"] = k
-
     return {"teams": teams, "fa_pool": fa_pool, "season": 1, "day": 245, "games_simmed": 0}
 
 # ─── Season Simulation ────────────────────────────────────────────────────────
@@ -1289,6 +1290,9 @@ def new_game(body: NewGameBody):
         adv_lookup = fetch_advanced_metrics(conn)
         contracts  = fetch_contracts(conn)
         ratings_2k = fetch_2k_ratings(conn)
+        # Store for use after with block
+        import builtins
+        builtins._ratings_2k_cache = ratings_2k
         print(f"Advanced metrics: {len(adv_lookup)}, contracts: {len(contracts)}")
         if len(adv_lookup) == 0:
             raise RuntimeError("fetch_advanced_metrics returned empty -- table may not exist on Railway")
