@@ -1158,7 +1158,7 @@ def _maybe_sign_lebron(league: dict):
     """Auto-sign LeBron to a team if still FA and in day range 245-248."""
     import random as _r
     day = league.get("day", 0)
-    if day < 245 or day > 248:
+    if day < 253 or day > 276:  # July 1-6 window (FA opens July 1 = day 253)
         return
     gm_team = league.get("gm_team", "")
 
