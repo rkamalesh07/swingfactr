@@ -1132,8 +1132,8 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
               <button onClick={async ()=>{
                 setSimming(true);
                 const targetGameDay = simConfirm.targetDay;
-                const startDay = state.day;
-                const totalDays = targetGameDay - startDay;
+                const totalDays = simConfirm.days;
+                const startDay = targetGameDay - totalDays;
                 const MONTHS = ["","OCT","NOV","DEC","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP"];
                 // Show starting day immediately
                 const startDate = gameDayToDate(startDay);
