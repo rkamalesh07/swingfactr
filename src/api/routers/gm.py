@@ -2673,3 +2673,175 @@ def resign_player(save_id: str, body: ResignBody):
         "outcome":    f"{player['name']} re-signed for ${body.salary/1e6:.1f}M x {body.years} years.",
     }
 
+
+# ─── Lineup & Minutes Engine ──────────────────────────────────────────────────
+
+POSITION_MAP = {
+    "PG": ["PG", "G"],
+    "SG": ["SG", "G", "G-F"],
+    "SF": ["SF", "F", "G-F", "F-G"],
+    "PF": ["PF", "F", "F-C"],
+    "C":  ["C", "F-C", "C-F"],
+}
+
+def assign_lineup(roster: list, is_playoffs: bool = False) -> list:
+    """
+    Auto-assign starting lineup, roles, and minutes to roster.
+    Rules:
+    - Best player at each position starts (unless forced_bench)
+    - Age 35+: base mins -4, age 38+: base mins -8, age 40+: base mins -12
+    - Load management: -20% regular season mins, ramps to full in playoffs
+    - Playoffs: rotation shrinks to 9 players
+    - Fatigue tracked 0-100, high fatigue increases injury risk
+    """
+    import random as _r
+
+    BASE_MINS = {"starter": 32, "sixthman": 24, "rotation": 18, "deep": 10, "dnp": 0}
+    PLAYOFF_MINS = {"starter": 36, "sixthman": 28, "rotation": 20, "deep": 8, "dnp": 0}
+    mins_table = PLAYOFF_MINS if is_playoffs else BASE_MINS
+
+    def age_penalty(age):
+        if age >= 40: return 12
+        if age >= 38: return 8
+        if age >= 35: return 4
+        return 0
+
+    def pos_fits(player_pos: str, slot: str) -> bool:
+        player_pos = player_pos.upper().replace(" ","")
+        return any(p in player_pos for p in POSITION_MAP.get(slot, [slot]))
+
+    # Initialize player state if missing
+    for p in roster:
+        if "fatigue" not in p: p["fatigue"] = 0
+        if "load_manage" not in p: p["load_manage"] = p.get("age", 26) >= 34
+        if "injured" not in p: p["injured"] = False
+        if "injury_days" not in p: p["injury_days"] = 0
+        if "forced_bench" not in p: p["forced_bench"] = False
+
+    available = [p for p in roster if not p["injured"]]
+
+    # Auto-assign starters by position
+    starters = {}
+    used_ids = set()
+    for slot in ["PG", "SG", "SF", "PF", "C"]:
+        candidates = [
+            p for p in available
+            if p["id"] not in used_ids
+            and not p.get("forced_bench", False)
+            and pos_fits(p.get("position", "G"), slot)
+        ]
+        if not candidates:
+            candidates = [p for p in available if p["id"] not in used_ids and not p.get("forced_bench", False)]
+        if candidates:
+            best = max(candidates, key=lambda x: x.get("overall", 50))
+            starters[slot] = best
+            used_ids.add(best["id"])
+
+    starter_ids = {p["id"] for p in starters.values()}
+
+    # Assign roles and minutes
+    bench = [p for p in available if p["id"] not in starter_ids]
+    bench_sorted = sorted(bench, key=lambda x: -x.get("overall", 50))
+
+    rotation_cutoff = 4 if is_playoffs else 9
+
+    for p in roster:
+        age = p.get("age", 26)
+        penalty = age_penalty(age)
+
+        if p["injured"]:
+            p["role"] = "injured"
+            p["minutes"] = 0
+            continue
+
+        if p["id"] in starter_ids:
+            p["role"] = "starter"
+            base = mins_table["starter"] - penalty
+        elif bench_sorted.index(p) < 1 and not is_playoffs:
+            p["role"] = "sixthman"
+            base = mins_table["sixthman"] - penalty
+        elif bench_sorted.index(p) < rotation_cutoff:
+            p["role"] = "rotation"
+            base = mins_table["rotation"] - max(0, penalty - 2)
+        else:
+            p["role"] = "dnp" if is_playoffs else "deep"
+            base = mins_table.get(p["role"], 5) - max(0, penalty - 4)
+
+        # Load management -- skip ~20% of regular season games
+        if p.get("load_manage") and not is_playoffs and age >= 34:
+            base = round(base * 0.82)
+
+        # Forced bench override
+        if p.get("forced_bench"):
+            if p["id"] not in starter_ids:
+                pass  # already benched
+            else:
+                p["role"] = "sixthman"
+                base = mins_table["sixthman"] - penalty
+
+        p["minutes"] = max(0, min(42, base))
+
+        # Update fatigue
+        p["fatigue"] = min(100, p.get("fatigue", 0) + p["minutes"] * 0.3)
+        if p.get("load_manage") and p["minutes"] < 28:
+            p["fatigue"] = max(0, p["fatigue"] - 5)
+
+        # Injury risk check (per game)
+        fatigue_factor = p["fatigue"] / 100
+        age_factor = max(0, (age - 30) * 0.01)
+        injury_chance = (fatigue_factor * 0.08 + age_factor) * (p["minutes"] / 35)
+        if _r.random() < injury_chance * 0.1:  # scaled for per-game
+            p["injured"] = True
+            p["injury_days"] = _r.randint(3, 21)
+            p["minutes"] = 0
+            p["role"] = "injured"
+
+    return roster
+
+@router.post("/lineup/{save_id}")
+async def update_lineup(save_id: str, body: dict):
+    """Update player lineup settings (load_manage, forced_bench) and recalculate minutes."""
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
+        gm_team = league.get("gm_team", "")
+        roster = league["teams"][gm_team]["roster"]
+
+        # Apply any overrides from body
+        overrides = body.get("overrides", {})  # {player_id: {load_manage, forced_bench}}
+        for p in roster:
+            pid = p["id"]
+            if pid in overrides:
+                if "load_manage" in overrides[pid]:
+                    p["load_manage"] = overrides[pid]["load_manage"]
+                if "forced_bench" in overrides[pid]:
+                    p["forced_bench"] = overrides[pid]["forced_bench"]
+
+        # Recalculate lineup
+        is_playoffs = league.get("day", 0) >= 179  # Apr 18+
+        roster = assign_lineup(roster, is_playoffs)
+        league["teams"][gm_team]["roster"] = roster
+        put_save(conn, league["save_id"] if "save_id" in league else save_id, league)
+
+    starters = [p for p in roster if p.get("role") == "starter"]
+    return {
+        "starters": starters,
+        "roster": roster,
+        "lineup": {p["role"]: [] for p in roster},
+    }
+
+@router.get("/lineup/{save_id}")
+async def get_lineup(save_id: str):
+    """Get current lineup assignments."""
+    with get_conn() as conn:
+        league = get_save(conn, save_id)
+        gm_team = league.get("gm_team", "")
+        roster = league["teams"][gm_team]["roster"]
+        is_playoffs = league.get("day", 0) >= 179
+        roster = assign_lineup(roster, is_playoffs)
+
+    by_role = {"starter": [], "sixthman": [], "rotation": [], "deep": [], "dnp": [], "injured": []}
+    for p in roster:
+        role = p.get("role", "rotation")
+        by_role.setdefault(role, []).append(p)
+
+    return {"by_role": by_role, "roster": roster}
