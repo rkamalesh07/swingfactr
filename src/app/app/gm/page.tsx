@@ -1322,9 +1322,33 @@ function HomeSection({state, roster, onNav, saveId, onViewOffer}: {state:GMState
 
 // ─── Roster Section ───────────────────────────────────────────────────────────
 function RosterSection({saveId, roster, state, onRosterChange}: {saveId:string; roster:Player[]; state:GMState; onRosterChange:()=>void}) {
+  const MM = "'DM Mono',monospace";
+  const [tab, setTab] = useState<"LINEUP"|"ROSTER"|"CONTRACTS">("LINEUP");
+  const [lineup, setLineup] = useState<any>(null);
+  const [lineupLoading, setLineupLoading] = useState(false);
   const [expanded, setExpanded] = useState<string|null>(null);
   const [releasing, setReleasing] = useState<string|null>(null);
   const [toast, setToast] = useState<string|null>(null);
+
+  useEffect(()=>{ if(tab==="LINEUP") loadLineup(); },[tab]);
+
+  async function loadLineup() {
+    setLineupLoading(true);
+    try {
+      const r = await fetch(`${API}/gm/lineup/${saveId}`);
+      const d = await r.json();
+      setLineup(d);
+    } catch(e){console.error(e);}
+    setLineupLoading(false);
+  }
+
+  async function toggleFlag(pid: string, flag: string, val: boolean) {
+    await fetch(`${API}/gm/lineup/${saveId}`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({overrides:{[pid]:{[flag]:val}}})
+    });
+    loadLineup();
+  }
 
   async function handleRelease(p: Player) {
     setReleasing(p.id);
