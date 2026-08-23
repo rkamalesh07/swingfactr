@@ -85,10 +85,10 @@ function Fade({ children, delay = 0 }: { children: React.ReactNode; delay?: numb
 
 function Ticker() {
   const items = [
-    'NBA Playoffs first round underway',
+    '2026-27 season preview now live',
     '574 players tracked', 'Model v14 · Bayesian shrinkage',
     '3× daily updates', 'Positional defense profiles',
-    'PER-based breakout analysis', '1M playoff simulations',
+    'Breakout candidates: VJ Edgecombe · Shaedon Sharpe · Matas Buzelis', '1M playoff simulations',
   ]
   const rep = [...items, ...items, ...items]
   return (
@@ -132,7 +132,7 @@ function buildStories(overall: any, breakout: any): Story[] {
   if (cold) stories.push({
     tag: 'Cold streak',
     headline: `${cold.player_name} has gone quiet.`,
-    context: 'Output has dipped from his season baseline over recent games.',
+    context: 'VJ Edgecombe, Shaedon Sharpe and Matas Buzelis are the names to watch in 2026-27.',
     link: '/insights', cta: 'See breakdown',
   })
   const top = breakout?.results?.[0]
@@ -150,7 +150,7 @@ function buildStories(overall: any, breakout: any): Story[] {
     })
   }
   stories.push({
-    tag: 'Playoffs · May 2026',
+    tag: '2026 Offseason',
     headline: 'First round underway. Bracket and odds updated after every game.',
     context: 'Playoff simulator updates as results come in.',
     link: '/playoffs', cta: 'See playoff picture',
@@ -158,7 +158,7 @@ function buildStories(overall: any, breakout: any): Story[] {
   stories.push({
     tag: 'Playoffs',
     headline: "The race for the Larry O'Brien is wide open.",
-    context: 'Simulate the full postseason from current standings. Up to 1M scenarios.',
+    context: 'Project the 2026-27 standings based on offseason moves and roster changes.',
     link: '/playoffs', cta: 'Open simulator',
   })
   return stories
@@ -308,7 +308,7 @@ export default function HomePage() {
               </span>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
               <span style={{ fontFamily: MONO, fontSize: 10, color: '#333', letterSpacing: '0.08em' }}>
-                2025–26 · Playoffs
+                2026–27 · Playoffs
               </span>
             </div>
 
@@ -318,7 +318,7 @@ export default function HomePage() {
               marginBottom: 20, textShadow: '0 2px 40px rgba(0,0,0,0.8)' }}>
               <Decrypt text="NBA intelligence," delay={100} />
               <br />
-              <Decrypt text="updated daily." delay={500} style={{ fontWeight: 600 }} />
+              <Decrypt text="preseason edition." delay={500} style={{ fontWeight: 600 }} />
             </h1>
 
             <p style={{ fontFamily: SANS, fontSize: 15, color: '#666',
@@ -358,7 +358,7 @@ export default function HomePage() {
               {[
                 { to: 574,     sfx: '',  label: 'Players tracked' },
                 { to: 3,       sfx: '×', label: 'Daily ETL updates' },
-                { to: 28127,   sfx: '',  label: 'Game logs · 2025–26' },
+                { to: 28127,   sfx: '',  label: 'Game logs · 2026–27' },
                 { to: 540,     sfx: '',  label: 'Defensive profiles' },
                 { to: 1000000, sfx: '',  label: 'Max playoff sims' },
               ].map((item, i, arr) => (
@@ -382,7 +382,7 @@ export default function HomePage() {
                 letterSpacing: '0.16em', marginBottom: 8,
                 textTransform: 'uppercase' as const }}>Playoffs · May 2026</div>
               <div style={{ fontFamily: SANS, fontSize: 12, color: '#666', lineHeight: 1.6 }}>
-                SAS vs NYK — Game 1 tonight.<br />Wembanyama vs Brunson for the title.
+                NY Knicks won it all. Brunson took home Finals MVP. Now every team is retooling for 2026-27.
               </div>
               <Link href="/playoffs" style={{ fontFamily: MONO, fontSize: 9, color: '#555',
                 letterSpacing: '0.1em', display: 'inline-block', marginTop: 8,
@@ -457,8 +457,8 @@ export default function HomePage() {
               gap: 1, background: '#111', border: '1px solid #111',
               borderRadius: 8, overflow: 'hidden' }}>
               {[
-                { to: 574,     sfx: '', label: 'Players tracked',    sub: '2025–26 season' },
-                { to: 28127,   sfx: '', label: 'Game logs',          sub: 'Through May 2026' },
+                { to: 574,     sfx: '', label: 'Players tracked',    sub: '2026–27 season' },
+                { to: 28127,   sfx: '', label: 'Game logs',          sub: '2025-26 season' },
                 { to: 540,     sfx: '', label: 'Defensive profiles', sub: 'By G / F / C' },
                 { to: 1000000, sfx: '', label: 'Max simulations',    sub: 'Playoff simulator' },
               ].map(item => (
@@ -531,7 +531,7 @@ export default function HomePage() {
         <span style={{ fontFamily: MONO, fontSize: 12, color: '#fff',
           fontWeight: 500, letterSpacing: '0.16em' }}>SWINGFACTR</span>
         <span style={{ fontFamily: MONO, fontSize: 9, color: '#2a2a2a',
-          letterSpacing: '0.1em' }}>2025–26 NBA · Playoffs · Updated 3× daily</span>
+          letterSpacing: '0.1em' }}>2026–27 NBA · Playoffs · Updated 3× daily</span>
       </div>
     </>
   )
